@@ -8,14 +8,17 @@
 // is quietly excluded from session load, personal records and the RPE deviation
 // the weekly review reads, and nothing on screen would ever say so.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { increments, isSet, segmentOf, toDisplay } from '@/lib/calc';
+import { isBodyweightLift } from '@/lib/bodyweight';
+import { REPS_MAX } from '@/lib/numberEntry';
 import { C, num, onInk } from '@/lib/tokens';
 import type { SetType } from '@/lib/types';
 import { useBompa } from '@/state/BompaContext';
-import { DarkSheet, InkButton, InkSegmented, StepperTile } from '@/components/ui';
+import { DarkSheet, EditableNumber, InkButton, InkSegmented, StepperTile } from '@/components/ui';
 import { RpePicker } from '@/components/RpePicker';
 import { pieceNoun } from '@/components/screens/SegmentControls';
+import { BodyweightChip, WeightFigure, useBodyweight } from '@/components/WeightFigure';
 
 const SET_TYPES: { value: SetType; label: string }[] = [
   { value: 'warmup', label: 'Warm-up' },
@@ -50,6 +53,14 @@ export function EditSetSheet() {
       return { id, weight, startWeight: weight, reps: row.reps, rpe: row.rpe, type: row.type };
     });
   }, [row, s.unit]);
+
+  const setWeight = (weight: number) => setDraft((prev) => (prev ? { ...prev, weight } : prev));
+  const bodyweight = useBodyweight(
+    draft ? String(draft.id) : undefined,
+    isBodyweightLift(row ? b.exerciseById.get(row.exerciseId) : undefined),
+    draft?.weight ?? 0,
+    setWeight,
+  );
 
   // The row can vanish underneath the sheet — deleted from the list behind it,
   // or a session closed. Rendering nothing beats rendering an empty form.
@@ -103,13 +114,28 @@ export function EditSetSheet() {
       closeText="Cancel"
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <StepperTile label="Decrease weight" height={60} onClick={() => setDraft({ ...draft, weight: Math.max(0, round(draft.weight - step)) })}>
+        <StepperTile label="Decrease weight" height={60} onClick={() => setWeight(Math.max(0, round(draft.weight - step)))}>
           −
         </StepperTile>
-        <Figure value={draft.weight} unit={s.unit} size={64} unitSize={15} />
-        <StepperTile label="Increase weight" height={60} onClick={() => setDraft({ ...draft, weight: round(draft.weight + step) })}>
+        {/* Typed in the display unit like the steppers; Save converts it, and
+            only if it moved. */}
+        <Figure>
+          <WeightFigure
+            weight={draft.weight}
+            unit={s.unit}
+            bodyweight={bodyweight.on}
+            onCommit={setWeight}
+            figure={figureType(64)}
+            unitStyle={{ fontSize: 15, fontWeight: 800 }}
+          />
+        </Figure>
+        <StepperTile label="Increase weight" height={60} onClick={() => setWeight(round(draft.weight + step))}>
           +
         </StepperTile>
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'center' }}>
+        <BodyweightChip on={bodyweight.on} onClick={bodyweight.toggle} />
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -117,7 +143,18 @@ export function EditSetSheet() {
         <StepperTile label="Decrease reps" onClick={() => setDraft({ ...draft, reps: Math.max(1, draft.reps - 1) })}>
           −
         </StepperTile>
-        <Figure value={draft.reps} unit="reps" size={44} unitSize={14} />
+        <Figure>
+          <EditableNumber
+            label="Reps"
+            value={draft.reps}
+            min={1}
+            max={REPS_MAX}
+            precision={1}
+            onCommit={(reps) => setDraft({ ...draft, reps })}
+            style={figureType(44)}
+          />
+          <span style={{ fontSize: 14, fontWeight: 800, color: onInk.muted }}>reps</span>
+        </Figure>
         <StepperTile label="Increase reps" onClick={() => setDraft({ ...draft, reps: draft.reps + 1 })}>
           +
         </StepperTile>
@@ -181,13 +218,14 @@ export function EditSetSheet() {
 }
 
 /** A big figure with its unit beside it, centred between two steppers. */
-function Figure({ value, unit, size, unitSize }: { value: number; unit: string; size: number; unitSize: number }) {
+function Figure({ children }: { children: ReactNode }) {
   return (
     // minWidth 0 lets the figure give way to the fixed-width steppers on a
     // narrow phone instead of pushing them off the edge.
-    <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 5 }}>
-      <span style={{ fontSize: size, fontWeight: 800, lineHeight: 1, letterSpacing: '-0.04em', color: onInk.text, ...num }}>{value}</span>
-      <span style={{ fontSize: unitSize, fontWeight: 800, color: onInk.muted }}>{unit}</span>
-    </div>
+    <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 5 }}>{children}</div>
   );
+}
+
+function figureType(size: number): CSSProperties {
+  return { fontSize: size, fontWeight: 800, lineHeight: 1, letterSpacing: '-0.04em', color: onInk.text };
 }

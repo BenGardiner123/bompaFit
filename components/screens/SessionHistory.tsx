@@ -21,6 +21,7 @@ import {
 } from '@/lib/history';
 import { C, FONT, HERO_SIZE, TOUCH, num, onInk } from '@/lib/tokens';
 import type { LoggedSet, Unit } from '@/lib/types';
+import { weightShort } from '@/lib/bodyweight';
 import { useBompa } from '@/state/BompaContext';
 import { Btn, Empty, Hero, HeroEyebrow, HeroNumeral, Section, Sheet } from '@/components/ui';
 import { pieceNoun } from '@/components/screens/SegmentControls';
@@ -346,7 +347,7 @@ function SetLine({ row, unit }: { row: SessionSummary['lifts'][number]['sets'][n
         {warm ? 'W' : row.type === 'backoff' ? 'B' : row.setNo}
       </span>
       <span style={{ fontWeight: 700, ...num }}>
-        {toDisplay(row.weightKg, unit)} {unit}
+        {weightShort(toDisplay(row.weightKg, unit), unit)}
       </span>
       <span style={{ fontWeight: 700, ...num }}>{row.reps} reps</span>
       <span style={{ fontSize: 12, fontWeight: 800, color: label, ...num }}>@{row.rpe}</span>

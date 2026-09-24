@@ -3,11 +3,12 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { brzycki, epley, fmtClock } from '@/lib/calc';
 import { db, isPersisted } from '@/lib/db';
+import { weightMax, weightPrecision } from '@/lib/numberEntry';
 import { buildEnvelope, downloadEnvelope } from '@/lib/exchange';
 import { C, HERO_SIZE, R, TOUCH, num, onInk } from '@/lib/tokens';
 import type { Unit } from '@/lib/types';
 import { useBompa } from '@/state/BompaContext';
-import { Btn, Hero, HeroNumeral, HeroTabs, InkButton, InkChip, Row, Section, Segmented, Sheet } from '@/components/ui';
+import { Btn, EditableNumber, Hero, HeroNumeral, HeroTabs, InkButton, InkChip, Row, Section, Segmented, Sheet } from '@/components/ui';
 import { StartingMaxes } from '@/components/StartingMaxes';
 import { ImportPreview, useImport } from '@/components/ImportPreview';
 import { ContentProviders } from '@/components/ContentProviders';
@@ -222,6 +223,10 @@ function OneRepMax() {
           label="Weight"
           value={s.calcWeight}
           unit={s.unit}
+          min={step}
+          max={weightMax(s.unit)}
+          precision={weightPrecision(s.unit)}
+          onSet={(calcWeight) => b.patch({ calcWeight })}
           onDown={() => b.patch({ calcWeight: Math.max(step, s.calcWeight - step) })}
           onUp={() => b.patch({ calcWeight: s.calcWeight + step })}
         />
@@ -229,8 +234,12 @@ function OneRepMax() {
           label="Reps"
           value={s.calcReps}
           unit="reps"
+          min={1}
+          max={CALC_REPS_MAX}
+          precision={1}
+          onSet={(calcReps) => b.patch({ calcReps })}
           onDown={() => b.patch({ calcReps: Math.max(1, s.calcReps - 1) })}
-          onUp={() => b.patch({ calcReps: Math.min(12, s.calcReps + 1) })}
+          onUp={() => b.patch({ calcReps: Math.min(CALC_REPS_MAX, s.calcReps + 1) })}
         />
 
         {/* Epley is drawn twice the size because it is the number the rest of
@@ -272,16 +281,28 @@ function OneRepMax() {
   );
 }
 
+/** Past twelve reps both estimators drift too far to be worth showing. */
+const CALC_REPS_MAX = 12;
+
 function CalcStepper({
   label,
   value,
   unit,
+  min,
+  max,
+  precision,
+  onSet,
   onUp,
   onDown,
 }: {
   label: string;
   value: number;
   unit: string;
+  min: number;
+  max: number;
+  precision: number;
+  /** A typed value, already rounded and clamped. */
+  onSet: (value: number) => void;
   onUp: () => void;
   onDown: () => void;
 }) {
@@ -291,7 +312,16 @@ function CalcStepper({
         −
       </RoundBtn>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-        <span style={{ fontSize: 34, fontWeight: 800, ...num }}>{value}</span>
+        <EditableNumber
+          label={label}
+          unit={unit}
+          value={value}
+          min={min}
+          max={max}
+          precision={precision}
+          onCommit={onSet}
+          style={{ fontSize: 34, fontWeight: 800 }}
+        />
         <span style={{ fontSize: 13, fontWeight: 800, color: C.tertiary }}>{unit}</span>
       </div>
       <RoundBtn onClick={onUp} label={`Increase ${label}`}>

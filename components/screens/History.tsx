@@ -17,6 +17,7 @@ import {
 } from '@/lib/history';
 import { C, HERO_SIZE, num, onInk } from '@/lib/tokens';
 import type { Unit } from '@/lib/types';
+import { weightShort } from '@/lib/bodyweight';
 import { useBompa } from '@/state/BompaContext';
 import { Empty, Hero, HeroEyebrow, HeroNumeral, HeroTabs, InkChip, Row, Scroller, Section, Sheet } from '@/components/ui';
 import { SessionHistory } from '@/components/screens/SessionHistory';
@@ -183,7 +184,7 @@ function LiftHistory({ tabs }: { tabs: ReactNode }) {
                   sub={fmtDate(pr.key)}
                   right={
                     <span style={{ fontSize: 17, fontWeight: 800, color: pr.highlight ? C.amberDark : C.ink, whiteSpace: 'nowrap', ...num }}>
-                      {pr.kind === 'volume' ? volumeText(pr.kg, s.unit) : `${toDisplay(pr.kg, s.unit)} ${s.unit}`}
+                      {pr.kind === 'volume' ? volumeText(pr.kg, s.unit) : weightShort(toDisplay(pr.kg, s.unit), s.unit)}
                     </span>
                   }
                 />

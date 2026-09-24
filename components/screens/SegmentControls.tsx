@@ -11,6 +11,7 @@
 
 import { useEffect } from 'react';
 import { countsAsWork, fmtClock } from '@/lib/calc';
+import { weightShort } from '@/lib/bodyweight';
 import { C, R, TOUCH, num, onInk } from '@/lib/tokens';
 import type { LoggedSet, SegmentStyle } from '@/lib/types';
 import { useBompa, type SegmentState } from '@/state/BompaContext';
@@ -87,7 +88,7 @@ function InProgress({ segment }: { segment: SegmentState }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
           <span style={{ fontSize: 17, fontWeight: 800, color: onInk.text, ...num }}>{heading}</span>
           <span style={{ fontSize: 13, fontWeight: 700, color: C.amberLight, ...num }}>
-            {s.entryWeight} {s.unit} · {reps}
+            {weightShort(s.entryWeight, s.unit)} · {reps}
           </span>
           {/* onInk.body rather than muted: this card is the lighter ink, where
               the muted grey is too faint for small text. */}

@@ -5,13 +5,16 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { toDisplay, toKg } from '@/lib/calc';
+import { isBodyweightLift, weightSpoken } from '@/lib/bodyweight';
 import { groupNoun } from '@/lib/methods';
+import { REPS_MAX, SETS_MAX, weightMax, weightPrecision } from '@/lib/numberEntry';
 import { describeMethod } from '@/lib/methodPresets';
 import { normaliseRoutine } from '@/lib/supersets';
 import { C, R, TOUCH, num } from '@/lib/tokens';
 import type { Routine, RoutineSlot } from '@/lib/types';
 import { useBompa } from '@/state/BompaContext';
-import { Btn, Empty, Eyebrow } from '@/components/ui';
+import { Btn, EditableNumber, Empty, Eyebrow, Pill } from '@/components/ui';
+import { useBodyweight } from '@/components/WeightFigure';
 import { ExercisePicker } from '@/components/screens/ExercisePicker';
 import { MethodPicker } from '@/components/MethodPicker';
 
@@ -244,9 +247,16 @@ export function RoutineBuilder({ routineId, onClose }: { routineId: string; onCl
                 </div>
 
                 <div style={{ display: 'flex', gap: 6 }}>
-                  <Field label="Sets" value={slot.scheme?.length || slot.sets} onChange={(v) => setSets(index, v)} />
-                  <Field label="Reps" value={slot.reps} onChange={(v) => setSlot(index, { reps: Math.max(1, v) })} />
-                  <Field label="RPE" value={slot.targetRpe} step={0.5} onChange={(v) => setSlot(index, { targetRpe: Math.min(10, Math.max(6, v)) })} />
+                  <Field label="Sets" value={slot.scheme?.length || slot.sets} min={1} max={SETS_MAX} onChange={(v) => setSets(index, Math.min(SETS_MAX, v))} />
+                  <Field label="Reps" value={slot.reps} min={1} max={REPS_MAX} onChange={(v) => setSlot(index, { reps: Math.min(REPS_MAX, Math.max(1, v)) })} />
+                  <Field
+                    label="RPE"
+                    value={slot.targetRpe}
+                    step={0.5}
+                    min={6}
+                    max={10}
+                    onChange={(v) => setSlot(index, { targetRpe: Math.min(10, Math.max(6, v)) })}
+                  />
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -273,14 +283,17 @@ export function RoutineBuilder({ routineId, onClose }: { routineId: string; onCl
                       label="Percent"
                       value={Math.round((slot.targetPct1RM ?? 0) * 100)}
                       step={5}
+                      min={30}
+                      max={100}
+                      precision={1}
                       onChange={(v) => setSlot(index, { targetPct1RM: Math.min(100, Math.max(30, v)) / 100 })}
                     />
                   ) : (
-                    <Field
-                      label={`Weight (${b.s.unit})`}
-                      value={toDisplay(slot.targetWeightKg ?? 0, b.s.unit)}
-                      step={b.s.unit === 'kg' ? 2.5 : 5}
-                      onChange={(v) => setSlot(index, { targetWeightKg: toKg(Math.max(0, v), b.s.unit) })}
+                    <WeightField
+                      exerciseId={slot.exerciseId}
+                      known={isBodyweightLift(exercise)}
+                      weightKg={slot.targetWeightKg ?? 0}
+                      onChange={(kg) => setSlot(index, { targetWeightKg: kg })}
                     />
                   )}
                 </div>
@@ -475,11 +488,22 @@ function Field({
   value,
   onChange,
   step = 1,
+  min,
+  max,
+  precision = step,
+  display,
+  spoken,
 }: {
   label: string;
   value: number;
   onChange: (value: number) => void;
   step?: number;
+  min: number;
+  max: number;
+  /** How finely a typed value is kept. The step, unless a finer one makes sense. */
+  precision?: number;
+  display?: string;
+  spoken?: string;
 }) {
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
@@ -488,11 +512,62 @@ function Field({
         <MiniBtn onClick={() => onChange(value - step)} label={`Decrease ${label}`}>
           −
         </MiniBtn>
-        <span style={{ flex: 1, textAlign: 'center', fontSize: 14, fontWeight: 800, ...num }}>{value}</span>
+        <EditableNumber
+          label={label}
+          value={value}
+          min={min}
+          max={max}
+          precision={precision}
+          display={display}
+          spoken={spoken}
+          onCommit={onChange}
+          style={{ flex: 1, fontSize: 14, fontWeight: 800 }}
+        />
         <MiniBtn onClick={() => onChange(value + step)} label={`Increase ${label}`}>
           +
         </MiniBtn>
       </div>
     </div>
+  );
+}
+
+/**
+ * A lift's target weight, with a one-tap way to plain bodyweight. The draft
+ * holds kilograms, so each change is converted here, once, on its way in.
+ */
+function WeightField({
+  exerciseId,
+  known,
+  weightKg,
+  onChange,
+}: {
+  exerciseId: string;
+  known: boolean;
+  weightKg: number;
+  onChange: (kg: number) => void;
+}) {
+  const { unit } = useBompa().s;
+  const weight = toDisplay(weightKg, unit);
+  const setWeight = (next: number) => onChange(toKg(Math.max(0, next), unit));
+  const bodyweight = useBodyweight(exerciseId, known, weight, setWeight);
+  // "BW" rather than the full word: the field is a third of a phone wide.
+  const display = weight === 0 ? 'BW' : bodyweight.on ? `BW + ${weight}` : undefined;
+  return (
+    <>
+      <Field
+        label={`Weight (${unit})`}
+        value={weight}
+        step={unit === 'kg' ? 2.5 : 5}
+        min={0}
+        max={weightMax(unit)}
+        precision={weightPrecision(unit)}
+        display={display}
+        spoken={bodyweight.on ? weightSpoken(weight, unit, true) : undefined}
+        onChange={setWeight}
+      />
+      <Pill on={bodyweight.on} onClick={bodyweight.toggle} style={{ height: TOUCH, alignSelf: 'flex-end' }}>
+        Bodyweight
+      </Pill>
+    </>
   );
 }

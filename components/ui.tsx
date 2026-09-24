@@ -3,7 +3,8 @@
 // Shared primitives. Everything visual comes from lib/tokens — no hex values
 // and no dimensions live in a component.
 
-import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { parseEntry } from '@/lib/numberEntry';
 import { C, FONT, R, SCRIM, SHADOW, TOUCH, Z, num, onInk } from '@/lib/tokens';
 
 export function Card({
@@ -856,6 +857,169 @@ export function StepperTile({
     >
       {children}
     </Btn>
+  );
+}
+
+/**
+ * A figure that can be typed as well as stepped. It draws exactly like the
+ * plain number it replaces; a tap turns it into a text box holding the value,
+ * all selected, so the first key typed replaces it. Going from 40 to 120 is
+ * then three keys instead of thirty-two taps on +.
+ *
+ * Enter or leaving the box keeps the value; Escape puts the old one back.
+ * Anything that isn't a number — an empty box included — also puts it back,
+ * so a slip can never write zero or NaN. What is kept is rounded and clamped
+ * by `parseEntry`, and `onCommit` is only called when the value moved.
+ *
+ * Everything here is in the display unit. Converting to kilograms is the
+ * caller's job, done once in `onCommit`, never per keystroke.
+ */
+export function EditableNumber({
+  value,
+  onCommit,
+  label,
+  unit,
+  min,
+  max,
+  precision,
+  display,
+  spoken,
+  openEmpty = false,
+  style,
+}: {
+  value: number;
+  onCommit: (next: number) => void;
+  /** What the number is, e.g. "Weight". Starts the accessible name. */
+  label: string;
+  /** Read after the value in the accessible name, e.g. "kg". */
+  unit?: string;
+  min: number;
+  max: number;
+  precision?: number;
+  /** Drawn instead of the bare value, e.g. "Bodyweight" for zero, or "—" for nothing set. */
+  display?: ReactNode;
+  /** Said instead of "label value unit" when `display` changes what the figure means. */
+  spoken?: string;
+  /** Open the box empty, for a value that means nothing yet (a max never entered). */
+  openEmpty?: boolean;
+  /** The figure's own type: size, weight, line height, letter spacing, colour. */
+  style?: CSSProperties;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const input = useRef<HTMLInputElement>(null);
+  const button = useRef<HTMLButtonElement>(null);
+  // Enter ends editing, and removing the box can fire a blur after it; this
+  // stops that blur committing a second time.
+  const settled = useRef(false);
+
+  const editing = draft !== null;
+
+  // Only when the box first opens — re-selecting on every keystroke would make
+  // each key replace the last one.
+  useEffect(() => {
+    if (!editing) return;
+    const box = input.current;
+    if (!box) return;
+    box.focus();
+    // select() alone is unreliable on iOS; the explicit range is what sticks.
+    box.select();
+    box.setSelectionRange(0, box.value.length);
+  }, [editing]);
+
+  const open = () => {
+    settled.current = false;
+    setDraft(openEmpty ? '' : String(value));
+  };
+
+  const finish = (keep: boolean, refocus: boolean) => {
+    if (settled.current || draft === null) return;
+    settled.current = true;
+    if (keep) {
+      const next = parseEntry(draft, { min, max, precision });
+      if (next !== null && next !== value) onCommit(next);
+    }
+    setDraft(null);
+    // Back to the figure for a keyboard user who pressed Enter or Escape; a
+    // tap elsewhere already put focus where the finger went.
+    if (refocus) requestAnimationFrame(() => button.current?.focus());
+  };
+
+  // "Reps 8", not "Reps 8 reps", when the label already says what is counted.
+  const said = unit && unit.toLowerCase() !== label.toLowerCase() ? ` ${unit}` : '';
+  const name = spoken ?? `${label} ${value}${said}`;
+  const figure: CSSProperties = { fontFamily: FONT, color: 'inherit', ...num, ...style };
+
+  if (draft !== null) {
+    return (
+      <input
+        ref={input}
+        type="text"
+        inputMode="decimal"
+        enterKeyHint="done"
+        autoComplete="off"
+        aria-label={unit ? `${label} in ${unit}` : label}
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={() => finish(true, false)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            finish(true, true);
+          } else if (event.key === 'Escape') {
+            // Escape here means "not this number", not "close the sheet I'm
+            // in" — every sheet listens for Escape on the window.
+            event.stopPropagation();
+            finish(false, true);
+          }
+        }}
+        // Selecting text by dragging must not pull the Train screen sideways
+        // into the next lift.
+        onPointerDown={(event) => event.stopPropagation()}
+        style={{
+          ...figure,
+          // Sized to what is typed, so the unit beside it stays put. Tabular
+          // digits make one "ch" one digit wide.
+          width: `${Math.max(2, draft.length)}ch`,
+          minWidth: TOUCH,
+          minHeight: TOUCH,
+          padding: 0,
+          margin: 0,
+          border: 'none',
+          borderBottom: `2px solid ${C.amber}`,
+          borderRadius: 0,
+          background: 'transparent',
+          caretColor: C.amber,
+          textAlign: 'center',
+          // The amber rule under the digits is the focus mark; a ring round
+          // a 96px figure as well would crowd the steppers.
+          outline: 'none',
+        }}
+      />
+    );
+  }
+
+  return (
+    <button
+      ref={button}
+      type="button"
+      onClick={open}
+      aria-label={`${name}, tap to type`}
+      style={{
+        ...figure,
+        border: 'none',
+        background: 'transparent',
+        padding: 0,
+        margin: 0,
+        minWidth: TOUCH,
+        minHeight: TOUCH,
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'text',
+      }}
+    >
+      {display ?? value}
+    </button>
   );
 }
 

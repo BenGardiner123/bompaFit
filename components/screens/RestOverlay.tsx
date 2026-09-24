@@ -14,6 +14,7 @@
 import { useEffect, useRef } from 'react';
 import { countsAsWork, fmtClock, isSet } from '@/lib/calc';
 import { C, TOUCH, Z, num, onInk } from '@/lib/tokens';
+import { isBodyweightLift, weightShort } from '@/lib/bodyweight';
 import { useBompa } from '@/state/BompaContext';
 import { InkButton, Ring, useEscapeKey } from '@/components/ui';
 import { offersDrop } from '@/components/screens/SegmentControls';
@@ -149,7 +150,7 @@ export function RestOverlay() {
           <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.14em', color: quiet }}>NEXT</span>
           <span style={{ fontSize: 22, fontWeight: 800 }}>{exercise?.name ?? 'Next set'}</span>
           <span style={{ fontSize: 15, fontWeight: 700, color: C.amberLight, ...num }}>
-            Set {nextSetNo} · {s.entryWeight} {s.unit} × {s.entryReps}
+            Set {nextSetNo} · {weightShort(s.entryWeight, s.unit, isBodyweightLift(exercise))} × {s.entryReps}
           </span>
         </div>
       </div>

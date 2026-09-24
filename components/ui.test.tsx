@@ -6,7 +6,7 @@
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DarkSheet, HeroNumeral, HeroTabs, InkButton, InkChip, Row } from './ui';
+import { DarkSheet, EditableNumber, HeroNumeral, HeroTabs, InkButton, InkChip, Row } from './ui';
 
 afterEach(cleanup);
 
@@ -126,5 +126,107 @@ describe('Row', () => {
   it('is plain text without one', () => {
     render(<Row title="Push Day" />);
     expect(screen.queryByRole('button')).toBeNull();
+  });
+});
+
+describe('EditableNumber', () => {
+  function setup(extra: Partial<Parameters<typeof EditableNumber>[0]> = {}) {
+    const onCommit = vi.fn();
+    render(<EditableNumber label="Weight" unit="kg" value={80} min={0} max={1000} precision={0.25} onCommit={onCommit} {...extra} />);
+    return onCommit;
+  }
+
+  function openBox() {
+    fireEvent.click(screen.getByRole('button', { name: 'Weight 80 kg, tap to type' }));
+    return screen.getByRole('textbox', { name: 'Weight in kg' }) as HTMLInputElement;
+  }
+
+  it('shows the figure as a button that says it can be typed', () => {
+    setup();
+    expect(screen.getByRole('button', { name: 'Weight 80 kg, tap to type' }).textContent).toBe('80');
+  });
+
+  it('opens a numeric text box holding the value, focused and selected', () => {
+    setup();
+    const box = openBox();
+    expect(box.value).toBe('80');
+    expect(box.inputMode).toBe('decimal');
+    expect(document.activeElement).toBe(box);
+    expect(box.selectionStart).toBe(0);
+    expect(box.selectionEnd).toBe(2);
+  });
+
+  it('commits on Enter, rounded, and goes back to the figure', () => {
+    const onCommit = setup();
+    const box = openBox();
+    fireEvent.change(box, { target: { value: '120,4' } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    expect(onCommit).toHaveBeenCalledTimes(1);
+    expect(onCommit).toHaveBeenCalledWith(120.5);
+    expect(screen.queryByRole('textbox')).toBeNull();
+  });
+
+  it('commits when focus leaves the box', () => {
+    const onCommit = setup();
+    const box = openBox();
+    fireEvent.change(box, { target: { value: '95' } });
+    fireEvent.blur(box);
+    expect(onCommit).toHaveBeenCalledWith(95);
+  });
+
+  it('clamps to the bounds', () => {
+    const onCommit = setup();
+    const box = openBox();
+    fireEvent.change(box, { target: { value: '5000' } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    expect(onCommit).toHaveBeenCalledWith(1000);
+  });
+
+  it('puts the old value back on Escape, without closing the sheet around it', () => {
+    const onCommit = setup();
+    const onWindowKey = vi.fn();
+    window.addEventListener('keydown', onWindowKey);
+    const box = openBox();
+    fireEvent.change(box, { target: { value: '120' } });
+    fireEvent.keyDown(box, { key: 'Escape' });
+    window.removeEventListener('keydown', onWindowKey);
+    expect(onCommit).not.toHaveBeenCalled();
+    expect(onWindowKey).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Weight 80 kg, tap to type' })).toBeTruthy();
+  });
+
+  it('writes nothing for an empty or invalid box', () => {
+    const onCommit = setup();
+    for (const text of ['', 'abc', '-5']) {
+      const box = openBox();
+      fireEvent.change(box, { target: { value: text } });
+      fireEvent.keyDown(box, { key: 'Enter' });
+    }
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
+  it('does not call back when the value did not move', () => {
+    const onCommit = setup();
+    fireEvent.keyDown(openBox(), { key: 'Enter' });
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
+  it('can draw and speak something other than the bare value', () => {
+    setup({ value: 0, display: 'Bodyweight', spoken: 'Bodyweight' });
+    const button = screen.getByRole('button', { name: 'Bodyweight, tap to type' });
+    expect(button.textContent).toBe('Bodyweight');
+  });
+
+  it('opens empty for a value that is not set yet', () => {
+    setup({ value: 0, display: '—', spoken: 'Weight not set', openEmpty: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Weight not set, tap to type' }));
+    expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('');
+  });
+
+  it('keeps a 44px target however small the figure', () => {
+    setup({ style: { fontSize: 14 } });
+    const button = screen.getByRole('button', { name: /tap to type/ });
+    expect(button.style.minHeight).toBe('44px');
+    expect(button.style.minWidth).toBe('44px');
   });
 });

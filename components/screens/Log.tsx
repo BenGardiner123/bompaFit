@@ -26,12 +26,15 @@ import {
   type MethodGuideKey,
   type SlotMethod,
 } from '@/lib/methods';
+import { isBodyweightLift, weightShort } from '@/lib/bodyweight';
+import { REPS_MAX } from '@/lib/numberEntry';
 import { C, HERO_SIZE, R, TOUCH, num, onInk } from '@/lib/tokens';
 import type { LoggedSet, SetPrescription, SetType } from '@/lib/types';
 import { useBompa } from '@/state/BompaContext';
-import { Btn, InkButton, InkChip, InkSegmented, StepperTile } from '@/components/ui';
+import { Btn, EditableNumber, InkButton, InkChip, InkSegmented, StepperTile } from '@/components/ui';
 import { ExercisePicker } from '@/components/screens/ExercisePicker';
 import { RpePicker } from '@/components/RpePicker';
+import { BodyweightChip, WeightFigure, useBodyweight } from '@/components/WeightFigure';
 import { SegmentControls } from '@/components/screens/SegmentControls';
 
 /**
@@ -193,35 +196,7 @@ export function Log() {
       <SwipeColumn>
         <LiftHeader />
 
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-            <span
-              style={{ fontSize: HERO_SIZE.step, fontWeight: 800, lineHeight: 0.9, letterSpacing: '-0.05em', ...num }}
-            >
-              {s.entryWeight}
-            </span>
-            <span style={{ fontSize: 17, fontWeight: 800, color: onInk.muted }}>
-              {s.unit}
-            </span>
-          </div>
-          <div style={{ display: 'flex', gap: 8, width: '100%', paddingTop: 12 }}>
-            <StepperTile
-              width="flex"
-              label="Decrease weight"
-              onClick={() => b.patch({ entryWeight: Math.max(0, Math.round((s.entryWeight - s.step) * 100) / 100) })}
-            >
-              −
-            </StepperTile>
-            <StepCycle />
-            <StepperTile
-              width="flex"
-              label="Increase weight"
-              onClick={() => b.patch({ entryWeight: Math.round((s.entryWeight + s.step) * 100) / 100 })}
-            >
-              +
-            </StepperTile>
-          </div>
-        </div>
+        <WeightEntry />
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {/* Floored at 1 — zero reps is not a set. */}
@@ -230,9 +205,15 @@ export function Log() {
           </StepperTile>
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 6 }}>
-              <span style={{ fontSize: 48, fontWeight: 800, lineHeight: 1, ...num }}>
-                {s.entryReps}
-              </span>
+              <EditableNumber
+                label="Reps"
+                value={s.entryReps}
+                min={1}
+                max={REPS_MAX}
+                precision={1}
+                onCommit={(next) => b.patch({ entryReps: next })}
+                style={{ fontSize: 48, fontWeight: 800, lineHeight: 1 }}
+              />
               <span style={{ fontSize: 14, fontWeight: 800, color: onInk.muted }}>
                 {REP_UNIT[repStyle]}
               </span>
@@ -336,7 +317,7 @@ export function Log() {
               ? 'Log AMRAP set'
               : 'Log set'}
           <span style={{ fontWeight: 700, opacity: 0.6, ...num }}>
-            {s.entryWeight} × {s.entryReps}
+            {s.entryWeight === 0 ? 'BW' : s.entryWeight} × {s.entryReps}
           </span>
         </Btn>
       </div>
@@ -559,7 +540,7 @@ function LiftHeader() {
       ) : (
         <span style={{ fontSize: 13.5, fontWeight: 800, color: C.amberLight, ...num }}>
           {activeTarget
-            ? `${activeTarget.sets} × ${activeTarget.reps} @ ${toDisplay(activeTarget.weightKg, s.unit)} ${s.unit} · RPE ${activeTarget.rpe}`
+            ? `${activeTarget.sets} × ${activeTarget.reps} @ ${weightShort(toDisplay(activeTarget.weightKg, s.unit), s.unit, isBodyweightLift(exercise))} · RPE ${activeTarget.rpe}`
             : 'Added today · no target'}
         </span>
       )}
@@ -745,7 +726,16 @@ function HoldStepper() {
         −
       </StepperTile>
       <div style={{ flex: 1, display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 6 }}>
-        <span style={{ fontSize: 32, fontWeight: 800, lineHeight: 1, ...num }}>{seconds}</span>
+        <EditableNumber
+          label="Hold"
+          unit="seconds"
+          value={seconds}
+          min={HOLD_SEC_MIN}
+          max={HOLD_SEC_MAX}
+          precision={1}
+          onCommit={set}
+          style={{ fontSize: 32, fontWeight: 800, lineHeight: 1 }}
+        />
         <span style={{ fontSize: 14, fontWeight: 800, color: onInk.muted }}>s each hold</span>
       </div>
       <StepperTile label="Longer hold" onClick={() => set(seconds + HOLD_STEP_SEC)}>
@@ -792,10 +782,54 @@ function SetDot({ row, fill }: { row: LoggedSet; fill: string }) {
     >
       <span className="sr-only">
         Edit set {row.setNo}
-        {kind}: {toDisplay(row.weightKg, unit)} {unit} × {row.reps} @{row.rpe}
+        {kind}: {weightShort(toDisplay(row.weightKg, unit), unit, isBodyweightLift(b.exerciseById.get(row.exerciseId)))} × {row.reps} @{row.rpe}
       </span>
       <span aria-hidden style={{ ...DOT, background: fill, border: `1.5px solid ${fill}` }} />
     </Btn>
+  );
+}
+
+/**
+ * The weight: the big figure, typed or stepped, and a one-tap way to plain
+ * bodyweight. Entry stays in the display unit throughout; logging the set is
+ * where it becomes kilograms, once.
+ */
+function WeightEntry() {
+  const b = useBompa();
+  const { s, activeExerciseId } = b;
+  const setWeight = (next: number) => b.patch({ entryWeight: next });
+  const known = isBodyweightLift(activeExerciseId ? b.exerciseById.get(activeExerciseId) : undefined);
+  const bodyweight = useBodyweight(activeExerciseId ?? undefined, known, s.entryWeight, setWeight);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+      {/* Holds the full figure's height even when "Bodyweight" is drawn
+          smaller, so the steppers don't jump under a thumb that is about to
+          press one. The outer box sits its row at the bottom (flex-end); the
+          inner row lines the figure and unit up on their text baseline. */}
+      <div style={{ minHeight: Math.round(HERO_SIZE.step * 0.9), display: 'flex', alignItems: 'flex-end' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+          <WeightFigure
+            weight={s.entryWeight}
+            unit={s.unit}
+            bodyweight={bodyweight.on}
+            onCommit={setWeight}
+            figure={{ fontSize: HERO_SIZE.step, fontWeight: 800, lineHeight: 0.9, letterSpacing: '-0.05em' }}
+            unitStyle={{ fontSize: 17, fontWeight: 800 }}
+          />
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 8, width: '100%', paddingTop: 12 }}>
+        <StepperTile width="flex" label="Decrease weight" onClick={() => setWeight(Math.max(0, Math.round((s.entryWeight - s.step) * 100) / 100))}>
+          −
+        </StepperTile>
+        <StepCycle />
+        <BodyweightChip on={bodyweight.on} onClick={bodyweight.toggle} />
+        <StepperTile width="flex" label="Increase weight" onClick={() => setWeight(Math.round((s.entryWeight + s.step) * 100) / 100)}>
+          +
+        </StepperTile>
+      </div>
+    </div>
   );
 }
 

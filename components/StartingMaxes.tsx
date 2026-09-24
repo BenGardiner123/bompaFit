@@ -6,9 +6,10 @@
 
 import { toDisplay, toKg } from '@/lib/calc';
 import { startingMaxLifts } from '@/lib/maxes';
-import { C, R, TOUCH, num } from '@/lib/tokens';
+import { weightMax, weightPrecision } from '@/lib/numberEntry';
+import { C, R, TOUCH } from '@/lib/tokens';
 import { useBompa } from '@/state/BompaContext';
-import { Btn, Row, Section } from '@/components/ui';
+import { Btn, EditableNumber, Row, Section } from '@/components/ui';
 
 /**
  * A new user has no history, so every routine priced as a percentage of 1RM
@@ -55,9 +56,18 @@ export function StartingMaxes() {
                 >
                   −
                 </MaxStepper>
-                <span style={{ minWidth: 50, textAlign: 'center', fontSize: 15, fontWeight: 800, ...num }}>
-                  {declared > 0 ? toDisplay(declared, s.unit) : '—'}
-                </span>
+                {/* Typed in the display unit and converted once, here. */}
+                <EditableNumber
+                  label={`Starting max for ${exercise.name}`}
+                  unit={s.unit}
+                  value={toDisplay(declared, s.unit)}
+                  min={0}
+                  max={weightMax(s.unit)}
+                  precision={weightPrecision(s.unit)}
+                  onCommit={(next) => b.setStartingMax(exercise.id, toKg(next, s.unit))}
+                  {...(declared > 0 ? {} : { display: '—', spoken: `Starting max for ${exercise.name} not set`, openEmpty: true })}
+                  style={{ minWidth: 50, fontSize: 15, fontWeight: 800 }}
+                />
                 <MaxStepper
                   onClick={() => b.setStartingMax(exercise.id, toKg(toDisplay(declared, s.unit) + step, s.unit))}
                   label={`Raise starting max for ${exercise.name}`}

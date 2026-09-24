@@ -13,6 +13,7 @@ import { countsAsWork, toDisplay } from '@/lib/calc';
 import type { SessionSummary } from '@/lib/history';
 import { C, HERO_SIZE, R, Z, num, onInk } from '@/lib/tokens';
 import { fatigueDelta, sessionVerdict } from '@/lib/verdict';
+import { isBodyweightLift, weightShort } from '@/lib/bodyweight';
 import { useBompa } from '@/state/BompaContext';
 import { Btn, Hero, HeroEyebrow, HeroNumeral, Row, Section, Sheet, useEscapeKey } from '@/components/ui';
 
@@ -91,7 +92,7 @@ function SummaryBody({ summary }: { summary: SessionSummary }) {
 
     const top = done.reduce((best, row) => Math.max(best, row.rpe), 0);
     const detail = done.length
-      ? `${done.length} × ${done[0]!.reps} @ ${toDisplay(lift!.topWeightKg, unit)} ${unit} · top RPE ${top}`
+      ? `${done.length} × ${done[0]!.reps} @ ${weightShort(toDisplay(lift!.topWeightKg, unit), unit, isBodyweightLift(b.exerciseById.get(exerciseId)))} · top RPE ${top}`
       : lift
         ? 'Warm-ups only'
         : 'Not trained today';
