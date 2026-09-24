@@ -66,6 +66,18 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+// Tapping the rest-over notification brings the app back: the window that is
+// already open if there is one, a fresh one if the phone has closed it since.
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windows) => {
+      const open = windows.find((client) => 'focus' in client);
+      return open ? open.focus() : self.clients.openWindow('/');
+    }),
+  );
+});
+
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   if (request.method !== 'GET') return;

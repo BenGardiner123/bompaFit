@@ -19,6 +19,7 @@ import { Setup } from '@/components/screens/Setup';
 import { Today } from '@/components/screens/Today';
 import { Tools } from '@/components/screens/Tools';
 import { useThemeColor } from '@/components/useThemeColor';
+import { TimerAlerts } from '@/components/TimerAlerts';
 import { C, R, SHADOW, Z, onInk } from '@/lib/tokens';
 import { BompaProvider, useBompa } from '@/state/BompaContext';
 
@@ -109,6 +110,7 @@ function App() {
           drawn later is on top, and the builder's "?" buttons open this. */}
       <MethodGuideSheet />
       <Toast />
+      <TimerAlerts />
     </div>
   );
 }

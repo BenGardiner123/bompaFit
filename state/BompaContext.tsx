@@ -2620,6 +2620,8 @@ function useBompaState() {
     priceSlot,
 
     // rest timer
+    /** Wall-clock end of the running rest, or null. Timer alerts schedule against it. */
+    restEndsAt,
     restActive,
     restRemainingMs,
     restTotalMs,

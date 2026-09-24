@@ -9,6 +9,8 @@ import { buildEnvelope, downloadEnvelope } from '@/lib/exchange';
 import { C, HERO_SIZE, R, TOUCH, num, onInk } from '@/lib/tokens';
 import type { Unit } from '@/lib/types';
 import { useBompa } from '@/state/BompaContext';
+import { AlertSettings } from '@/components/AlertSettings';
+import { useIntervalAlerts } from '@/components/useTimerAlerts';
 import { Btn, EditableNumber, Hero, HeroNumeral, HeroTabs, InkButton, InkChip, Row, Section, Segmented, Sheet } from '@/components/ui';
 import { StartingMaxes } from '@/components/StartingMaxes';
 import { ImportPreview, useImport } from '@/components/ImportPreview';
@@ -23,6 +25,7 @@ export function Tools() {
       <IntervalTimers />
       <Sheet gap={26}>
         <RestPresets />
+        <AlertSettings />
         <OneRepMax />
         <StartingMaxes />
         <Settings />
@@ -94,6 +97,8 @@ function IntervalTimers() {
           ? `Time is up on the ${capMinutes} minute cap`
           : `${clock} left of ${capMinutes} minutes`
         : `${clock} left in round ${round}, every ${intervalMinutes} minutes`;
+
+  useIntervalAlerts({ mode, startedAt, accumulatedMs: accumulated, capMs: capMinutes * 60_000, intervalMs: intervalMinutes * 60_000 });
 
   const urgent = (mode === 'amrap' && remaining <= 10 && running) || (mode === 'emom' && roundRemaining <= 3 && running);
 
