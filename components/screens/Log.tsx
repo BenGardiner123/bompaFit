@@ -35,7 +35,7 @@ import type { LoggedSet, SetPrescription, SetType } from '@/lib/types';
 import { useBompa } from '@/state/BompaContext';
 import { Btn, EditableNumber, InkButton, InkChip, InkSegmented, StepperTile } from '@/components/ui';
 import { ExercisePicker } from '@/components/screens/ExercisePicker';
-import { RpePicker } from '@/components/RpePicker';
+import { RpeButton, RpePickerSheet } from '@/components/RpeEntry';
 import { BodyweightChip, WeightFigure, useBodyweight } from '@/components/WeightFigure';
 import { SegmentControls } from '@/components/screens/SegmentControls';
 
@@ -141,6 +141,7 @@ export function Log() {
   const b = useBompa();
   const { s, openSession, activeTarget, sessionSets } = b;
   const [picking, setPicking] = useState(false);
+  const [choosingRpe, setChoosingRpe] = useState(false);
 
   // Only the session gates the logger. If the routine behind it has since been
   // deleted, the session still has its own snapshot of exercise ids and is
@@ -157,6 +158,8 @@ export function Log() {
   const amrap = Boolean(b.activeSetTarget?.amrap) && s.entryType !== 'warmup';
   // Warm-ups are ordinary reps on the way up, whatever the working sets ask for.
   const repStyle = s.entryType === 'warmup' ? 'full' : (b.activeMethod?.repStyle ?? 'full');
+  // What gets logged when the lifter leaves RPE alone.
+  const rpeTarget = activeTarget?.rpe ?? b.activeSlot?.targetRpe ?? 7;
 
   return (
     <div
@@ -204,6 +207,14 @@ export function Log() {
       </div>
 
       {picking && <ExercisePicker onClose={() => setPicking(false)} />}
+      <RpePickerSheet
+        open={choosingRpe}
+        onClose={() => setChoosingRpe(false)}
+        value={s.entryRpe}
+        target={rpeTarget}
+        onPick={(next) => b.patch({ entryRpe: next })}
+        onExplain={() => b.patch({ rpeHelp: true })}
+      />
 
       {/* The countdown shrunk to a card, after "Minimise". The full-screen one
           lives in the shell so it can cover the tab bar too. */}
@@ -251,29 +262,7 @@ export function Log() {
 
         {repStyle === 'isometric' && <HoldStepper />}
 
-        <RpePicker
-          dark
-          value={s.entryRpe}
-          target={activeTarget?.rpe ?? b.activeSlot?.targetRpe ?? 7}
-          onPick={(next) => b.patch({ entryRpe: next })}
-          after={
-            <Btn
-              onClick={() => b.patch({ rpeHelp: true })}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                minHeight: TOUCH,
-                padding: '0 4px',
-                verticalAlign: 'middle',
-                fontSize: 12.5,
-                fontWeight: 800,
-                color: C.amberLight,
-              }}
-            >
-              What&rsquo;s RPE?
-            </Btn>
-          }
-        />
+        <RpeButton value={s.entryRpe} target={rpeTarget} onClick={() => setChoosingRpe(true)} />
 
         {/* Set type goes last on purpose: it is the field changed least, and the
             one most often left alone between sets. */}

@@ -86,8 +86,10 @@ test.describe('keyboard and labels', () => {
 // top of the page.
 type SheetCase = {
   sheet: string;
-  /** The button on the Train screen that opens it. */
+  /** The button that opens it — on the Train screen, or inside the sheet `via` opens. */
   opener: string | RegExp;
+  /** A button on Train to press first, when the opener lives inside another sheet. */
+  via?: RegExp;
   /** The dialog's accessible name. */
   dialog: string | RegExp;
   /** The close control inside it. */
@@ -98,7 +100,10 @@ const SHEETS: SheetCase[] = [
   { sheet: 'How-to', opener: /How to ›$/, dialog: /^How to perform /, close: 'Close' },
   // A prefix, because the row's full name goes on to describe the set.
   { sheet: 'Edit set', opener: /^Edit set 1\b/, dialog: 'Edit logged set', close: 'Cancel' },
-  { sheet: 'RPE', opener: /^What.s RPE\?$/, dialog: 'What RPE means', close: 'Close' },
+  { sheet: 'RPE', opener: /^RPE: not set, target \d+(\.\d+)? — choose$/, dialog: 'How hard was that set?', close: 'Close' },
+  // Opened from inside the RPE sheet, which closes on the way, so focus goes
+  // back to the button that opened that one.
+  { sheet: 'RPE explainer', via: /^RPE: not set, target \d+(\.\d+)? — choose$/, opener: /^What.s RPE\?$/, dialog: 'What RPE means', close: 'Close' },
   { sheet: 'Set types', opener: 'What do the set types mean?', dialog: 'What the set types mean', close: 'Close' },
   { sheet: 'Add a lift', opener: 'Add a lift to this session', dialog: 'Add a lift', close: 'Close' },
 ];
@@ -120,32 +125,38 @@ test.describe('bottom sheets', () => {
   for (const c of SHEETS) {
     const opener = (page: import('@playwright/test').Page) => page.getByRole('button', { name: c.opener, exact: true });
     const dialog = (page: import('@playwright/test').Page) => page.getByRole('dialog', { name: c.dialog });
+    const open = async (page: import('@playwright/test').Page) => {
+      if (c.via) await page.getByRole('button', { name: c.via }).click();
+      await opener(page).click();
+    };
+    // Where focus should land once the sheet is gone.
+    const origin = (page: import('@playwright/test').Page) => (c.via ? page.getByRole('button', { name: c.via }) : opener(page));
 
     test(`${c.sheet}: a named modal dialog that closes three ways and hands focus back`, async ({ page }) => {
       // Escape.
-      await opener(page).click();
+      await open(page);
       await expect(dialog(page)).toBeVisible();
       await expect(dialog(page)).toHaveAttribute('aria-modal', 'true');
       await page.keyboard.press('Escape');
       await expect(dialog(page)).toBeHidden();
-      await expect(opener(page)).toBeFocused();
+      await expect(origin(page)).toBeFocused();
 
       // Its own close control.
-      await opener(page).click();
+      await open(page);
       await dialog(page).getByRole('button', { name: c.close, exact: true }).click();
       await expect(dialog(page)).toBeHidden();
-      await expect(opener(page)).toBeFocused();
+      await expect(origin(page)).toBeFocused();
 
       // A tap on the dimmed area. The dialog element is the full-screen scrim
       // with the panel at the bottom, so its top-left corner is scrim.
-      await opener(page).click();
+      await open(page);
       await dialog(page).click({ position: { x: 5, y: 5 } });
       await expect(dialog(page)).toBeHidden();
-      await expect(opener(page)).toBeFocused();
+      await expect(origin(page)).toBeFocused();
     });
 
     test(`${c.sheet}: every control inside is at least 44px square`, async ({ page }) => {
-      await opener(page).click();
+      await open(page);
       await expect(dialog(page)).toBeVisible();
 
       const small = await dialog(page).evaluate((root) =>

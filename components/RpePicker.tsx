@@ -34,8 +34,8 @@ export function RpePicker({
   target: number;
   onPick: (next: number | null) => void;
   /**
-   * The ink version, for the Train screen: unselected chips go transparent with
-   * a dark outline. Off by default so the light sheets that share this picker
+   * The ink version, for the Train screen's RPE sheet: unselected chips go
+   * transparent with a dark outline. Off by default so the light sheets that share this picker
    * keep their look until they are restyled themselves.
    */
   dark?: boolean;

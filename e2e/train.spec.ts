@@ -120,7 +120,10 @@ test.describe('the Train screen', () => {
   test.describe('the finish summary', () => {
     test('Finish opens a summary of the session, and Done lands on Today', async ({ page }) => {
       await startSession(page);
-      await page.getByRole('button', { name: 'RPE 8', exact: true }).click();
+      // Said out loud rather than left to the target, so the summary's top RPE is the lifter's own.
+      await page.getByRole('button', { name: /^RPE: not set/ }).click();
+      await page.getByRole('dialog', { name: 'How hard was that set?' }).getByRole('button', { name: 'RPE 8', exact: true }).click();
+      await expect(page.getByRole('button', { name: 'RPE 8 — change' })).toBeVisible();
       await page.getByRole('button', { name: 'Log set' }).click();
       await skipRest(page);
       await page.getByRole('button', { name: 'Finish' }).click();
