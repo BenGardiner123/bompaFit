@@ -40,11 +40,23 @@ export function uniqueId(name: string, exists: (id: string) => boolean): string 
 
 /** "Push Day" → "Push Day copy" → "Push Day copy 2". Used by routine duplication. */
 export function copyName(name: string, exists: (name: string) => boolean): string {
-  const base = `${name} copy`;
+  return freeName(`${name} copy`, name, exists);
+}
+
+/**
+ * "Push A" for a strength block → "Push A (Strength)" → "Push A (Strength) 2".
+ * The phase in the name is what tells two versions of a workout apart in the
+ * library, where the block they belong to is not shown.
+ */
+export function versionName(name: string, label: string, exists: (name: string) => boolean): string {
+  return freeName(`${name} (${label})`, name, exists);
+}
+
+function freeName(base: string, original: string, exists: (name: string) => boolean): string {
   if (!exists(base)) return base;
   for (let n = 2; n < 1000; n++) {
     const candidate = `${base} ${n}`;
     if (!exists(candidate)) return candidate;
   }
-  throw new Error(`Could not find a free name for "${name}" after 1000 attempts`);
+  throw new Error(`Could not find a free name for "${original}" after 1000 attempts`);
 }

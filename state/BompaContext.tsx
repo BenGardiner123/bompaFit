@@ -52,15 +52,19 @@ import { loadHowTo } from '@/lib/howtos';
 import { bodyweightShare, effectiveWeight, isBodyweightLift as isLibraryBodyweight, readBodyweightKg, readBodyweightLifts } from '@/lib/bodyweight';
 import { db, onStorageFailure, queue, readSettings, requestPersistence, warn, writeSetting } from '@/lib/db';
 import { readWarmupItems, readWarmupTicks, resolveWarmup, toggleTick, type WarmupTicks } from '@/lib/warmup';
-import { copyName, uniqueId } from '@/lib/ids';
+import { copyName, uniqueId, versionName } from '@/lib/ids';
+import { PHASE_LABEL } from '@/lib/tokens';
 import { summariseSessions, type SessionSummary } from '@/lib/history';
 import { buildInsights, type Insight } from '@/lib/insights';
 import {
   DEFAULT_BLOCKS,
   addToEveryWeek,
   addToWeek,
+  blockRotation,
   generatePlan,
   predictPeak,
+  replaceInRotation,
+  repointInBlock,
   reverseTaper,
   routineLoader,
   type PeakWindow,
@@ -268,6 +272,11 @@ type UIState = {
 
   builderPhase: Phase;
   builderWeeks: number;
+  /**
+   * The workouts the next block will cycle through, in order. Null until the
+   * lifter changes the pick, which means the plan's own list.
+   */
+  builderRotation: string[] | null;
 
   hydrated: boolean;
   storageOk: boolean;
@@ -305,6 +314,7 @@ const INITIAL: UIState = {
 
   builderPhase: 'strength',
   builderWeeks: 4,
+  builderRotation: null,
 
   hydrated: false,
   storageOk: true,
@@ -1213,17 +1223,7 @@ function useBompaState() {
       const takenNames = new Set(routines.map((r) => r.name));
       const takenIds = new Set(routines.map((r) => r.id));
       const name = takenNames.has(template.name) ? copyName(template.name, (n) => takenNames.has(n)) : template.name;
-      const copy: Routine = {
-        ...template,
-        id: uniqueId(name, (candidate) => takenIds.has(candidate)),
-        name,
-        source: 'user',
-        slots: template.slots.map(cloneSlot),
-        // Copied for the same reason the slots are: a spread would leave the
-        // copy sharing the template's map, so editing one would edit both.
-        supersetRest: { ...(template.supersetRest ?? {}) },
-        ...(template.warmup ? { warmup: template.warmup.map((item) => ({ ...item })) } : {}),
-      };
+      const copy = copyRoutine(template, uniqueId(name, (candidate) => takenIds.has(candidate)), name);
       await persistRoutine(copy);
       patch({ editingRoutineId: copy.id });
       say(`Copied. ${name} is yours to change now.`);
@@ -1964,14 +1964,78 @@ function useBompaState() {
     [planned, plan, persistAdjustments, routineById, say],
   );
 
-  /** Swap the routine filling a pending slot. The week's budget re-prices to match. */
+  /**
+   * Point every pending slot in a block that uses one workout at another, and
+   * put the new one in the block's list where the old one stood.
+   *
+   * One adjustment for the whole change, so a single Undo puts back every slot
+   * and the block's list together — the same restore path a reorder uses, with
+   * the block's previous list carried alongside the slots.
+   */
+  const repointBlock = useCallback(
+    (slot: PlannedSession, to: Routine, narrative: string): boolean => {
+      const block = blocks.find((b) => b.id === slot.blockId);
+      if (!block?.id || !plan?.id) return false;
+      // A stand-in id is a row whose write has not landed; putting it would
+      // store a second copy under the made-up key.
+      const stored = planned.filter((p) => p.id !== undefined && p.id > 0);
+      const changed = repointInBlock({ planned: stored, blockId: block.id, from: slot.routineId, to: to.id });
+      if (changed.length === 0) return false;
+
+      const current = blockRotation(block, plan);
+      const rotation = replaceInRotation(current, slot.routineId, to.id);
+      const listChanged = rotation.some((id, i) => id !== current[i]);
+      const nextBlock: Block = listChanged ? { ...block, rotation } : block;
+      const at = Date.now();
+
+      setPlanned((prev) => prev.map((p) => changed.find((c) => c.id === p.id) ?? p));
+      if (listChanged) setBlocks((prev) => prev.map((b) => (b.id === block.id ? nextBlock : b)));
+      void db.plannedSessions.bulkPut(changed).catch(warn);
+      changed.forEach((row) => queue('plannedSessions', 'put', row, at));
+      if (listChanged) {
+        void db.blocks.put(nextBlock).catch(warn);
+        queue('blocks', 'put', nextBlock, at);
+      }
+
+      const summary = (rows: PlannedSession[]) =>
+        rows.map((p) => ({ id: p.id, slotIndex: p.slotIndex, routineId: p.routineId, volumeFactor: p.volumeFactor, status: p.status }));
+      void persistAdjustments([
+        {
+          at,
+          planId: plan.id,
+          scope: { kind: 'session', plannedSessionId: slot.id! },
+          rule: 'user-reschedule',
+          before: {
+            sessions: summary(stored.filter((p) => changed.some((c) => c.id === p.id))),
+            block: { id: block.id, rotation: block.rotation ?? null },
+          },
+          after: { sessions: summary(changed), block: { id: block.id, rotation: nextBlock.rotation ?? null } },
+          narrative,
+        },
+      ]);
+      return true;
+    },
+    [planned, plan, blocks, persistAdjustments],
+  );
+
+  /**
+   * Swap the routine filling a pending slot — in this week only, or in every
+   * pending slot of the block that runs the same workout. The week's budget
+   * re-prices to match.
+   */
   const swapSlotRoutine = useCallback(
-    async (slotId: number, routineId: string) => {
+    async (slotId: number, routineId: string, scope: 'week' | 'block' = 'week') => {
       const slot = planned.find((p) => p.id === slotId);
       const routine = routineById(routineId);
       if (!slot || !routine || !plan?.id || slot.routineId === routineId) return;
       if (slot.status === 'done') {
         say("That one's already logged — swapping it now would rewrite history.");
+        return;
+      }
+
+      if (scope === 'block') {
+        const from = routineById(slot.routineId)?.name ?? 'that workout';
+        repointBlock(slot, routine, `You swapped ${from} for ${routine.name} in every week left in this block.`);
         return;
       }
 
@@ -1991,7 +2055,34 @@ function useBompaState() {
         },
       ]);
     },
-    [planned, plan, persistAdjustments, routineById, say],
+    [planned, plan, persistAdjustments, routineById, repointBlock, say],
+  );
+
+  /**
+   * Give this block its own copy of a workout, and open it to change.
+   *
+   * Phases usually train the same pattern with different lifts, so the copy
+   * replaces the original only in this block's pending slots. Other blocks keep
+   * the original, and so does everything already trained or skipped — sessions
+   * snapshot their own name and lifts, and the slots say what was planned then.
+   */
+  const makeBlockVersion = useCallback(
+    (slotId: number) => {
+      const slot = planned.find((p) => p.id === slotId);
+      const original = slot ? routineById(slot.routineId) : undefined;
+      const block = slot ? blocks.find((b) => b.id === slot.blockId) : undefined;
+      if (!slot || !original || !block || slot.status !== 'plan') return;
+
+      const takenNames = new Set(routines.map((r) => r.name));
+      const takenIds = new Set(routines.map((r) => r.id));
+      const phase = PHASE_LABEL[block.phase];
+      const name = versionName(original.name, phase, (n) => takenNames.has(n));
+      const copy = copyRoutine(original, uniqueId(name, (candidate) => takenIds.has(candidate)), name);
+      void persistRoutine(copy);
+      repointBlock(slot, copy, `You made ${name} for this ${phase.toLowerCase()} block. Other blocks keep ${original.name}.`);
+      patch({ editingRoutineId: copy.id });
+    },
+    [planned, blocks, routines, routineById, persistRoutine, repointBlock, patch],
   );
 
   /**
@@ -2257,41 +2348,72 @@ function useBompaState() {
         });
         setPlanned(restored);
         void db.plannedSessions.bulkPut(restored.filter((p) => before.some((b) => b.id === p.id))).catch(warn);
+
+        // A change across a block also put a workout in the block's list.
+        const priorBlock = (adjustment.before as { block?: { id: number; rotation: string[] | null } })?.block;
+        const block = priorBlock ? blocks.find((b) => b.id === priorBlock.id) : undefined;
+        if (priorBlock && block) {
+          // Absent, not empty, when the block had no list of its own: absent is
+          // what reads as "the plan's list".
+          const restoredBlock: Block = { ...block };
+          delete restoredBlock.rotation;
+          if (priorBlock.rotation) restoredBlock.rotation = priorBlock.rotation;
+          setBlocks((prev) => prev.map((b) => (b.id === block.id ? restoredBlock : b)));
+          void db.blocks.put(restoredBlock).catch(warn);
+        }
         say('Reverted. The week is back as it was planned.');
       }
     },
-    [prescriptions, planned, savePrescriptions, say],
+    [prescriptions, planned, blocks, savePrescriptions, say],
   );
 
-  const addBlock = useCallback(async () => {
+  const addBlock = useCallback(() => {
     if (!plan?.id) return;
+    const chosen = s.builderRotation;
+    if (chosen && chosen.length === 0) {
+      say('Pick at least one workout for the block.');
+      return;
+    }
     const last = [...blocks].sort((a, b) => (a.startDate < b.startDate ? -1 : 1)).pop();
     const startAfter = last
       ? dateKey(fromDateKey(last.startDate) + (last.weeks + last.deloadWeeks) * 7 * DAY_MS)
       : todayKey;
+    // Stored only when it differs from the plan's list, so a block added
+    // without touching the pick is exactly the block it always was.
+    const own = chosen && chosen.join() !== plan.rotation.join() ? chosen : null;
 
     const generated = generatePlan({
       name: plan.name,
       startDate: startAfter,
-      // The new block inherits the plan's rotation and cadence — adding a block
-      // is a periodization decision, not a re-pick of which workouts you do.
+      // The new block keeps the plan's cadence — adding a block is a
+      // periodization decision — but may cycle through its own workouts.
       rotation: plan.rotation,
       sessionsPerWeek: plan.sessionsPerWeek,
-      specs: [{ phase: s.builderPhase, weeks: s.builderWeeks, deloadWeeks: 1 }],
+      specs: [{ phase: s.builderPhase, weeks: s.builderWeeks, deloadWeeks: 1, ...(own ? { rotation: own } : {}) }],
       planId: plan.id,
     });
     const nextBlockId = Math.max(0, ...blocks.map((b) => b.id ?? 0)) + 1;
     const block: Block = { ...generated.blocks[0]!, id: nextBlockId };
     const rows = generated.sessions.map((p) => ({ ...p, blockId: nextBlockId }));
 
+    // Stand-in ids until the write lands, as adding a workout does, so these
+    // slots can be swapped and versioned without a reload.
+    const at = Date.now();
+    const standIns = rows.map((row, i) => ({ ...row, id: -(at * 1000 + i) }));
     setBlocks((prev) => [...prev, block]);
-    setPlanned((prev) => [...prev, ...rows]);
-    await db.blocks.put(block).catch(warn);
-    await db.plannedSessions.bulkAdd(rows).catch(warn);
+    setPlanned((prev) => [...prev, ...standIns]);
+    void db.blocks.put(block).catch(warn);
+    void db.plannedSessions
+      .bulkAdd(rows, { allKeys: true })
+      .then((ids) => {
+        const realId = new Map(standIns.map((row, i) => [row.id, (ids as number[])[i]!]));
+        setPlanned((prev) => prev.map((p) => (realId.has(p.id!) ? { ...p, id: realId.get(p.id!) } : p)));
+      })
+      .catch(warn);
 
-    patch({ planTab: 'cal' });
+    patch({ planTab: 'cal', builderRotation: null });
     say(`${s.builderWeeks}-week ${s.builderPhase} block added after this one.`);
-  }, [plan, blocks, todayKey, s.builderPhase, s.builderWeeks, patch, say]);
+  }, [plan, blocks, todayKey, s.builderPhase, s.builderWeeks, s.builderRotation, patch, say]);
 
   const saveCompetition = useCallback(
     async (name: string, date: string, location: string) => {
@@ -2706,6 +2828,7 @@ function useBompaState() {
     deleteRoutine,
     moveSession,
     swapSlotRoutine,
+    makeBlockVersion,
     dropSlot,
     addWorkout,
     setUnit,
@@ -2761,6 +2884,21 @@ function useBompaState() {
     unlinkExercise,
     downloadContent,
     savedContent,
+  };
+}
+
+/** A routine of the user's own with the same lifts, under a new id and name. */
+function copyRoutine(from: Routine, id: string, name: string): Routine {
+  return {
+    ...from,
+    id,
+    name,
+    source: 'user',
+    slots: from.slots.map(cloneSlot),
+    // Copied for the same reason the slots are: a spread would leave the copy
+    // sharing the original's map, so editing one would edit both.
+    supersetRest: { ...(from.supersetRest ?? {}) },
+    ...(from.warmup ? { warmup: from.warmup.map((item) => ({ ...item })) } : {}),
   };
 }
 

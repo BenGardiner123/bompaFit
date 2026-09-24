@@ -236,6 +236,16 @@ export type Block = {
   weeks: number;
   deloadWeeks: number;
   startDate: string;
+  /**
+   * The workouts this block cycles through, in order, when it has its own.
+   * Absent means the plan's `rotation` — which is how every block written
+   * before this existed reads, so it needed no new schema version: optional
+   * and unindexed, like `PlannedSession.userModified`.
+   *
+   * The slots were generated from it already; this records the choice so it
+   * can be shown, and so a version made for the block can take its place.
+   */
+  rotation?: string[];
 };
 
 /**

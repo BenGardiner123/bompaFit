@@ -2,12 +2,12 @@
 
 import { useState, type CSSProperties, type ReactNode } from 'react';
 import { dateKey, daysBetween, fmtDayMonth } from '@/lib/calc';
-import { blockContaining, mesocycleCurve } from '@/lib/plan';
+import { blockContaining, blockRotation, mesocycleCurve } from '@/lib/plan';
 import { weekIsUserModified } from '@/lib/schedule';
 import { C, HERO_SIZE, ON_PHASE, PH, PHASE_ABBR, PHASE_LABEL, PH_ON_INK, R, TOUCH, num, onInk } from '@/lib/tokens';
 import type { Phase, PlannedSession } from '@/lib/types';
 import { useBompa, type PlanTab } from '@/state/BompaContext';
-import { Btn, Hero, HeroEyebrow, HeroNumeral, HeroTabs, HeroText, Row, Scroller, Section, Sheet, Tag } from '@/components/ui';
+import { Btn, Hero, HeroEyebrow, HeroNumeral, HeroTabs, HeroText, Row, Scroller, Section, Segmented, Sheet, Tag } from '@/components/ui';
 import { macrocycle, nextBlockStart } from './PlanMacrocycle';
 
 const PLAN_TABS: { value: PlanTab; label: string }[] = [
@@ -167,6 +167,9 @@ function Calendar() {
   const b = useBompa();
   // Which slot has its options expanded.
   const [open, setOpen] = useState<number | null>(null);
+  // Whether a swap reaches the rest of the block. Back to this week each time
+  // the options open, so a wide swap is never the leftover of an earlier one.
+  const [scope, setScope] = useState<'week' | 'block'>('week');
   const slots = b.thisWeekSlots;
   const done = slots.filter((slot) => slot.status === 'done').length;
 
@@ -211,7 +214,10 @@ function Calendar() {
                   <span style={{ width: TOUCH, flex: 'none', display: 'flex' }}>
                     {editable && (
                       <Btn
-                        onClick={() => setOpen(isOpen ? null : slot.id!)}
+                        onClick={() => {
+                          setOpen(isOpen ? null : slot.id!);
+                          setScope('week');
+                        }}
                         label={isOpen ? 'Close options' : `Options for ${routine?.name ?? 'this slot'}`}
                         style={{
                           width: TOUCH,
@@ -255,13 +261,38 @@ function Calendar() {
                   </div>
                   {/* People look for the workout itself where they see it scheduled.
                       Editing it here changes every week, because each slot points
-                      to the workout rather than holding a copy of it. */}
+                      to the workout rather than holding a copy of it — so the
+                      version button beside it is how one block trains differently. */}
                   {routine && (
-                    <div style={{ display: 'flex' }}>
-                      <SlotBtn onClick={() => b.patch({ editingRoutineId: routine.id })} label={`Edit workout ${routine.name}`}>
-                        ✎ Edit {routine.name}
-                      </SlotBtn>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <div style={{ display: 'flex' }}>
+                        <SlotBtn onClick={() => b.patch({ editingRoutineId: routine.id })} label={`Edit workout ${routine.name}`}>
+                          ✎ Edit {routine.name}
+                        </SlotBtn>
+                      </div>
+                      <div style={{ display: 'flex' }}>
+                        <SlotBtn
+                          onClick={() => {
+                            b.makeBlockVersion(slot.id!);
+                            setOpen(null);
+                          }}
+                          label={`Make a version of ${routine.name} for this block`}
+                        >
+                          Make a version for this block
+                        </SlotBtn>
+                      </div>
                     </div>
+                  )}
+                  {b.routines.length > 1 && (
+                    <Segmented
+                      label="Swap in"
+                      value={scope}
+                      onChange={setScope}
+                      options={[
+                        { value: 'week', label: 'Just this week' },
+                        { value: 'block', label: 'Every week in block' },
+                      ]}
+                    />
                   )}
                   {b.routines.length > 1 && (
                     <Scroller style={{ gap: 6 }}>
@@ -271,7 +302,7 @@ function Calendar() {
                           <Btn
                             key={r.id}
                             onClick={() => {
-                              void b.swapSlotRoutine(slot.id!, r.id);
+                              void b.swapSlotRoutine(slot.id!, r.id, scope);
                               setOpen(null);
                             }}
                             style={{
@@ -652,10 +683,137 @@ function Mesocycle() {
         </div>
       </Section>
 
-      <Btn onClick={b.addBlock} style={inkButton(56, R.block, 15)}>
+      <BlockWorkouts />
+
+      <Btn onClick={b.addBlock} disabled={b.s.builderRotation?.length === 0} style={inkButton(56, R.block, 15)}>
         Add block to calendar
       </Btn>
+
+      <PlanBlocks />
     </>
+  );
+}
+
+/**
+ * Which of your workouts the new block cycles through, and in what order.
+ * Starts on the plan's own list, so adding a block without touching this is
+ * what it always was.
+ */
+function BlockWorkouts() {
+  const b = useBompa();
+  if (!b.plan || b.routines.length === 0) return null;
+
+  const known = new Set(b.routines.map((r) => r.id));
+  const chosen = b.s.builderRotation ?? b.plan.rotation.filter((id) => known.has(id));
+  const set = (builderRotation: string[]) => b.patch({ builderRotation });
+  const move = (from: number, to: number) => {
+    const next = [...chosen];
+    const [id] = next.splice(from, 1);
+    next.splice(to, 0, id!);
+    set(next);
+  };
+  // Chosen first, in the order they will run, then the rest to pick from.
+  const ordered = [...chosen.map((id) => b.routineById(id)!), ...b.routines.filter((r) => !chosen.includes(r.id))];
+
+  return (
+    <Section title="Workouts" right={`${chosen.length} in the block`}>
+      {ordered.map((routine) => {
+        const at = chosen.indexOf(routine.id);
+        const on = at >= 0;
+        return (
+          <Row
+            key={routine.id}
+            title={routine.name}
+            lead={
+              <span style={{ width: 24, flex: 'none', fontSize: 12, fontWeight: 800, color: C.tertiary, ...num }}>{on ? at + 1 : ''}</span>
+            }
+            right={
+              <span style={{ display: 'flex', gap: 6 }}>
+                {on && (
+                  <>
+                    <OrderBtn label={`Move ${routine.name} earlier`} disabled={at === 0} onClick={() => move(at, at - 1)}>
+                      ↑
+                    </OrderBtn>
+                    <OrderBtn label={`Move ${routine.name} later`} disabled={at === chosen.length - 1} onClick={() => move(at, at + 1)}>
+                      ↓
+                    </OrderBtn>
+                  </>
+                )}
+                <Btn
+                  label={`Use ${routine.name}`}
+                  pressed={on}
+                  onClick={() => set(on ? chosen.filter((id) => id !== routine.id) : [...chosen, routine.id])}
+                  style={{
+                    width: TOUCH,
+                    height: TOUCH,
+                    borderRadius: R.chip,
+                    border: `1px solid ${on ? C.ink : C.lineStrong}`,
+                    background: on ? C.ink : C.card,
+                    color: on ? C.white : C.tertiary,
+                    fontSize: 14,
+                    fontWeight: 800,
+                  }}
+                >
+                  {on ? '✓' : '+'}
+                </Btn>
+              </span>
+            }
+          />
+        );
+      })}
+      <Note>
+        {chosen.length === 0
+          ? 'Pick at least one workout for the block.'
+          : `The block starts on the first and works down the list, ${b.plan.sessionsPerWeek} sessions a week.`}
+      </Note>
+    </Section>
+  );
+}
+
+function OrderBtn({ children, label, disabled, onClick }: { children: ReactNode; label: string; disabled: boolean; onClick: () => void }) {
+  return (
+    <Btn
+      label={label}
+      disabled={disabled}
+      onClick={onClick}
+      style={{ width: TOUCH, height: TOUCH, borderRadius: R.chip, border: `1px solid ${C.lineStrong}`, background: C.card, color: C.ink60, fontSize: 14, fontWeight: 800 }}
+    >
+      {children}
+    </Btn>
+  );
+}
+
+/** Every block in the plan and the workouts it cycles through, so a block with its own versions says so. */
+function PlanBlocks() {
+  const b = useBompa();
+  if (b.blocks.length === 0) return null;
+  const blocks = [...b.blocks].sort((x, y) => (x.startDate < y.startDate ? -1 : 1));
+
+  return (
+    <Section title="Blocks in your plan">
+      <div role="list" aria-label="Blocks in your plan" style={{ display: 'flex', flexDirection: 'column' }}>
+        {blocks.map((block) => {
+          const names = blockRotation(block, b.plan).map((id) => b.routineById(id)?.name ?? 'Deleted workout');
+          return (
+            <div
+              key={block.id ?? block.startDate}
+              role="listitem"
+              style={{ display: 'grid', gridTemplateColumns: '12px 1fr auto', gap: 12, alignItems: 'flex-start', padding: '12px 0', borderTop: `1px solid ${C.line}` }}
+            >
+              <span aria-hidden style={{ width: 10, height: 10, borderRadius: 3, background: PH[block.phase], marginTop: 5 }} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                <span style={{ fontSize: 15, fontWeight: 800 }}>{PHASE_LABEL[block.phase]} block</span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: C.tertiary }}>
+                  {block.rotation ? 'Its own workouts: ' : ''}
+                  {names.join(', ')}
+                </span>
+              </div>
+              <span style={{ fontSize: 12, fontWeight: 800, color: C.ink80, ...num }}>{fmtDayMonth(block.startDate)}</span>
+            </div>
+          );
+        })}
+      </div>
+    </Section>
   );
 }
 

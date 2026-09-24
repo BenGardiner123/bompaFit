@@ -259,6 +259,25 @@ describe('training methods in a backup', () => {
   });
 });
 
+describe('blocks in a backup', () => {
+  it("a block's own workouts come back, and a block without any still has none", async () => {
+    const own = { id: 1, planId: 1, phase: 'strength' as const, weeks: 4, deloadWeeks: 1, startDate: '2026-08-17', rotation: ['push-a-strength', 'legs-b'] };
+    const plain = { id: 2, planId: 1, phase: 'peak' as const, weeks: 3, deloadWeeks: 0, startDate: '2026-09-21' };
+    await db.blocks.bulkPut([own, plain]);
+
+    const text = JSON.stringify(await buildEnvelope(new Date(NOW).toISOString()));
+    await clearAll();
+    const parsed = parseEnvelope(text);
+    if (!parsed.ok) throw new Error(parsed.error);
+    await applyEnvelope(parsed.envelope);
+
+    expect(await db.blocks.get(1)).toEqual(own);
+    const back = await db.blocks.get(2);
+    expect(back).toEqual(plain);
+    expect(back && 'rotation' in back).toBe(false);
+  });
+});
+
 describe('warm-ups in a backup', () => {
   it("a workout's own warm-up, the default-list switch and the default list all come back unchanged", async () => {
     const warmup = [

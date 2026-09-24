@@ -40,7 +40,13 @@ export function mesocycleCurve(phase: Phase, weeks: number): CurveWeek[] {
 // Building a plan
 // ─────────────────────────────────────────────────────────────
 
-export type BlockSpec = { phase: Phase; weeks: number; deloadWeeks: number };
+export type BlockSpec = {
+  phase: Phase;
+  weeks: number;
+  deloadWeeks: number;
+  /** The workouts this block cycles through, when it differs from the plan's. */
+  rotation?: string[];
+};
 
 /** The 16-week default a fresh install starts on. */
 export const DEFAULT_BLOCKS: BlockSpec[] = [
@@ -95,7 +101,7 @@ export function generatePlan(args: {
   const blocks: (Block & { id: number })[] = [];
   const sessions: PlannedSession[] = [];
 
-  if (rotation.length === 0 || sessionsPerWeek <= 0) {
+  if (sessionsPerWeek <= 0 || (rotation.length === 0 && !specs.some((spec) => spec.rotation?.length))) {
     // A plan with nothing to schedule is a valid state — it is what setup
     // produces if the user skips building a routine — but it has no sessions.
     return { plan, blocks, sessions };
@@ -106,6 +112,11 @@ export function generatePlan(args: {
   let rotationCursor = 0;
 
   for (const spec of specs) {
+    // A block with its own workouts starts on the first one the lifter picked,
+    // because they chose that order. The plan-wide cursor is left where it was
+    // so a later block on the plan's list carries on as it always did.
+    const own = spec.rotation && spec.rotation.length > 0 ? spec.rotation : null;
+    let ownCursor = 0;
     const block: Block & { id: number } = {
       id: blockId,
       planId,
@@ -113,11 +124,16 @@ export function generatePlan(args: {
       weeks: spec.weeks,
       deloadWeeks: spec.deloadWeeks,
       startDate: cursor,
+      // Only written when the block has its own list: absent means "the plan's",
+      // which is how every block stored before this field existed reads.
+      ...(own ? { rotation: [...own] } : {}),
     };
     blocks.push(block);
-
     const totalWeeks = spec.weeks + spec.deloadWeeks;
-    for (let w = 0; w < totalWeeks; w++) {
+    // Nothing to cycle through: the block still exists, it just has no slots.
+    const fillable = own !== null || rotation.length > 0;
+
+    for (let w = 0; w < (fillable ? totalWeeks : 0); w++) {
       const isDeload = w >= spec.weeks;
       const shape = weekShape(isDeload ? 'deload' : spec.phase, w, spec.weeks);
       const weekStart = addDays(cursor, w * 7);
@@ -129,8 +145,7 @@ export function generatePlan(args: {
       for (let slotIndex = 0; slotIndex < slots; slotIndex++) {
         // The rotation carries across week and block boundaries, so a 3-routine
         // split over a 4-session week doesn't restart on A every Monday.
-        const routineId = rotation[rotationCursor % rotation.length]!;
-        rotationCursor += 1;
+        const routineId = own ? own[ownCursor++ % own.length]! : rotation[rotationCursor++ % rotation.length]!;
         sessions.push({
           planId,
           blockId,
@@ -224,8 +239,9 @@ function appendedSlot(args: {
  *
  * Planned, not additional: the week's budget rises by what the workout costs,
  * so training it later fills this slot and the over-budget offer has nothing to
- * say about it. Full volume, because this is a one-off the user asked for by
- * name rather than a week the generator shaped.
+ * say about it. Sized to the week's own volume, like the sessions the generator
+ * put there, so an added session in a ramp-up or deload week is not heavier
+ * than everything around it.
  *
  * Null when there is no plan, or the week sits outside every block — there is
  * no block to file the slot under, and inventing one would put a row in the
@@ -277,6 +293,39 @@ export function addToEveryWeek(args: {
     .map((w) =>
       appendedSlot({ planned, planId, blockId: block.id!, weekStart: w.weekStart, routineId, volumeFactor: w.volumeFactor }),
     );
+}
+
+// ─────────────────────────────────────────────────────────────
+// A block's own workouts
+// ─────────────────────────────────────────────────────────────
+
+/** The workouts a block cycles through: its own list, or the plan's when it has none. */
+export function blockRotation(block: Block, plan: Pick<Plan, 'rotation'> | null): string[] {
+  return block.rotation ?? plan?.rotation ?? [];
+}
+
+/**
+ * Point every pending slot in one block that uses `from` at `to` instead.
+ *
+ * Returns only the rows that changed. Done and skipped slots are left alone —
+ * they are what was trained, or what the week closed on, and history must read
+ * as it happened. Slots in other blocks are never touched: the point is that
+ * this block trains differently and the rest of the plan does not.
+ *
+ * Marked `userModified`, as a single swap is: the lifter changed these weeks.
+ * Positions are not touched, so every week stays dense.
+ */
+export function repointInBlock(args: { planned: PlannedSession[]; blockId: number; from: string; to: string }): PlannedSession[] {
+  const { planned, blockId, from, to } = args;
+  if (from === to) return [];
+  return planned
+    .filter((p) => p.blockId === blockId && p.status === 'plan' && p.routineId === from)
+    .map((p) => ({ ...p, routineId: to, userModified: true }));
+}
+
+/** A rotation with one workout replaced by another, in the same position. */
+export function replaceInRotation(rotation: string[], from: string, to: string): string[] {
+  return rotation.map((id) => (id === from ? to : id));
 }
 
 /** Plans start on a Monday so week boundaries line up with the adaptation pass. */

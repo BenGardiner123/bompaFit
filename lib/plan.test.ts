@@ -8,10 +8,13 @@ import {
   addToEveryWeek,
   addToWeek,
   blockContaining,
+  blockRotation,
   generatePlan,
   mesocycleCurve,
   plannedSessionLoad,
   predictPeak,
+  repointInBlock,
+  replaceInRotation,
   reverseTaper,
   startWeekOn,
   weekShape,
@@ -558,5 +561,142 @@ describe('adding a workout', () => {
       expect(addToEveryWeek({ planned: [], planId: undefined, blocks: [], fromWeek: THIS, routineId: 'legs' })).toEqual([]);
       expect(addToEveryWeek({ planned, planId: 1, blocks: [BLOCK], fromWeek: '2026-09-07', routineId: 'legs' })).toEqual([]);
     });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────
+// A block's own workouts
+// ─────────────────────────────────────────────────────────────
+
+describe('a block with its own workouts', () => {
+  const ROTATION = ['push', 'pull', 'legs'];
+  const base = { name: 'Autumn build', startDate: TODAY, rotation: ROTATION, sessionsPerWeek: 4 };
+  const weekOf = (sessions: PlannedSession[], weekStart: string) => weekSlots(sessions, weekStart).map((p) => p.routineId);
+
+  it('with no list of its own, fills exactly as before', () => {
+    // Hand-worked: 4 a week over [push, pull, legs]. The hypertrophy block is 5
+    // working weeks and a 3-session deload, 23 slots, so the strength block
+    // opens on slot 23 — 23 mod 3 = 2, legs — and the rotation runs on from
+    // there. Every block keeps reading the plan's list, so none stores one.
+    const { blocks, sessions } = generatePlan(base);
+    expect(weekOf(sessions, blocks[0]!.startDate)).toEqual(['push', 'pull', 'legs', 'push']);
+    expect(weekOf(sessions, blocks[1]!.startDate)).toEqual(['legs', 'push', 'pull', 'legs']);
+    // 62 slots in all (14 working weeks at 4, 2 deloads at 3). Pull fills slots
+    // 1, 4, … 61 of them: 21 times.
+    expect(sessions).toHaveLength(62);
+    expect(sessions.filter((p) => p.routineId === 'pull')).toHaveLength(21);
+    for (const block of blocks) expect('rotation' in block).toBe(false);
+  });
+
+  it('fills its weeks from the workouts it was given, in the order given, starting on the first', () => {
+    const specs = [DEFAULT_BLOCKS[0]!, { ...DEFAULT_BLOCKS[1]!, rotation: ['legs', 'push'] }, DEFAULT_BLOCKS[2]!];
+    const { blocks, sessions } = generatePlan({ ...base, specs });
+    const strength = blocks[1]!;
+    expect(strength.rotation).toEqual(['legs', 'push']);
+    const inBlock = sessions.filter((p) => p.blockId === strength.id);
+    // Pull was left out, so no slot in this block asks for it.
+    expect(new Set(inBlock.map((p) => p.routineId))).toEqual(new Set(['legs', 'push']));
+    expect(weekOf(sessions, strength.startDate)).toEqual(['legs', 'push', 'legs', 'push']);
+    // Same number of sessions a week as any other block, deload included.
+    expect(inBlock).toHaveLength(5 * 4 + 3);
+  });
+
+  it("leaves the blocks around it on the plan's list", () => {
+    const specs = [DEFAULT_BLOCKS[0]!, { ...DEFAULT_BLOCKS[1]!, rotation: ['legs'] }, DEFAULT_BLOCKS[2]!];
+    const { blocks, sessions } = generatePlan({ ...base, specs });
+    const plain = generatePlan(base);
+    // The first block is untouched, slot for slot.
+    expect(sessions.filter((p) => p.blockId === 1)).toEqual(plain.sessions.filter((p) => p.blockId === 1));
+    // The peak block picks up the plan's rotation where the first block left
+    // it: 23 slots in, so legs.
+    expect(weekOf(sessions, blocks[2]!.startDate)).toEqual(['legs', 'push', 'pull', 'legs']);
+    expect('rotation' in blocks[2]!).toBe(false);
+  });
+
+  it("schedules a block with its own list even when the plan's list is empty", () => {
+    const { sessions } = generatePlan({ ...base, rotation: [], specs: [{ phase: 'strength', weeks: 1, deloadWeeks: 0, rotation: ['legs'] }] });
+    expect(sessions.map((p) => p.routineId)).toEqual(['legs', 'legs', 'legs', 'legs']);
+  });
+
+  it("reads the plan's list for a block with none of its own", () => {
+    const block: Block = { id: 1, planId: 1, phase: 'strength', weeks: 3, deloadWeeks: 1, startDate: '2026-08-10' };
+    expect(blockRotation(block, { rotation: ROTATION })).toEqual(ROTATION);
+    expect(blockRotation({ ...block, rotation: ['legs'] }, { rotation: ROTATION })).toEqual(['legs']);
+    expect(blockRotation(block, null)).toEqual([]);
+  });
+
+  it('replaces one workout in a rotation without moving the others', () => {
+    expect(replaceInRotation(['push', 'pull', 'legs', 'push'], 'push', 'push-strength')).toEqual(['push-strength', 'pull', 'legs', 'push-strength']);
+    expect(replaceInRotation(ROTATION, 'arms', 'push')).toEqual(ROTATION);
+  });
+});
+
+describe('pointing a block at a different workout', () => {
+  // Block 1 runs Mon 10 Aug to the deload of 31 Aug; block 2 starts 7 Sep.
+  const row = (over: Partial<PlannedSession>): PlannedSession => ({
+    planId: 1,
+    blockId: 1,
+    weekStart: '2026-08-17',
+    slotIndex: 0,
+    routineId: 'push',
+    status: 'plan',
+    adjustedByBompa: false,
+    volumeFactor: 1,
+    ...over,
+  });
+  const planned: PlannedSession[] = [
+    row({ id: 1, weekStart: '2026-08-10', slotIndex: 0, status: 'done', date: '2026-08-11' }),
+    row({ id: 2, weekStart: '2026-08-10', slotIndex: 1, status: 'skip' }),
+    row({ id: 3, weekStart: '2026-08-17', slotIndex: 0, status: 'done', date: '2026-08-17' }),
+    row({ id: 4, weekStart: '2026-08-17', slotIndex: 1, routineId: 'pull' }),
+    row({ id: 5, weekStart: '2026-08-17', slotIndex: 2 }),
+    row({ id: 6, weekStart: '2026-08-24', slotIndex: 0 }),
+    row({ id: 7, weekStart: '2026-08-24', slotIndex: 1, routineId: 'pull' }),
+    row({ id: 8, weekStart: '2026-08-31', slotIndex: 0, volumeFactor: DELOAD_VOLUME_FACTOR }),
+    row({ id: 9, blockId: 2, weekStart: '2026-09-07', slotIndex: 0 }),
+    row({ id: 10, blockId: 2, weekStart: '2026-09-07', slotIndex: 1, routineId: 'pull' }),
+  ];
+  const apply = (changed: PlannedSession[]) => planned.map((p) => changed.find((c) => c.id === p.id) ?? p);
+
+  it('a version touches only the pending slots of that block that use the original', () => {
+    const changed = repointInBlock({ planned, blockId: 1, from: 'push', to: 'push-strength' });
+    // 1 and 3 are done, 2 was skipped, 4 and 7 are pull, 9 is another block.
+    expect(changed.map((p) => p.id)).toEqual([5, 6, 8]);
+    expect(changed.every((p) => p.routineId === 'push-strength' && p.userModified === true)).toBe(true);
+    // Nothing pending picks up a date, and the deload keeps its volume.
+    expect(changed.every((p) => p.date === undefined)).toBe(true);
+    expect(changed.find((p) => p.id === 8)!.volumeFactor).toBe(DELOAD_VOLUME_FACTOR);
+  });
+
+  it('a swap across the block follows the same rule for any workout', () => {
+    expect(repointInBlock({ planned, blockId: 1, from: 'pull', to: 'legs' }).map((p) => p.id)).toEqual([4, 7]);
+    expect(repointInBlock({ planned, blockId: 2, from: 'pull', to: 'legs' }).map((p) => p.id)).toEqual([10]);
+    expect(repointInBlock({ planned, blockId: 1, from: 'pull', to: 'pull' })).toEqual([]);
+  });
+
+  it('leaves every week in the same order', () => {
+    const after = apply(repointInBlock({ planned, blockId: 1, from: 'push', to: 'push-strength' }));
+    for (const week of ['2026-08-10', '2026-08-17', '2026-08-24', '2026-08-31', '2026-09-07']) {
+      expect(weekSlots(after, week).map((p) => p.id)).toEqual(weekSlots(planned, week).map((p) => p.id));
+      const indices = weekSlots(after, week).map((p) => p.slotIndex);
+      expect(indices).toEqual(indices.map((_, i) => i));
+    }
+  });
+
+  it('a fresh version costs what the original did, until its lifts change', () => {
+    // Push 100, pull 80, with the done push logged at 100. The version starts
+    // as an exact copy, so the week prices the same; give it a lift worth 30
+    // more and the slot it fills prices at 130.
+    const after = apply(repointInBlock({ planned, blockId: 1, from: 'push', to: 'push-strength' }));
+    const budget = (rows: PlannedSession[], cost: Record<string, number>) =>
+      weekBudget({ planned: rows, weekStart: '2026-08-17', slotLoad: (p) => (cost[p.routineId] ?? 0) * p.volumeFactor, loggedLoad: 100 });
+
+    const before = budget(planned, { push: 100, pull: 80 });
+    const copied = budget(after, { push: 100, pull: 80, 'push-strength': 100 });
+    expect(before.budget).toBe(280);
+    expect(copied.budget).toBe(before.budget);
+    expect(copied.projected).toBe(before.projected);
+    // The done push is still priced as the original: 100 + 80 + 130.
+    expect(budget(after, { push: 100, pull: 80, 'push-strength': 130 }).budget).toBe(310);
   });
 });

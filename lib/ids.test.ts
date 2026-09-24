@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { copyName, slugify, uniqueId } from './ids';
+import { copyName, slugify, uniqueId, versionName } from './ids';
 
 const none = () => false;
 const taken = (...ids: string[]) => (id: string) => ids.includes(id);
@@ -52,5 +52,12 @@ describe('copyName', () => {
 
   it('refuses rather than returning a duplicate name', () => {
     expect(() => copyName('Push Day', () => true)).toThrow(/free name/);
+  });
+});
+
+describe('versionName', () => {
+  it('names the version after the phase, then numbers a second one', () => {
+    expect(versionName('Push A', 'Strength', none)).toBe('Push A (Strength)');
+    expect(versionName('Push A', 'Strength', taken('Push A (Strength)'))).toBe('Push A (Strength) 2');
   });
 });
