@@ -253,6 +253,16 @@ function Calendar() {
                       Drop
                     </SlotBtn>
                   </div>
+                  {/* People look for the workout itself where they see it scheduled.
+                      Editing it here changes every week, because each slot points
+                      to the workout rather than holding a copy of it. */}
+                  {routine && (
+                    <div style={{ display: 'flex' }}>
+                      <SlotBtn onClick={() => b.patch({ editingRoutineId: routine.id })} label={`Edit workout ${routine.name}`}>
+                        ✎ Edit {routine.name}
+                      </SlotBtn>
+                    </div>
+                  )}
                   {b.routines.length > 1 && (
                     <Scroller style={{ gap: 6 }}>
                       {b.routines

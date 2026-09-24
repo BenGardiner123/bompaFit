@@ -20,6 +20,15 @@ test.describe('the week', () => {
     await expect(page.getByText(/^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)$/)).toHaveCount(0);
   });
 
+  test("a slot's options open its workout for editing", async ({ page }) => {
+    // People look for the workout where they see it scheduled, not only in the library.
+    const first = page.getByRole('button', { name: /^Options for / }).first();
+    const name = (await first.getAttribute('aria-label'))!.replace('Options for ', '');
+    await first.click();
+    await page.getByRole('button', { name: `Edit workout ${name}` }).click();
+    await expect(page.getByRole('dialog', { name: `Edit ${name}` })).toBeVisible();
+  });
+
   test('says out loud that order is a suggestion', async ({ page }) => {
     await expect(page.getByText(/Order is a suggestion, not a schedule/)).toBeVisible();
   });

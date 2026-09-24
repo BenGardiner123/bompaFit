@@ -549,6 +549,12 @@ function Credit() {
       <a href="https://github.com/yuhonas/free-exercise-db" target="_blank" rel="noopener noreferrer">
         Free Exercise DB
       </a>. Everything you log stays on this device — {b.s.storageOk ? 'no account, no server' : 'storage is unavailable, running from memory'}.
+      {/* Which copy of the app this is. An installed app runs the copy it saved
+          until an update lands, so this is how to tell a new deploy has arrived. */}
+      <span style={{ display: 'block', paddingTop: 6, ...num }}>
+        Bompa {process.env.NEXT_PUBLIC_APP_VERSION} · build {process.env.NEXT_PUBLIC_APP_BUILD} ·{' '}
+        {process.env.NEXT_PUBLIC_APP_BUILT_AT}
+      </span>
     </span>
   );
 }

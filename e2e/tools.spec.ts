@@ -198,6 +198,14 @@ test.describe('restoring a backup', () => {
   });
 });
 
+test.describe('version', () => {
+  test('the bottom of Tools says which build this is', async ({ page }) => {
+    // Version, the commit it was built from, and the build date: how to tell
+    // an installed copy has picked up a new deploy.
+    await expect(page.getByText(/^Bompa \d+\.\d+\.\d+ · build [0-9a-f]{7}|dev · \d{4}-\d{2}-\d{2}$/)).toBeVisible();
+  });
+});
+
 test.describe('backup', () => {
   test('exports a complete JSON backup', async ({ page }) => {
     const download = page.waitForEvent('download');
