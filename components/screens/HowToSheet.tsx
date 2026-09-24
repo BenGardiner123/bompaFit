@@ -223,9 +223,11 @@ function Credits({ view, providerName }: { view: ResolvedHowTo; providerName?: s
       {view.textSource === 'bundled' && HOWTO_BY_ID.has(view.exerciseId) && (
         <span style={creditText}>Cues written for Bompa · CC0</span>
       )}
+      {/* The imported movements' cues are ours too, written from each movement's
+          facts; only the movement list itself comes from the dataset. */}
       {view.textSource === 'bundled' && !HOWTO_BY_ID.has(view.exerciseId) && (
         <span style={creditText}>
-          Cues from{' '}
+          Written by Bompa · CC0 · movement from{' '}
           {/* The global link colour is a dark amber tuned for light pages; on ink
               it is too dim to read, so the link takes body text and an underline. */}
           <a href="https://github.com/yuhonas/free-exercise-db" target="_blank" rel="noopener noreferrer" style={creditLink}>

@@ -4,10 +4,11 @@
 // supplied them and written in the same voice where it didn't.
 //
 // Licensing: the bundled movements (names, muscles, equipment) come from Free
-// Exercise DB. Their step-by-step text lives separately in public/howtos.json and
-// is not redistributed with the published code, because its origin could not be
-// confirmed. The 14 hand-written seed movements below, cues included, are CC0.
-// No wger data is bundled; wger content arrives only through a connected service. `Exercise.licence` is still recorded per
+// Exercise DB. Their step-by-step cues in public/howtos.json were written for
+// Bompa from those facts — the dataset's own instruction text is not used,
+// because its origin could not be confirmed — and are CC0, like the 14
+// hand-written seed movements below. No wger data is bundled; wger content
+// arrives only through a connected service. `Exercise.licence` is still recorded per
 // entry so the source of every movement stays on record — ingest is the only
 // moment that answer is knowable.
 

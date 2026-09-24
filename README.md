@@ -40,10 +40,9 @@ On iPhone, install it rather than using it in a Safari tab. Safari can clear a w
 
 ## Exercise instructions
 
-The movement library (names, muscles, equipment) ships with the app. Step-by-step instructions for those movements are **not included in this repository**, because the only freely available set could not be confirmed as free to redistribute. The 14 starter movements carry instructions written for this project. For the rest you can:
+Every movement ships with short step-by-step cues **written for Bompa** (`public/howtos.json`), shown as "Written by Bompa" on each How-to sheet. They were written from each movement's facts (name, muscles, equipment, movement pattern), not adapted from any existing instruction text, and checked for overlap against the freely available datasets. They are general guidance: if a cue reads wrong for a movement you know, please open an issue.
 
-- **Connect a content service** in Tools → Exercise content. wger works with no account. ExerciseDB (via RapidAPI) works with your own key. Content is saved on your phone for offline use where the service's terms allow it, and each entry shows its credit and licence.
-- **Generate your own copy** with `node scripts/ingest-exercises.mjs <path to exercises.json>`, which writes `public/howtos.json` from a dataset you supply.
+For more detail, pictures or video, **connect a content service** in Tools → Exercise content. wger works with no account. ExerciseDB (via RapidAPI) works with your own key. Content is saved on your phone for offline use where the service's terms allow it, and each entry shows its credit and licence.
 
 ## What's here
 
@@ -93,4 +92,4 @@ Bompa's readiness and fatigue numbers are training guidance worked out from what
 
 ## Licence
 
-Code is released under the [MIT licence](./LICENSE). The 14 hand-written starter movements in `lib/data.ts` are released under CC0 (public domain).
+Code is released under the [MIT licence](./LICENSE). The exercise cues — the 14 starter movements in `lib/data.ts` and every entry in `public/howtos.json` — are released under CC0 (public domain).

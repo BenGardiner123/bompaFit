@@ -3,8 +3,8 @@
 // Produced by scripts/ingest-exercises.mjs from Free Exercise DB:
 //   https://github.com/yuhonas/free-exercise-db
 //
-// 736 movements, all Unlicense (public domain). Cues for these live in
-// public/howtos.json and load on demand — see lib/howtos.ts.
+// 736 movements: names, muscles and equipment. Their cues are written
+// for Bompa, live in public/howtos.json and load on demand — see lib/howtos.ts.
 //
 // Ids clashing with a seeded movement are dropped in lib/data.ts, not here, so
 // this file never needs regenerating just because a seed was added.

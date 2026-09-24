@@ -16,6 +16,12 @@
 //                               file in public/ so the URL is stable enough for
 //                               the service worker to precache it by name.
 //
+// The cues' steps are Bompa's own writing, kept in public/howtos.json itself.
+// This script never takes steps from the dataset: their origin could not be
+// confirmed, so they are not ours to ship. It refreshes each entry's muscles
+// line (a fact) and keeps the steps already there, and it lists any movement
+// that has no steps yet, so new ones get written rather than silently blank.
+//
 // Nothing here reads lib/data.ts. Collisions with the 14 seeded movements are
 // resolved at runtime in lib/data.ts instead, so adding a seed can never leave
 // this script silently out of date.
@@ -194,6 +200,15 @@ const exercises = [];
 const howTos = {};
 const seenIds = new Set();
 const skipped = [];
+// Bompa's own cues, kept across regenerations. Missing file means no cues yet.
+const existingCues = (() => {
+  try {
+    return JSON.parse(readFileSync('public/howtos.json', 'utf8'));
+  } catch {
+    return {};
+  }
+})();
+const needsCues = [];
 
 const dropped = { category: 0 };
 
@@ -235,17 +250,20 @@ for (const entry of raw) {
     licence: LICENCE,
   });
 
-  const steps = (entry.instructions ?? []).map((step) => step.trim()).filter(Boolean);
-  if (steps.length === 0) continue;
+  // Steps come from Bompa's own cue file, never from the dataset's instructions.
+  const steps = existingCues[id]?.steps ?? [];
+  if (steps.length === 0) {
+    needsCues.push(id);
+    continue;
+  }
 
   const secondary = (entry.secondaryMuscles ?? []).map(muscleName).filter(Boolean);
   howTos[id] = {
     muscles: `Primary: ${muscleName(primary) || '—'} · Secondary: ${secondary.length ? secondary.join(', ') : '—'}`,
     steps,
-    // No `fault`. The dataset carries execution steps and nothing about what
-    // people get wrong, and inventing one for 873 movements would be fiction.
-    // HowTo.fault is optional for exactly this reason — the sheet omits the
-    // block rather than printing a guess.
+    // No `fault`. Inventing one for hundreds of movements would be fiction in a
+    // domain where wrong advice injures people. HowTo.fault is optional for
+    // exactly this reason — the sheet omits the block rather than printing a guess.
   };
 }
 
@@ -254,8 +272,8 @@ const header = `// GENERATED FILE — do not edit by hand.
 // Produced by scripts/ingest-exercises.mjs from Free Exercise DB:
 //   ${SOURCE_URL}
 //
-// ${exercises.length} movements, all ${LICENCE} (public domain). Cues for these live in
-// public/howtos.json and load on demand — see lib/howtos.ts.
+// ${exercises.length} movements: names, muscles and equipment. Their cues are written
+// for Bompa, live in public/howtos.json and load on demand — see lib/howtos.ts.
 //
 // Ids clashing with a seeded movement are dropped in lib/data.ts, not here, so
 // this file never needs regenerating just because a seed was added.
@@ -292,6 +310,7 @@ console.log(`dropped  ${dropped.category} outside ${[...KEEP_CATEGORIES].join('/
 console.log(`wrote    lib/exercises.generated.ts   ${exercises.length} movements`);
 console.log(`wrote    public/howtos.json           ${Object.keys(howTos).length} how-tos`);
 if (skipped.length) console.log(`skipped  ${skipped.length}: ${skipped.join(', ')}`);
+if (needsCues.length) console.log(`no cues  ${needsCues.length} (write them in public/howtos.json): ${needsCues.join(', ')}`);
 console.log('');
 console.log(`list     ${kb(Buffer.byteLength(listJson))} raw, ${kb(gzipSync(listJson).length)} gzipped   ships in the bundle`);
 console.log(`how-tos  ${kb(Buffer.byteLength(howToJson))} raw, ${kb(gzipSync(howToJson).length)} gzipped   fetched on demand`);
