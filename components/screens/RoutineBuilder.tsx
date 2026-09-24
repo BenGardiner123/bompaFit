@@ -3,7 +3,7 @@
 // Build and edit a workout. Without this, first-run setup cannot ask the user
 // to set up their first one, and the app is stuck shipping routines it invented.
 
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { toDisplay, toKg } from '@/lib/calc';
 import { weightSpoken } from '@/lib/bodyweight';
 import { groupNoun } from '@/lib/methods';
@@ -17,6 +17,13 @@ import { Btn, EditableNumber, Empty, Eyebrow, Pill } from '@/components/ui';
 import { useBodyweight } from '@/components/WeightFigure';
 import { ExercisePicker } from '@/components/screens/ExercisePicker';
 import { MethodPicker } from '@/components/MethodPicker';
+
+// On demand: the warm-up editor and its common moves are only needed once a
+// workout is open for editing.
+// A failed load draws nothing rather than throwing away the builder with the edit in it.
+const RoutineWarmup = lazy(() =>
+  import('@/components/WarmupEditor').then((m) => ({ default: m.RoutineWarmup })).catch(() => ({ default: () => null })),
+);
 
 const SUPERSET_LETTERS = ['A', 'B', 'C'];
 
@@ -177,6 +184,11 @@ export function RoutineBuilder({ routineId, onClose }: { routineId: string; onCl
         </label>
 
         <div className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {/* First because it comes first in the gym. */}
+          <Suspense fallback={null}>
+            <RoutineWarmup draft={draft} defaults={b.defaultWarmup} onChange={setDraft} />
+          </Suspense>
+
           {draft.slots.length === 0 && <Empty>No lifts yet. Add one below.</Empty>}
 
           {draft.slots.map((slot, index) => {

@@ -15,6 +15,7 @@ import { Btn, EditableNumber, Hero, HeroNumeral, HeroTabs, InkButton, InkChip, R
 import { StartingMaxes } from '@/components/StartingMaxes';
 import { ImportPreview, useImport } from '@/components/ImportPreview';
 import { ContentProviders } from '@/components/ContentProviders';
+import { DefaultWarmup } from '@/components/DefaultWarmup';
 
 export function Tools() {
   return (
@@ -28,6 +29,7 @@ export function Tools() {
         <AlertSettings />
         <OneRepMax />
         <StartingMaxes />
+        <DefaultWarmup />
         <Settings />
         <ContentProviders />
         <Credit />

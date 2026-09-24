@@ -2258,3 +2258,103 @@ describe('exercise content providers', () => {
     expect(provider.fetchHowTo).not.toHaveBeenCalled();
   });
 });
+
+describe('warm-up checklist', () => {
+  const WARMUP = [
+    { id: 'cat-cow', name: 'Cat-cow', dose: '8 slow' },
+    { id: 'band-marches', name: 'Band marches', dose: '10 each side' },
+  ];
+
+  it('persists on the routine, clamped, and a workout with none stores no field at all', async () => {
+    const { result } = await mount();
+    await act(async () => {
+      await result.current.saveRoutine({ ...PUSH, warmup: [...WARMUP, { id: 'x', name: '   ' }] });
+      await result.current.saveRoutine(PULL);
+    });
+
+    const push = await db.routines.get(PUSH.id);
+    // The blank item is dropped on the way in, so what is stored is what is read.
+    expect(push?.warmup).toEqual(WARMUP);
+    expect(push?.warmupUsesDefault).toBeUndefined();
+    const pull = await db.routines.get(PULL.id);
+    expect(pull && 'warmup' in pull).toBe(false);
+  });
+
+  it('keeps the default warm-up in settings across a reload', async () => {
+    const first = await mount();
+    expect(first.result.current.defaultWarmup).toEqual([]);
+    await act(async () => first.result.current.setDefaultWarmup(WARMUP));
+    await waitFor(async () => expect((await db.settings.get('defaultWarmup'))?.value).toEqual(WARMUP));
+    first.unmount();
+
+    const second = await mount();
+    expect(second.result.current.defaultWarmup).toEqual(WARMUP);
+  });
+
+  it("shows the default list for a workout that uses it, and the workout's own otherwise", async () => {
+    const { result } = await mount();
+    await withPlan({ result });
+    await act(async () => {
+      result.current.setDefaultWarmup([{ id: 'leg-swings', name: 'Leg swings' }]);
+      await result.current.saveRoutine({ ...PUSH, warmup: WARMUP, warmupUsesDefault: true });
+    });
+    // Nothing to tick before a session starts.
+    expect(result.current.activeWarmup).toEqual([]);
+
+    await act(async () => result.current.startSession('my-push'));
+    await waitFor(() => expect(result.current.openSession).not.toBeNull());
+    expect(result.current.activeWarmup.map((item) => item.name)).toEqual(['Leg swings']);
+
+    await act(async () => {
+      await result.current.saveRoutine({ ...PUSH, warmup: WARMUP, warmupUsesDefault: false });
+    });
+    expect(result.current.activeWarmup).toEqual(WARMUP);
+  });
+
+  it('ticking never logs a set or moves a load, and the ticks survive a reload mid-session', async () => {
+    const first = await mount();
+    await withPlan(first);
+    await act(async () => {
+      await first.result.current.saveRoutine({ ...PUSH, warmup: WARMUP });
+    });
+    await act(async () => first.result.current.startSession('my-push'));
+    await waitFor(() => expect(first.result.current.openSession?.id).toBeDefined());
+
+    const loadsBefore = JSON.stringify(first.result.current.loads);
+    act(() => first.result.current.toggleWarmupItem('cat-cow'));
+    act(() => first.result.current.toggleWarmupItem('band-marches'));
+    act(() => first.result.current.toggleWarmupItem('band-marches'));
+    expect(first.result.current.warmupDone).toEqual(['cat-cow']);
+
+    expect(first.result.current.sessionSets).toHaveLength(0);
+    expect(first.result.current.sets).toHaveLength(0);
+    expect(JSON.stringify(first.result.current.loads)).toBe(loadsBefore);
+    expect(await db.sets.count()).toBe(0);
+    await waitFor(async () => expect((await db.settings.get('warmupTicks'))?.value).toMatchObject({ done: ['cat-cow'] }));
+    first.unmount();
+
+    const second = await mount();
+    expect(second.result.current.openSession).not.toBeNull();
+    expect(second.result.current.warmupDone).toEqual(['cat-cow']);
+  });
+
+  it('starts the next session with nothing ticked', async () => {
+    const { result } = await mount();
+    await withPlan({ result });
+    await act(async () => {
+      await result.current.saveRoutine({ ...PUSH, warmup: WARMUP });
+    });
+    await act(async () => result.current.startSession('my-push'));
+    await waitFor(() => expect(result.current.openSession?.id).toBeDefined());
+    act(() => result.current.toggleWarmupItem('cat-cow'));
+    expect(result.current.warmupDone).toEqual(['cat-cow']);
+    await act(async () => {
+      await result.current.finishSession();
+    });
+    await waitFor(() => expect(result.current.openSession).toBeNull());
+
+    await act(async () => result.current.startSession('my-push'));
+    await waitFor(() => expect(result.current.openSession?.id).toBeDefined());
+    expect(result.current.warmupDone).toEqual([]);
+  });
+});

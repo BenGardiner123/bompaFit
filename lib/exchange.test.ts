@@ -259,6 +259,37 @@ describe('training methods in a backup', () => {
   });
 });
 
+describe('warm-ups in a backup', () => {
+  it("a workout's own warm-up, the default-list switch and the default list all come back unchanged", async () => {
+    const warmup = [
+      { id: 'cat-cow', name: 'Cat-cow', dose: '8 slow' },
+      { id: 'w2', name: 'Kettlebell halos' },
+    ];
+    const defaults = [{ id: 'leg-swings', name: 'Leg swings', dose: '10 each way' }];
+    const routine = {
+      id: 'legs',
+      name: 'Legs',
+      source: 'user' as const,
+      phase: 'strength' as const,
+      estMinutes: 40,
+      slots: [],
+      warmup,
+      warmupUsesDefault: true,
+    };
+    await db.routines.put(routine);
+    await db.settings.put({ key: 'defaultWarmup', value: defaults });
+
+    const text = JSON.stringify(await buildEnvelope(new Date(NOW).toISOString()));
+    await clearAll();
+    const parsed = parseEnvelope(text);
+    if (!parsed.ok) throw new Error(parsed.error);
+    await applyEnvelope(parsed.envelope);
+
+    expect(await db.routines.get('legs')).toEqual(routine);
+    expect((await db.settings.get('defaultWarmup'))?.value).toEqual(defaults);
+  });
+});
+
 // ─────────────────────────────────────────────────────────────
 // Links to content providers
 // ─────────────────────────────────────────────────────────────

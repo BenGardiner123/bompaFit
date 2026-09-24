@@ -183,6 +183,24 @@ export type Routine = {
    * undefined and resolve to zero: exactly the old behaviour, no migration.
    */
   supersetRest?: Record<string, number>;
+  /**
+   * This workout's own warm-up checklist, shown on Train when a session starts.
+   * Optional and unindexed like `supersetRest`, so older rows need no
+   * migration. Read only through lib/warmup.ts, which clamps it.
+   */
+  warmup?: WarmupItem[];
+  /** Show the lifter's default warm-up instead of `warmup`. Absent means false. */
+  warmupUsesDefault?: boolean;
+};
+
+/**
+ * One move on a warm-up checklist. Never a logged set: ticking it touches no
+ * load, record or chip count. `dose` is free text — "5 each side", "30 s".
+ */
+export type WarmupItem = {
+  id: string;
+  name: string;
+  dose?: string;
 };
 
 export type Plan = {

@@ -124,8 +124,11 @@ test('choosing another entry links the movement to the one picked', async ({ pag
   await sheet.getByRole('button', { name: 'Link to Bench Press' }).click();
   await expect(sheet.getByRole('listitem', { name: 'Overhead Press' })).toHaveCount(0);
 
-  const links = await readTable(page, 'contentLinks');
-  expect(links.find((l) => l.exerciseId === 'overhead-press')).toMatchObject({ status: 'confirmed', method: 'manual', externalId: WGER_ENTRIES[0]!.uuid as string });
+  // The screen updates before the write lands, on purpose, so the stored row is
+  // polled for rather than read once.
+  await expect
+    .poll(async () => (await readTable(page, 'contentLinks')).find((l) => l.exerciseId === 'overhead-press'))
+    .toMatchObject({ status: 'confirmed', method: 'manual', externalId: WGER_ENTRIES[0]!.uuid as string });
 });
 
 test('a keyed service needs a passing test before Connect, and never shows the saved key', async ({ page, context }) => {

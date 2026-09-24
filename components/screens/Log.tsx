@@ -6,6 +6,8 @@
 // gym lights is the hardest thing in the room to read at a glance.
 
 import {
+  Suspense,
+  lazy,
   useEffect,
   useRef,
   useState,
@@ -36,6 +38,14 @@ import { ExercisePicker } from '@/components/screens/ExercisePicker';
 import { RpePicker } from '@/components/RpePicker';
 import { BodyweightChip, WeightFigure, useBodyweight } from '@/components/WeightFigure';
 import { SegmentControls } from '@/components/screens/SegmentControls';
+
+// On demand, with the common moves' cues: a workout with no warm-up never
+// downloads it, and logging a set never waits on it.
+// A chunk that fails to load (a stale page after an update, say) draws nothing
+// rather than throwing, which with no error boundary would take Train down mid-set.
+const WarmupCard = lazy(() =>
+  import('@/components/screens/WarmupCard').then((m) => ({ default: m.WarmupCard })).catch(() => ({ default: () => null })),
+);
 
 /**
  * What the reps stepper is counting. A 1½ rep is one full cycle, and an
@@ -181,6 +191,14 @@ export function Log() {
             Finish
           </InkButton>
         </div>
+
+        {/* Above the lifts and outside the swipe column, so a tick is never
+            read as the start of a swipe to the next lift. */}
+        {b.activeWarmup.length > 0 && (
+          <Suspense fallback={null}>
+            <WarmupCard items={b.activeWarmup} done={b.warmupDone} onToggle={b.toggleWarmupItem} />
+          </Suspense>
+        )}
 
         <LiftChips onAdd={() => setPicking(true)} />
       </div>

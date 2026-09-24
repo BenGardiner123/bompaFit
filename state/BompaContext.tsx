@@ -51,6 +51,7 @@ import { countCached, deleteConnection, deleteLink, putConnection, putLinks, swe
 import { loadHowTo } from '@/lib/howtos';
 import { bodyweightShare, effectiveWeight, isBodyweightLift as isLibraryBodyweight, readBodyweightKg, readBodyweightLifts } from '@/lib/bodyweight';
 import { db, onStorageFailure, queue, readSettings, requestPersistence, warn, writeSetting } from '@/lib/db';
+import { readWarmupItems, readWarmupTicks, resolveWarmup, toggleTick, type WarmupTicks } from '@/lib/warmup';
 import { copyName, uniqueId } from '@/lib/ids';
 import { summariseSessions, type SessionSummary } from '@/lib/history';
 import { buildInsights, type Insight } from '@/lib/insights';
@@ -124,6 +125,7 @@ import type {
   Session,
   SetType,
   Unit,
+  WarmupItem,
 } from '@/lib/types';
 
 /** Where the user's declared starting maxes live in the settings table. */
@@ -143,6 +145,16 @@ export const BODYWEIGHT_KEY = 'bodyweightKg';
  * "Other".
  */
 export const BODYWEIGHT_LIFTS_KEY = 'bodyweightLifts';
+
+/** The lifter's default warm-up checklist, which any workout can use instead of its own. */
+export const DEFAULT_WARMUP_KEY = 'defaultWarmup';
+
+/**
+ * Which warm-up items are ticked in the session in progress. One row,
+ * overwritten, so a reload mid-session keeps the ticks and the next session
+ * starts clean without anything having to clear it.
+ */
+export const WARMUP_TICKS_KEY = 'warmupTicks';
 
 /**
  * Whether first-run setup has been completed or deliberately skipped.
@@ -339,6 +351,8 @@ function useBompaState() {
   const [startingMaxes, setStartingMaxesState] = useState<Record<string, number>>({});
   const [bodyweightKg, setBodyweightKgState] = useState<number | null>(null);
   const [markedBodyweight, setMarkedBodyweight] = useState<readonly string[]>([]);
+  const [defaultWarmup, setDefaultWarmupState] = useState<WarmupItem[]>([]);
+  const [warmupTicks, setWarmupTicks] = useState<WarmupTicks | null>(null);
   const [openSession, setOpenSession] = useState<Session | null>(null);
   // Routines are user data now, not a static import. Everything that used to
   // reach for a module-level map reads this instead.
@@ -481,6 +495,13 @@ function useBompaState() {
         setSetupDone(settingsRow[SETUP_DONE_KEY] === true);
         setBodyweightKgState(readBodyweightKg(settingsRow[BODYWEIGHT_KEY]));
         setMarkedBodyweight(readBodyweightLifts(settingsRow[BODYWEIGHT_LIFTS_KEY]));
+        setDefaultWarmupState(readWarmupItems(settingsRow[DEFAULT_WARMUP_KEY]));
+        // Kept as stored; whether it belongs to the open session is decided on
+        // read, against that session's start time.
+        const ticksRow = settingsRow[WARMUP_TICKS_KEY] as { sessionKey?: unknown } | undefined;
+        if (ticksRow && typeof ticksRow.sessionKey === 'number') {
+          setWarmupTicks({ sessionKey: ticksRow.sessionKey, done: readWarmupTicks(ticksRow, ticksRow.sessionKey) });
+        }
 
         const unit = (settingsRow.unit as Unit) ?? INITIAL.unit;
         patch({
@@ -718,6 +739,32 @@ function useBompaState() {
     return id ? (routineById(id) ?? null) : null;
   }, [openSession, nextSlot, routineById]);
 
+  // The warm-up for the session in progress. Only an open session has one:
+  // before starting, there is nothing to tick.
+  const activeWarmup = useMemo(
+    () => (openSession ? resolveWarmup(routineById(openSession.routineId), defaultWarmup) : []),
+    [openSession, routineById, defaultWarmup],
+  );
+  const warmupSessionKey = openSession?.startedAt ?? null;
+  const warmupDone = useMemo(
+    () => (warmupTicks && warmupTicks.sessionKey === warmupSessionKey ? warmupTicks.done : []),
+    [warmupTicks, warmupSessionKey],
+  );
+
+  /**
+   * Tick or untick a warm-up item. A checklist, not a set: nothing here reaches
+   * the sets table, the fatigue model, records or chip counts.
+   */
+  const toggleWarmupItem = useCallback(
+    (itemId: string) => {
+      if (warmupSessionKey === null) return;
+      const next: WarmupTicks = { sessionKey: warmupSessionKey, done: toggleTick(warmupDone, itemId) };
+      setWarmupTicks(next);
+      writeSetting(WARMUP_TICKS_KEY, next, Date.now());
+    },
+    [warmupSessionKey, warmupDone],
+  );
+
   const priceSlot = useMemo(
     // Priced with the same weighting as the logged loads, or a bodyweight
     // session done exactly as planned would read as over budget.
@@ -912,6 +959,13 @@ function useBompaState() {
       writeSetting(BODYWEIGHT_LIFTS_KEY, next, Date.now());
       return next;
     });
+  }, []);
+
+  /** Replace the default warm-up. Clamped here so what is stored is what will be read. */
+  const setDefaultWarmup = useCallback((items: WarmupItem[]) => {
+    const next = readWarmupItems(items);
+    setDefaultWarmupState(next);
+    writeSetting(DEFAULT_WARMUP_KEY, next, Date.now());
   }, []);
 
   const setStatsLift = useCallback((exerciseId: string) => {
@@ -1129,7 +1183,7 @@ function useBompaState() {
       }
       // Method fields are clamped on the way in so what is stored is what will
       // be read, and a scheme's set count is written back into `sets`.
-      const tidied: Routine = { ...routine, slots: routine.slots.map(normaliseSlot) };
+      const tidied: Routine = tidyWarmup({ ...routine, slots: routine.slots.map(normaliseSlot) });
       // Rough minutes from the work itself, so the library card stays honest as
       // the routine is edited.
       const sets = tidied.slots.reduce((total, slot) => total + slot.sets, 0);
@@ -1168,6 +1222,7 @@ function useBompaState() {
         // Copied for the same reason the slots are: a spread would leave the
         // copy sharing the template's map, so editing one would edit both.
         supersetRest: { ...(template.supersetRest ?? {}) },
+        ...(template.warmup ? { warmup: template.warmup.map((item) => ({ ...item })) } : {}),
       };
       await persistRoutine(copy);
       patch({ editingRoutineId: copy.id });
@@ -2579,6 +2634,14 @@ function useBompaState() {
     setBodyweightKg,
     isBodyweightLift,
     markBodyweightLift,
+    /** The lifter's default warm-up checklist, clamped. */
+    defaultWarmup,
+    setDefaultWarmup,
+    /** The warm-up for the open session, own list or default; empty with none. */
+    activeWarmup,
+    /** Ids of the warm-up items ticked this session. */
+    warmupDone,
+    toggleWarmupItem,
     openSession,
     sessionSets,
     loads,
@@ -2698,6 +2761,21 @@ function useBompaState() {
     unlinkExercise,
     downloadContent,
     savedContent,
+  };
+}
+
+/**
+ * A routine's warm-up as it should be stored: clamped, and with the fields
+ * left off entirely when they say nothing, so an untouched routine stays
+ * byte-for-byte what it was.
+ */
+function tidyWarmup(routine: Routine): Routine {
+  const { warmup, warmupUsesDefault, ...rest } = routine;
+  const items = readWarmupItems(warmup);
+  return {
+    ...rest,
+    ...(items.length ? { warmup: items } : {}),
+    ...(warmupUsesDefault ? { warmupUsesDefault: true } : {}),
   };
 }
 
