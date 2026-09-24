@@ -3,6 +3,10 @@ import { DAY_MS, addDays as addDaysAcross, buildLoads, dateKey, daysBetween } fr
 import { TEMPLATE_BY_ID } from './data';
 import {
   DEFAULT_BLOCKS,
+  DELOAD_VOLUME_FACTOR,
+  addToEveryWeek,
+  addToWeek,
+  blockContaining,
   generatePlan,
   mesocycleCurve,
   plannedSessionLoad,
@@ -11,7 +15,8 @@ import {
   startWeekOn,
   weekShape,
 } from './plan';
-import type { LoggedSet, PlannedSession, Session } from './types';
+import { isOverBudget, renumber, weekBudget, weekSlots } from './schedule';
+import type { Block, LoggedSet, PlannedSession, Session } from './types';
 
 const NOW = new Date(2026, 7, 19, 18, 0, 0).getTime(); // Wed 19 Aug 2026
 const TODAY = dateKey(NOW);
@@ -347,5 +352,149 @@ describe('plannedSessionLoad', () => {
     const routine = TEMPLATE_BY_ID.get('meet-openers')!;
     const load = plannedSessionLoad(routine, 1, { 'back-squat': 200, 'barbell-bench-press': 120, deadlift: 240 });
     expect(load).toBeGreaterThan(0);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────
+// Adding a workout to the plan
+// ─────────────────────────────────────────────────────────────
+
+describe('adding a workout', () => {
+  // A 3-week strength block plus one deload, starting Mon 10 Aug 2026. "Now" is
+  // the week of 17 Aug, so 10 Aug is behind us and 24 Aug, 31 Aug are ahead.
+  const BLOCK: Block = { id: 1, planId: 1, phase: 'strength', weeks: 3, deloadWeeks: 1, startDate: '2026-08-10' };
+  const PAST = '2026-08-10';
+  const THIS = '2026-08-17';
+  const NEXT = '2026-08-24';
+  const DELOAD = '2026-08-31';
+
+  const row = (over: Partial<PlannedSession>): PlannedSession => ({
+    planId: 1,
+    blockId: 1,
+    weekStart: THIS,
+    slotIndex: 0,
+    routineId: 'push',
+    status: 'plan',
+    adjustedByBompa: false,
+    volumeFactor: 1,
+    ...over,
+  });
+
+  const planned: PlannedSession[] = [
+    row({ id: 1, weekStart: PAST, slotIndex: 0, status: 'done', date: '2026-08-11' }),
+    row({ id: 2, weekStart: PAST, slotIndex: 1, routineId: 'pull', status: 'skip' }),
+    row({ id: 3, weekStart: THIS, slotIndex: 0, status: 'done', date: '2026-08-17' }),
+    row({ id: 4, weekStart: THIS, slotIndex: 1, routineId: 'pull' }),
+    row({ id: 5, weekStart: NEXT, slotIndex: 0 }),
+    row({ id: 6, weekStart: NEXT, slotIndex: 1, routineId: 'pull' }),
+    row({ id: 7, weekStart: DELOAD, slotIndex: 0, volumeFactor: DELOAD_VOLUME_FACTOR }),
+  ];
+
+  // Push costs 100 at full volume, pull 80, legs 120 — picked so every sum
+  // below can be checked by eye.
+  const COST: Record<string, number> = { push: 100, pull: 80, legs: 120 };
+  const price = (p: PlannedSession) => (COST[p.routineId] ?? 0) * p.volumeFactor;
+  const budgetOf = (rows: PlannedSession[], logged: number) =>
+    weekBudget({ planned: rows, weekStart: THIS, slotLoad: price, loggedLoad: logged });
+
+  describe('just this week', () => {
+    const added = addToWeek({ planned, planId: 1, blocks: [BLOCK], weekStart: THIS, routineId: 'legs' })!;
+
+    it('appends a pending slot at the next dense index, with no date', () => {
+      // Sized to the week it joins (0.81 here), not a full-volume outlier.
+      expect(added).toMatchObject({ weekStart: THIS, slotIndex: 2, routineId: 'legs', status: 'plan', blockId: 1, volumeFactor: 0.81 });
+      expect(added.date).toBeUndefined();
+      expect(weekSlots([...planned, added], THIS).map((p) => p.slotIndex)).toEqual([0, 1, 2]);
+    });
+
+    it('marks the week as rearranged by the user, not by Bompa', () => {
+      expect(added.userModified).toBe(true);
+      expect(added.adjustedByBompa).toBe(false);
+    });
+
+    it('raises the budget by what the workout costs, so it is planned rather than additional', () => {
+      // Push done (100 logged), pull still to come (80): budget 180.
+      expect(budgetOf(planned, 100).budget).toBe(180);
+      // Legs at 120, sized to this week's volume of 0.81 like its neighbours:
+      // 97.2 lands on both sides — budget 277.2, projection 100 + 80 + 97.2.
+      const after = budgetOf([...planned, added], 100);
+      expect(after.budget).toBeCloseTo(277.2, 6);
+      expect(after.projected).toBeCloseTo(277.2, 6);
+      expect(isOverBudget(after, false)).toBe(false);
+      expect(isOverBudget(after, true)).toBe(false);
+    });
+
+    it('returns the week to its prior budget when the added slot is dropped', () => {
+      const before = budgetOf(planned, 100);
+      const dropped = renumber([...planned, added].filter((p) => p !== added));
+      const after = budgetOf(dropped, 100);
+      expect(after.budget).toBe(before.budget);
+      expect(after.projected).toBe(before.projected);
+    });
+
+    it('lets the same workout be added twice — a second push day is a real plan', () => {
+      const once = addToWeek({ planned, planId: 1, blocks: [BLOCK], weekStart: THIS, routineId: 'push' })!;
+      const twice = addToWeek({ planned: [...planned, once], planId: 1, blocks: [BLOCK], weekStart: THIS, routineId: 'push' })!;
+      expect(once.slotIndex).toBe(2);
+      expect(twice.slotIndex).toBe(3);
+    });
+
+    it('starts a week the user emptied at index 0', () => {
+      const emptied = planned.filter((p) => p.weekStart !== NEXT);
+      expect(addToWeek({ planned: emptied, planId: 1, blocks: [BLOCK], weekStart: NEXT, routineId: 'push' })?.slotIndex).toBe(0);
+    });
+
+    it('does nothing with no plan, or outside every block', () => {
+      expect(addToWeek({ planned: [], planId: undefined, blocks: [], weekStart: THIS, routineId: 'legs' })).toBeNull();
+      expect(addToWeek({ planned, planId: 1, blocks: [BLOCK], weekStart: '2026-09-07', routineId: 'legs' })).toBeNull();
+    });
+  });
+
+  describe('every week from now', () => {
+    const added = addToEveryWeek({ planned, planId: 1, blocks: [BLOCK], fromWeek: THIS, routineId: 'legs' });
+
+    it('touches only this week and the weeks after it in the block', () => {
+      expect(added.map((p) => p.weekStart)).toEqual([THIS, NEXT, DELOAD]);
+    });
+
+    it("appends at each week's next dense index", () => {
+      expect(added.map((p) => p.slotIndex)).toEqual([2, 2, 1]);
+      const all = [...planned, ...added];
+      for (const week of [THIS, NEXT, DELOAD]) {
+        const indices = weekSlots(all, week).map((p) => p.slotIndex);
+        expect(indices).toEqual(indices.map((_, i) => i));
+      }
+    });
+
+    it('gives each week the volume the generator would — a deload copy is deload-sized', () => {
+      const generated = generatePlan({
+        name: 'Reference',
+        startDate: BLOCK.startDate,
+        rotation: ['legs'],
+        sessionsPerWeek: 1,
+        specs: [{ phase: 'strength', weeks: 3, deloadWeeks: 1 }],
+      }).sessions;
+      for (const slot of added) {
+        expect(slot.volumeFactor).toBe(generated.find((g) => g.weekStart === slot.weekStart)!.volumeFactor);
+      }
+      expect(added.at(-1)!.volumeFactor).toBe(DELOAD_VOLUME_FACTOR);
+    });
+
+    it('returns only new pending rows — nothing past or done is rewritten', () => {
+      expect(added.every((p) => p.id === undefined && p.status === 'plan' && p.date === undefined)).toBe(true);
+      expect(added.every((p) => p.userModified === true)).toBe(true);
+    });
+
+    it('stops at the end of the block it starts in', () => {
+      const later: Block = { id: 2, planId: 1, phase: 'peak', weeks: 2, deloadWeeks: 0, startDate: '2026-09-07' };
+      const across = addToEveryWeek({ planned, planId: 1, blocks: [BLOCK, later], fromWeek: THIS, routineId: 'legs' });
+      expect(across.map((p) => p.blockId)).toEqual([1, 1, 1]);
+      expect(blockContaining([BLOCK, later], '2026-09-14')?.id).toBe(2);
+    });
+
+    it('does nothing with no plan, or once the plan has ended', () => {
+      expect(addToEveryWeek({ planned: [], planId: undefined, blocks: [], fromWeek: THIS, routineId: 'legs' })).toEqual([]);
+      expect(addToEveryWeek({ planned, planId: 1, blocks: [BLOCK], fromWeek: '2026-09-07', routineId: 'legs' })).toEqual([]);
+    });
   });
 });

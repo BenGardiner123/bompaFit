@@ -2,7 +2,7 @@
 // forward projection that finds the peak window. Pure — no Dexie, no React.
 
 import { DAY_MS, MODEL, addDays, dateKey, daysBetween, fitness, fatigue, fromDateKey, weekdayIndex } from './calc';
-import { planWeekStart, spreadWeekDays } from './schedule';
+import { planWeekStart, spreadWeekDays, weekSlots } from './schedule';
 import type { SessionLoad } from './calc';
 import type { Block, Phase, Plan, PlannedSession, Routine } from './types';
 
@@ -149,6 +149,134 @@ export function generatePlan(args: {
   }
 
   return { plan, blocks, sessions };
+}
+
+// ─────────────────────────────────────────────────────────────
+// Adding a workout to the plan
+// ─────────────────────────────────────────────────────────────
+
+/** One calendar week of a block, with the volume the generator gives it. */
+export type BlockWeek = { weekStart: string; isDeload: boolean; volumeFactor: number };
+
+/** Every week a block covers, working weeks first and then its deloads. */
+export function blockWeeks(block: Block): BlockWeek[] {
+  const total = block.weeks + block.deloadWeeks;
+  return Array.from({ length: total }, (_, w) => {
+    const isDeload = w >= block.weeks;
+    return {
+      weekStart: addDays(block.startDate, w * 7),
+      isDeload,
+      volumeFactor: weekShape(isDeload ? 'deload' : block.phase, w, block.weeks).volume,
+    };
+  });
+}
+
+/**
+ * The block a week falls inside, or null when the week is outside the plan.
+ *
+ * By date rather than by "the block of this week's first slot": a week the user
+ * has emptied with drops has no slot to ask, and it still belongs to a block.
+ */
+export function blockContaining(blocks: Block[], weekStart: string): Block | null {
+  for (const block of blocks) {
+    if (block.id === undefined) continue;
+    if (blockWeeks(block).some((w) => w.weekStart === weekStart)) return block;
+  }
+  return null;
+}
+
+/**
+ * A new pending slot at the end of a week.
+ *
+ * One past the highest index rather than the slot count: on a dense week the
+ * two agree, and if a week were ever left with a gap, the count would collide
+ * with an existing slot while this cannot. No date — it has not been trained.
+ *
+ * Marked `userModified` because the user put it there. Only the new slot
+ * carries the mark: a week reads as rearranged when any slot says so, and
+ * leaving the others alone means a done slot is never rewritten by an add.
+ */
+function appendedSlot(args: {
+  planned: PlannedSession[];
+  planId: number;
+  blockId: number;
+  weekStart: string;
+  routineId: string;
+  volumeFactor: number;
+}): PlannedSession {
+  const slots = weekSlots(args.planned, args.weekStart);
+  const slotIndex = slots.reduce((max, p) => Math.max(max, p.slotIndex), -1) + 1;
+  return {
+    planId: args.planId,
+    blockId: args.blockId,
+    weekStart: args.weekStart,
+    slotIndex,
+    routineId: args.routineId,
+    status: 'plan',
+    adjustedByBompa: false,
+    userModified: true,
+    volumeFactor: args.volumeFactor,
+  };
+}
+
+/**
+ * Add a workout to one week only — "just this week".
+ *
+ * Planned, not additional: the week's budget rises by what the workout costs,
+ * so training it later fills this slot and the over-budget offer has nothing to
+ * say about it. Full volume, because this is a one-off the user asked for by
+ * name rather than a week the generator shaped.
+ *
+ * Null when there is no plan, or the week sits outside every block — there is
+ * no block to file the slot under, and inventing one would put a row in the
+ * plan that no block owns.
+ */
+export function addToWeek(args: {
+  planned: PlannedSession[];
+  planId: number | undefined;
+  blocks: Block[];
+  weekStart: string;
+  routineId: string;
+}): PlannedSession | null {
+  const { planned, planId, blocks, weekStart, routineId } = args;
+  if (planId === undefined || !routineId) return null;
+  const block = blockContaining(blocks, weekStart);
+  if (!block?.id) return null;
+  // The week's own volume, as its generated sessions have: an added session in
+  // a lighter ramp-up or deload week is sized like its neighbours, not heavier.
+  const volumeFactor = blockWeeks(block).find((w) => w.weekStart === weekStart)?.volumeFactor ?? 1;
+  return appendedSlot({ planned, planId, blockId: block.id, weekStart, routineId, volumeFactor });
+}
+
+/**
+ * Add a workout to this week and every week left in its block — "every week
+ * from now".
+ *
+ * Planned sessions are generated up front, one row per slot for the whole
+ * block, so there is no rotation to change that would reach weeks already
+ * written. The workout is appended to each remaining week instead, at the
+ * volume the generator gives that week — which is what makes a deload week's
+ * copy a deload-sized session rather than a full one.
+ *
+ * Weeks before `fromWeek` are left alone: a past week's slots are history, and
+ * a new pending slot there would be skipped the moment it was written.
+ */
+export function addToEveryWeek(args: {
+  planned: PlannedSession[];
+  planId: number | undefined;
+  blocks: Block[];
+  fromWeek: string;
+  routineId: string;
+}): PlannedSession[] {
+  const { planned, planId, blocks, fromWeek, routineId } = args;
+  if (planId === undefined || !routineId) return [];
+  const block = blockContaining(blocks, fromWeek);
+  if (!block?.id) return [];
+  return blockWeeks(block)
+    .filter((w) => w.weekStart >= fromWeek)
+    .map((w) =>
+      appendedSlot({ planned, planId, blockId: block.id!, weekStart: w.weekStart, routineId, volumeFactor: w.volumeFactor }),
+    );
 }
 
 /** Plans start on a Monday so week boundaries line up with the adaptation pass. */

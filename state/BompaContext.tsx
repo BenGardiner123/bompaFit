@@ -53,7 +53,17 @@ import { db, onStorageFailure, queue, readSettings, requestPersistence, warn, wr
 import { copyName, uniqueId } from '@/lib/ids';
 import { summariseSessions, type SessionSummary } from '@/lib/history';
 import { buildInsights, type Insight } from '@/lib/insights';
-import { DEFAULT_BLOCKS, generatePlan, predictPeak, reverseTaper, routineLoader, type PeakWindow, type TaperPlan } from '@/lib/plan';
+import {
+  DEFAULT_BLOCKS,
+  addToEveryWeek,
+  addToWeek,
+  generatePlan,
+  predictPeak,
+  reverseTaper,
+  routineLoader,
+  type PeakWindow,
+  type TaperPlan,
+} from '@/lib/plan';
 import {
   isOverBudget,
   nextPendingSlot,
@@ -1895,6 +1905,58 @@ function useBompaState() {
     [planned, say],
   );
 
+  /**
+   * Put one of your workouts into the plan — this week only, or this week and
+   * every week left in the block.
+   *
+   * Planned, not additional: the week's budget rises by the workout's cost, so
+   * training it later fills the new slot and the over-budget offer stays quiet.
+   *
+   * No adjustment record, for the same reason a drop writes none: the log says
+   * what Bompa did and why, and this is the user's own decision. It is undone
+   * with Drop, which is also what keeps the undo in one place.
+   */
+  const addWorkout = useCallback(
+    (routineId: string, scope: 'week' | 'every') => {
+      const routine = routineById(routineId);
+      if (!routine) return;
+      const args = { planned, planId: plan?.id, blocks, routineId };
+      const rows =
+        scope === 'week'
+          ? [addToWeek({ ...args, weekStart: currentWeek })].filter((p): p is PlannedSession => p !== null)
+          : addToEveryWeek({ ...args, fromWeek: currentWeek });
+      if (rows.length === 0) {
+        say('There is no block covering this week to add it to. Add a block on the Mesocycle tab first.');
+        return;
+      }
+
+      // Shown straight away with a stand-in id, then stamped with the real one
+      // when the write lands. The stand-in is negative so it can never match a
+      // stored row, and the Plan screen withholds Move and Drop until it is
+      // replaced — dropping a row the database has not finished writing would
+      // leave it to come back on reload.
+      const at = Date.now();
+      const standIns = rows.map((row, i) => ({ ...row, id: -(at * 1000 + i) }));
+      setPlanned((prev) => [...prev, ...standIns]);
+
+      void db.plannedSessions
+        .bulkAdd(rows, { allKeys: true })
+        .then((ids) => {
+          const realId = new Map(standIns.map((row, i) => [row.id, (ids as number[])[i]!]));
+          setPlanned((prev) => prev.map((p) => (realId.has(p.id!) ? { ...p, id: realId.get(p.id!) } : p)));
+          rows.forEach((row, i) => queue('plannedSessions', 'put', { ...row, id: (ids as number[])[i] }, at));
+        })
+        .catch(warn);
+
+      say(
+        scope === 'week'
+          ? `${routine.name} added to this week.`
+          : `${routine.name} added to this week and every week left in the block.`,
+      );
+    },
+    [planned, plan, blocks, currentWeek, routineById, say],
+  );
+
   /** Run the weekly review over the week that just closed. */
   const runWeeklyReview = useCallback(async () => {
     if (!plan?.id) return;
@@ -2508,6 +2570,7 @@ function useBompaState() {
     moveSession,
     swapSlotRoutine,
     dropSlot,
+    addWorkout,
     setUnit,
     setWeekStart,
     setStep,

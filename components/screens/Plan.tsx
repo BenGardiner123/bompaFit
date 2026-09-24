@@ -2,7 +2,7 @@
 
 import { useState, type CSSProperties, type ReactNode } from 'react';
 import { dateKey, daysBetween, fmtDayMonth } from '@/lib/calc';
-import { mesocycleCurve } from '@/lib/plan';
+import { blockContaining, mesocycleCurve } from '@/lib/plan';
 import { weekIsUserModified } from '@/lib/schedule';
 import { C, HERO_SIZE, ON_PHASE, PH, PHASE_ABBR, PHASE_LABEL, PH_ON_INK, R, TOUCH, num, onInk } from '@/lib/tokens';
 import type { Phase, PlannedSession } from '@/lib/types';
@@ -185,7 +185,10 @@ function Calendar() {
           const isNext = b.nextSlot?.id === slot.id;
           const tag = statusTag(slot, isNext);
           // Done work is history; rearranging it would rewrite what happened.
-          const editable = slot.id !== undefined && slot.status !== 'done';
+          // A negative id is a slot just added whose write has not landed yet;
+          // moving or dropping it before then would act on a row that is not
+          // stored, and it would come back on reload.
+          const editable = slot.id !== undefined && slot.id > 0 && slot.status !== 'done';
           const isOpen = open === slot.id;
 
           return (
@@ -284,6 +287,7 @@ function Calendar() {
             </Row>
           );
         })}
+        <AddWorkout />
         <span style={{ fontSize: 12, lineHeight: 1.5, color: C.tertiary, paddingTop: 10, borderTop: `1px solid ${C.line}` }}>
           Order is a suggestion, not a schedule — train these whenever the week suits you. Dropping one lowers what the week expects; it isn&apos;t a
           miss.
@@ -295,21 +299,134 @@ function Calendar() {
   );
 }
 
+/**
+ * Put one of your own workouts into the plan: this week only, or every week
+ * left in the block. Your own workouts only — templates are copied before they
+ * are trained, never scheduled as they are.
+ */
+function AddWorkout() {
+  const b = useBompa();
+  const [open, setOpen] = useState(false);
+  // Which workout has its two choices showing.
+  const [picked, setPicked] = useState<string | null>(null);
+  const wrap: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 10, padding: '12px 0', borderTop: `1px solid ${C.line}` };
+
+  // Said rather than offered: a button that silently does nothing when there
+  // is no week to put the workout in would look broken.
+  if (!b.plan) return <Note>No plan yet, so there is no week to add a workout to. Build a block on the Mesocycle tab.</Note>;
+  if (!blockContaining(b.blocks, b.currentWeek)) {
+    return <Note>No block covers this week, so there is nowhere to add a workout. Add a block on the Mesocycle tab.</Note>;
+  }
+
+  const close = () => {
+    setOpen(false);
+    setPicked(null);
+  };
+
+  return (
+    <div style={wrap}>
+      <Btn
+        onClick={() => (open ? close() : setOpen(true))}
+        label="Add a workout"
+        pressed={open}
+        style={{
+          height: TOUCH,
+          borderRadius: R.chip,
+          border: `1px dashed ${open ? C.ink : C.lineStrong}`,
+          background: 'transparent',
+          color: C.ink60,
+          fontSize: 13,
+          fontWeight: 800,
+        }}
+      >
+        + Add a workout
+      </Btn>
+
+      {open && b.routines.length === 0 && (
+        <div className="rise" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <span style={{ fontSize: 13, lineHeight: 1.5, color: C.tertiary }}>
+            You have no workouts of your own yet. Build one, or copy a template, in the library.
+          </span>
+          {/* In a row so the button's flex: 1 fills the width. In a column,
+              flex: 1 would act on its height instead. */}
+          <div style={{ display: 'flex' }}>
+            <SlotBtn onClick={() => b.patch({ library: true })}>Open the library</SlotBtn>
+          </div>
+        </div>
+      )}
+
+      {open && b.routines.length > 0 && (
+        <div className="rise" style={{ display: 'flex', flexDirection: 'column' }}>
+          {b.routines.map((routine) => {
+            const isPicked = picked === routine.id;
+            return (
+              <Row
+                key={routine.id}
+                title={routine.name}
+                sub={`${routine.slots.length} ${routine.slots.length === 1 ? 'lift' : 'lifts'}`}
+                label={isPicked ? `Close choices for ${routine.name}` : `Choose ${routine.name}`}
+                onClick={() => setPicked(isPicked ? null : routine.id)}
+                right={
+                  <span aria-hidden style={{ fontSize: 14, fontWeight: 800, color: isPicked ? C.ink : C.tertiary }}>
+                    {isPicked ? '✕' : '+'}
+                  </span>
+                }
+              >
+                {isPicked && (
+                  <div className="rise" style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingBottom: 14 }}>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <SlotBtn
+                        label={`Add ${routine.name} just this week`}
+                        onClick={() => {
+                          b.addWorkout(routine.id, 'week');
+                          close();
+                        }}
+                      >
+                        Just this week
+                      </SlotBtn>
+                      <SlotBtn
+                        label={`Add ${routine.name} every week from now`}
+                        onClick={() => {
+                          b.addWorkout(routine.id, 'every');
+                          close();
+                        }}
+                      >
+                        Every week from now
+                      </SlotBtn>
+                    </div>
+                    <span style={{ fontSize: 12, lineHeight: 1.5, color: C.tertiary }}>
+                      Either way it is planned work, so the week expects it. Every week runs to the end of this block.
+                    </span>
+                  </div>
+                )}
+              </Row>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SlotBtn({
   children,
   onClick,
   disabled,
   danger,
+  label,
 }: {
   children: ReactNode;
   onClick: () => void;
   disabled?: boolean;
   danger?: boolean;
+  /** When the visible text alone would not say which workout it acts on. */
+  label?: string;
 }) {
   return (
     <Btn
       onClick={onClick}
       disabled={disabled}
+      label={label}
       style={{
         flex: 1,
         height: TOUCH,
