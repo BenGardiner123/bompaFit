@@ -3,7 +3,7 @@
 
 import { DAY_MS, MODEL, addDays, dateKey, daysBetween, fitness, fatigue, fromDateKey, weekdayIndex } from './calc';
 import { planWeekStart, spreadWeekDays, weekSlots } from './schedule';
-import type { SessionLoad } from './calc';
+import type { EffectiveWeight, SessionLoad } from './calc';
 import type { Block, Phase, Plan, PlannedSession, Routine } from './types';
 
 /** A deload week runs at roughly half the volume of a working week. */
@@ -381,19 +381,40 @@ export type PeakWindow = { startDate: string; endDate: string; daysAway: number 
  * from anything logged. Slots priced off a percentage of 1RM need an estimate
  * for that lift; without one they contribute nothing, which understates the
  * projection rather than inventing load.
+ *
+ * `effectiveKg` is the same weighting the logged sessions are counted with, so
+ * a bodyweight slot is priced as the share of the lifter it moves. The week
+ * budget compares this against what was logged, and pricing the two sides
+ * differently would read a week of pull-ups done exactly as planned as over
+ * budget. Absent, every slot is priced at its written weight.
  */
 export function plannedSessionLoad(
   routine: Routine,
   volumeFactor: number,
   e1rmByExercise: Record<string, number>,
+  effectiveKg: EffectiveWeight = (_exerciseId, weightKg) => weightKg,
 ): number {
   let total = 0;
   for (const slot of routine.slots) {
-    const weight = slot.targetWeightKg ?? (slot.targetPct1RM ? (e1rmByExercise[slot.exerciseId] ?? 0) * slot.targetPct1RM : 0);
+    const written = slotWeight(slot, e1rmByExercise);
+    if (written === null) continue;
+    const weight = effectiveKg(slot.exerciseId, written);
     if (weight <= 0) continue;
     total += slot.sets * slot.reps * weight * (slot.targetRpe / 10);
   }
   return total * volumeFactor;
+}
+
+/**
+ * A slot's weight as written, or null when it is a percentage of a max nobody
+ * has estimated yet. That is unknown rather than bodyweight, so it is never
+ * handed on to be priced as a bodyweight lift.
+ */
+function slotWeight(slot: Routine['slots'][number], e1rmByExercise: Record<string, number>): number | null {
+  if (typeof slot.targetWeightKg === 'number') return slot.targetWeightKg;
+  const max = e1rmByExercise[slot.exerciseId] ?? 0;
+  if (!slot.targetPct1RM || max <= 0) return null;
+  return max * slot.targetPct1RM;
 }
 
 /**
@@ -485,10 +506,11 @@ export function predictPeak(
 export function routineLoader(
   lookup: (id: string) => Routine | undefined,
   e1rmByExercise: Record<string, number>,
+  effectiveKg?: EffectiveWeight,
 ) {
   return (p: PlannedSession): number | null => {
     const routine = lookup(p.routineId);
     if (!routine) return null;
-    return plannedSessionLoad(routine, p.volumeFactor || 1, e1rmByExercise);
+    return plannedSessionLoad(routine, p.volumeFactor || 1, e1rmByExercise, effectiveKg);
   };
 }

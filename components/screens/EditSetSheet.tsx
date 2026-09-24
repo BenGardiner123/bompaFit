@@ -10,7 +10,6 @@
 
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { increments, isSet, segmentOf, toDisplay } from '@/lib/calc';
-import { isBodyweightLift } from '@/lib/bodyweight';
 import { REPS_MAX } from '@/lib/numberEntry';
 import { C, num, onInk } from '@/lib/tokens';
 import type { SetType } from '@/lib/types';
@@ -55,12 +54,7 @@ export function EditSetSheet() {
   }, [row, s.unit]);
 
   const setWeight = (weight: number) => setDraft((prev) => (prev ? { ...prev, weight } : prev));
-  const bodyweight = useBodyweight(
-    draft ? String(draft.id) : undefined,
-    isBodyweightLift(row ? b.exerciseById.get(row.exerciseId) : undefined),
-    draft?.weight ?? 0,
-    setWeight,
-  );
+  const bodyweight = useBodyweight(row?.exerciseId, draft?.weight ?? 0, setWeight);
 
   // The row can vanish underneath the sheet — deleted from the list behind it,
   // or a session closed. Rendering nothing beats rendering an empty form.

@@ -138,6 +138,11 @@ export function liftCall(lift: LiftWeek): 'hard' | 'easy' | null {
  * prescription is not used — it starts empty, so a step added to it would never
  * happen. Zero means a bodyweight lift, and a step there would strap on a plate
  * nobody chose.
+ *
+ * Read from the logged weight, never the effective weight the fatigue model
+ * counts a bodyweight lift at. Weighted dips progress as the plate on the belt;
+ * a base that included the lifter's own weight would add the step to a load
+ * nobody could put on the bar.
  */
 export function progressionBase(sets: LoggedSet[], exerciseId: string): number | null {
   const heaviest = Math.max(

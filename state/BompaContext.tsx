@@ -49,6 +49,7 @@ import { MAX_ID_CHARS, type ExternalMatch, type TestResult } from '@/lib/content
 import { loadProvider, providerEntries, providerEntry } from '@/lib/content/registry';
 import { countCached, deleteConnection, deleteLink, putConnection, putLinks, sweepExpired } from '@/lib/content/store';
 import { loadHowTo } from '@/lib/howtos';
+import { bodyweightShare, effectiveWeight, isBodyweightLift as isLibraryBodyweight, readBodyweightKg, readBodyweightLifts } from '@/lib/bodyweight';
 import { db, onStorageFailure, queue, readSettings, requestPersistence, warn, writeSetting } from '@/lib/db';
 import { copyName, uniqueId } from '@/lib/ids';
 import { summariseSessions, type SessionSummary } from '@/lib/history';
@@ -127,6 +128,21 @@ import type {
 
 /** Where the user's declared starting maxes live in the settings table. */
 export const STARTING_MAXES_KEY = 'startingMaxes';
+
+/**
+ * The lifter's bodyweight in kilograms, or null for never entered. One number,
+ * overwritten when it changes, and never a history: it is what the fatigue
+ * model counts a set of pull-ups at, not something to chart.
+ */
+export const BODYWEIGHT_KEY = 'bodyweightKg';
+
+/**
+ * Lifts the lifter marked as bodyweight by hand, by exercise id. Library
+ * movements whose equipment is bodyweight count without being listed; this
+ * holds the others, such as hyperextensions, which the library files under
+ * "Other".
+ */
+export const BODYWEIGHT_LIFTS_KEY = 'bodyweightLifts';
 
 /**
  * Whether first-run setup has been completed or deliberately skipped.
@@ -321,6 +337,8 @@ function useBompaState() {
   const [competition, setCompetition] = useState<Competition | null>(null);
   const [prescriptions, setPrescriptions] = useState<Prescriptions>({});
   const [startingMaxes, setStartingMaxesState] = useState<Record<string, number>>({});
+  const [bodyweightKg, setBodyweightKgState] = useState<number | null>(null);
+  const [markedBodyweight, setMarkedBodyweight] = useState<readonly string[]>([]);
   const [openSession, setOpenSession] = useState<Session | null>(null);
   // Routines are user data now, not a static import. Everything that used to
   // reach for a module-level map reads this instead.
@@ -461,6 +479,8 @@ function useBompaState() {
         setPrescriptions((settingsRow[PRESCRIPTIONS_KEY] as Prescriptions) ?? {});
         setStartingMaxesState((settingsRow[STARTING_MAXES_KEY] as Record<string, number>) ?? {});
         setSetupDone(settingsRow[SETUP_DONE_KEY] === true);
+        setBodyweightKgState(readBodyweightKg(settingsRow[BODYWEIGHT_KEY]));
+        setMarkedBodyweight(readBodyweightLifts(settingsRow[BODYWEIGHT_LIFTS_KEY]));
 
         const unit = (settingsRow.unit as Unit) ?? INITIAL.unit;
         patch({
@@ -603,7 +623,33 @@ function useBompaState() {
   // Derived training data
   // ───────────────────────────────────────────────────────────
 
-  const loads = useMemo(() => buildLoads(sessions, sets), [sessions, sets]);
+  /**
+   * Is this lift done with the body as its base load? Known from the library,
+   * or marked by the lifter with the Bodyweight chip. One answer for every
+   * screen and for the model, so "BW + 10 kg" and the load it counts at agree.
+   */
+  const isBodyweightLift = useCallback(
+    (exerciseId: string | null | undefined): boolean => {
+      // No lift picked yet is not a bodyweight lift.
+      if (!exerciseId) return false;
+      return markedBodyweight.includes(exerciseId) || isLibraryBodyweight(allExerciseById.get(exerciseId));
+    },
+    [markedBodyweight, allExerciseById],
+  );
+
+  // Undefined until a bodyweight is entered, and then every load below is
+  // exactly what it was before bodyweight counted.
+  const effectiveKg = useMemo(
+    () =>
+      effectiveWeight({
+        bodyweightKg,
+        isBodyweight: isBodyweightLift,
+        share: (exerciseId) => bodyweightShare(allExerciseById.get(exerciseId)),
+      }),
+    [bodyweightKg, isBodyweightLift, allExerciseById],
+  );
+
+  const loads = useMemo(() => buildLoads(sessions, sets, effectiveKg), [sessions, sets, effectiveKg]);
 
   const setsByExercise = useMemo(() => {
     const map = new Map<string, LoggedSet[]>();
@@ -673,8 +719,10 @@ function useBompaState() {
   }, [openSession, nextSlot, routineById]);
 
   const priceSlot = useMemo(
-    () => routineLoader(routineById, e1rmByExercise),
-    [routineById, e1rmByExercise],
+    // Priced with the same weighting as the logged loads, or a bodyweight
+    // session done exactly as planned would read as over budget.
+    () => routineLoader(routineById, e1rmByExercise, effectiveKg),
+    [routineById, e1rmByExercise, effectiveKg],
   );
 
   const peakWindow: PeakWindow = useMemo(
@@ -845,6 +893,26 @@ function useBompaState() {
     setRestTotalMs(seconds * 1000);
     writeSetting('restPresetSec', seconds, Date.now());
   }, [patch]);
+
+  /** Kilograms, converted by the caller once on entry. Zero or less clears it. */
+  const setBodyweightKg = useCallback((kg: number | null) => {
+    const next = readBodyweightKg(kg);
+    setBodyweightKgState(next);
+    writeSetting(BODYWEIGHT_KEY, next, Date.now());
+  }, []);
+
+  /**
+   * Mark a lift as bodyweight, or take the mark off. Taking it off a library
+   * bodyweight lift changes nothing: the library's answer still stands.
+   */
+  const markBodyweightLift = useCallback((exerciseId: string, yes: boolean) => {
+    setMarkedBodyweight((prev) => {
+      if (prev.includes(exerciseId) === yes) return prev;
+      const next = yes ? [...prev, exerciseId] : prev.filter((id) => id !== exerciseId);
+      writeSetting(BODYWEIGHT_LIFTS_KEY, next, Date.now());
+      return next;
+    });
+  }, []);
 
   const setStatsLift = useCallback((exerciseId: string) => {
     patch({ statsLift: exerciseId });
@@ -2507,6 +2575,10 @@ function useBompaState() {
     competition,
     prescriptions,
     startingMaxes,
+    bodyweightKg,
+    setBodyweightKg,
+    isBodyweightLift,
+    markBodyweightLift,
     openSession,
     sessionSets,
     loads,

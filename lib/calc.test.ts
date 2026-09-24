@@ -19,6 +19,8 @@ import {
   volumeLoad,
 } from './calc';
 import type { LoggedSet, Session, SetType } from './types';
+import { bodyweightShare, effectiveWeight, isBodyweightLift as isLibraryBodyweight } from './bodyweight';
+import { EXERCISE_BY_ID } from './data';
 
 // ─────────────────────────────────────────────────────────────
 // Fixtures
@@ -435,5 +437,98 @@ describe('training methods in the model', () => {
 
   it('weekly tonnage counts reps at their equivalents', () => {
     expect(volumeLoad([row({ weightKg: 30, reps: 21, repStyle: 'twenty-ones' })], NOW)).toBeCloseTo(30 * 14, 10);
+  });
+});
+
+describe('bodyweight lifts in the model', () => {
+  // An 80 kg lifter. Pull-ups and push-ups are bodyweight in the library;
+  // hyperextensions are filed under "Other" and are marked by hand, as the
+  // Bodyweight chip would.
+  const marked = new Set(['hyperextensions-back-extensions']);
+  const weigh = effectiveWeight({
+    bodyweightKg: 80,
+    isBodyweight: (id) => marked.has(id) || isLibraryBodyweight(EXERCISE_BY_ID.get(id)),
+    share: (id) => bodyweightShare(EXERCISE_BY_ID.get(id)),
+  })!;
+
+  function bw(exerciseId: string, over: Partial<LoggedSet>): LoggedSet {
+    return set({ exerciseId, weightKg: 0, ...over });
+  }
+
+  const threeOf = (exerciseId: string, over: Partial<LoggedSet>) =>
+    [1, 2, 3].map((setNo) => bw(exerciseId, { setNo, ...over }));
+
+  it('3 × 10 pull-ups at RPE 8 cost what 80 kg for 3 × 10 would', () => {
+    // 80 × 1.0 = 80 kg a rep. 80 × 10 × 0.8 = 640 a set, 1920 for three.
+    const sets = threeOf('pullups', { reps: 10, rpe: 8 });
+    expect(sessionLoad(sets, weigh)).toBeCloseTo(1920, 9);
+    // Without the lifter's weight they cost nothing, which is the bug.
+    expect(sessionLoad(sets)).toBe(0);
+  });
+
+  it('3 × 12 hyperextensions count half the body, and a plate on top of it', () => {
+    // 80 × 0.5 = 40 kg. 40 × 12 × 0.8 = 384 a set, 1152 for three.
+    expect(sessionLoad(threeOf('hyperextensions-back-extensions', { reps: 12, rpe: 8 }), weigh)).toBeCloseTo(1152, 9);
+    // With 10 kg held: 50 × 12 × 0.8 = 480 a set, 1440.
+    expect(sessionLoad(threeOf('hyperextensions-back-extensions', { reps: 12, rpe: 8, weightKg: 10 }), weigh)).toBeCloseTo(1440, 9);
+  });
+
+  it('weighted dips count the body under the belt', () => {
+    // 80 + 10 = 90 kg. 90 × 8 × 0.8 = 576 a set, 1728 for three. As logged,
+    // only the plate: 10 × 8 × 0.8 × 3 = 192.
+    const sets = threeOf('dips-triceps-version', { reps: 8, rpe: 8, weightKg: 10 });
+    expect(sessionLoad(sets, weigh)).toBeCloseTo(1728, 9);
+    expect(sessionLoad(sets)).toBeCloseTo(192, 9);
+  });
+
+  it('push-ups count about two thirds of the body', () => {
+    // 80 × 0.65 = 52 kg. 52 × 20 × 0.7 = 728 a set, 2184 for three.
+    expect(sessionLoad(threeOf('pushups', { reps: 20, rpe: 7 }), weigh)).toBeCloseTo(2184, 9);
+  });
+
+  it('a bodyweight warm-up before a weighted set is measured body and all', () => {
+    // Working: +20 kg pull-ups, 100 kg effective. 100 × 5 × 0.8 = 400.
+    // Warm-up at bodyweight: 80 / 100 = 0.8, squared 0.64.
+    //                         80 × 5 × 0.64 × 0.3 = 76.8
+    const sets = [
+      bw('pullups', { setNo: 1, type: 'warmup', reps: 5, rpeEstimated: true }),
+      bw('pullups', { setNo: 2, weightKg: 20, reps: 5, rpe: 8 }),
+    ];
+    expect(sessionLoad(sets, weigh)).toBeCloseTo(476.8, 9);
+  });
+
+  it('leaves a loaded lift exactly as it was', () => {
+    const bench = [set({ weightKg: 100, reps: 10, rpe: 8 })];
+    expect(sessionLoad(bench, weigh)).toBe(sessionLoad(bench));
+  });
+
+  it('with no bodyweight entered, every existing figure is unchanged to the last bit', () => {
+    const none = effectiveWeight({ bodyweightKg: null, isBodyweight: () => true, share: () => 1 });
+    const fixtures: LoggedSet[][] = [
+      [set({ weightKg: 100, reps: 5, rpe: 8 }), set({ weightKg: 90, reps: 8, rpe: 7, type: 'backoff' })],
+      [set({ setNo: 1, type: 'warmup', weightKg: 50, reps: 5, rpeEstimated: true }), set({ setNo: 2, weightKg: 100, reps: 5, rpe: 8 })],
+      [set({ weightKg: 60, reps: 12, rpe: 10, repStyle: 'isometric', holdSec: 9 })],
+      threeOf('pullups', { reps: 10, rpe: 8 }),
+      threeOf('dips-triceps-version', { reps: 8, rpe: 8, weightKg: 10 }),
+    ];
+    for (const sets of fixtures) expect(sessionLoad(sets, none)).toBe(sessionLoad(sets));
+
+    const { sessions, sets, loads } = history([1, 3, 8, 15, 30]);
+    expect(buildLoads(sessions, sets, none)).toEqual(loads);
+    expect(scores(buildLoads(sessions, sets, none), NOW)).toEqual(scores(loads, NOW));
+  });
+
+  it('moves fatigue once pull-ups count', () => {
+    const sessions = [session(1, NOW - DAY_MS)];
+    const sets = threeOf('pullups', { reps: 10, rpe: 8, at: NOW - DAY_MS });
+    // Nothing at all before; 1920 decayed by one day after.
+    expect(buildLoads(sessions, sets)).toEqual([]);
+    const loads = buildLoads(sessions, sets, weigh);
+    expect(fatigue(loads, NOW)).toBeCloseTo(1920 * Math.exp(-1 / 7), 6);
+  });
+
+  it('displayed tonnage stays what was loaded', () => {
+    // The plates on the belt, not an estimate of the lifter.
+    expect(volumeLoad(threeOf('dips-triceps-version', { reps: 8, weightKg: 10 }), NOW)).toBe(240);
   });
 });

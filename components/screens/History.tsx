@@ -169,7 +169,7 @@ function LiftHistory({ tabs }: { tabs: ReactNode }) {
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 <span style={{ fontSize: 28, fontWeight: 800, ...num }}>
-                  {best ? `${toDisplay(best.weightKg, s.unit)}×${best.reps}` : '—'}
+                  {best ? bestSetText(best.weightKg, best.reps, s.unit, b.isBodyweightLift(liftId)) : '—'}
                 </span>
                 <span style={{ fontSize: 11.5, fontWeight: 700, color: C.tertiary }}>best set</span>
               </div>
@@ -184,7 +184,7 @@ function LiftHistory({ tabs }: { tabs: ReactNode }) {
                   sub={fmtDate(pr.key)}
                   right={
                     <span style={{ fontSize: 17, fontWeight: 800, color: pr.highlight ? C.amberDark : C.ink, whiteSpace: 'nowrap', ...num }}>
-                      {pr.kind === 'volume' ? volumeText(pr.kg, s.unit) : weightShort(toDisplay(pr.kg, s.unit), s.unit)}
+                      {pr.kind === 'volume' ? volumeText(pr.kg, s.unit) : weightShort(toDisplay(pr.kg, s.unit), s.unit, b.isBodyweightLift(liftId))}
                     </span>
                   }
                 />
@@ -215,4 +215,14 @@ function LiftHistory({ tabs }: { tabs: ReactNode }) {
 function volumeText(kg: number, unit: Unit): string {
   const short = volumeUnit(unit, true);
   return unit === 'kg' ? `${fmtVolume(kg, unit)}${short}` : `${fmtVolume(kg, unit)} ${short}`;
+}
+
+/**
+ * "100×8" for a loaded lift. A bodyweight best reads "BW × 8", or "+10 kg × 8"
+ * with added weight — "0×8" says the best set was nothing.
+ */
+function bestSetText(weightKg: number, reps: number, unit: Unit, bodyweight: boolean): string {
+  const weight = toDisplay(weightKg, unit);
+  if (weight === 0 || bodyweight) return `${weightShort(weight, unit, bodyweight)} × ${reps}`;
+  return `${weight}×${reps}`;
 }

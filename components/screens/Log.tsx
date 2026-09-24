@@ -26,7 +26,7 @@ import {
   type MethodGuideKey,
   type SlotMethod,
 } from '@/lib/methods';
-import { isBodyweightLift, weightShort } from '@/lib/bodyweight';
+import { weightShort } from '@/lib/bodyweight';
 import { REPS_MAX } from '@/lib/numberEntry';
 import { C, HERO_SIZE, R, TOUCH, num, onInk } from '@/lib/tokens';
 import type { LoggedSet, SetPrescription, SetType } from '@/lib/types';
@@ -540,7 +540,7 @@ function LiftHeader() {
       ) : (
         <span style={{ fontSize: 13.5, fontWeight: 800, color: C.amberLight, ...num }}>
           {activeTarget
-            ? `${activeTarget.sets} × ${activeTarget.reps} @ ${weightShort(toDisplay(activeTarget.weightKg, s.unit), s.unit, isBodyweightLift(exercise))} · RPE ${activeTarget.rpe}`
+            ? `${activeTarget.sets} × ${activeTarget.reps} @ ${weightShort(toDisplay(activeTarget.weightKg, s.unit), s.unit, b.isBodyweightLift(activeExerciseId))} · RPE ${activeTarget.rpe}`
             : 'Added today · no target'}
         </span>
       )}
@@ -782,7 +782,7 @@ function SetDot({ row, fill }: { row: LoggedSet; fill: string }) {
     >
       <span className="sr-only">
         Edit set {row.setNo}
-        {kind}: {weightShort(toDisplay(row.weightKg, unit), unit, isBodyweightLift(b.exerciseById.get(row.exerciseId)))} × {row.reps} @{row.rpe}
+        {kind}: {weightShort(toDisplay(row.weightKg, unit), unit, b.isBodyweightLift(row.exerciseId))} × {row.reps} @{row.rpe}
       </span>
       <span aria-hidden style={{ ...DOT, background: fill, border: `1.5px solid ${fill}` }} />
     </Btn>
@@ -798,8 +798,7 @@ function WeightEntry() {
   const b = useBompa();
   const { s, activeExerciseId } = b;
   const setWeight = (next: number) => b.patch({ entryWeight: next });
-  const known = isBodyweightLift(activeExerciseId ? b.exerciseById.get(activeExerciseId) : undefined);
-  const bodyweight = useBodyweight(activeExerciseId ?? undefined, known, s.entryWeight, setWeight);
+  const bodyweight = useBodyweight(activeExerciseId ?? undefined, s.entryWeight, setWeight);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>

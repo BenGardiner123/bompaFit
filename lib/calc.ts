@@ -96,6 +96,37 @@ export const MODEL = {
    * model of what a hold costs.
    */
   HOLD_SEC_PER_REP: 3,
+  /**
+   * How much of the lifter's bodyweight a bodyweight lift moves, by movement.
+   * A set of pull-ups is stored as zero kilograms, or as the plate hung from
+   * the belt, and without these it would cost the model nothing, or only the
+   * plate.
+   *
+   * Stand-ins, like WARMUP_SHARE: rounded estimates of the share of body mass
+   * each kind of movement lifts, not measurements. They only apply once the
+   * lifter has entered a bodyweight; with none, every set counts as logged.
+   *
+   * Pull-ups, chin-ups, dips, muscle-ups and handstand push-ups hang or press
+   * the whole body.
+   */
+  BW_SHARE_FULL: 1.0,
+  /** Push-ups: the feet carry the rest. Roughly two thirds reaches the hands. */
+  BW_SHARE_PUSH_UP: 0.65,
+  /** Squats, lunges, step-ups: the body less the lower legs, which barely travel. */
+  BW_SHARE_SQUAT: 0.7,
+  /** Back extensions, hyperextensions, glute-ham raises: trunk, head and arms hinging over a pad. */
+  BW_SHARE_HINGE: 0.5,
+  /**
+   * Everything else: crunches, leg raises, planks, and any movement the name
+   * and pattern don't identify. Core work moves a segment — the legs, or the
+   * upper trunk — each around a third of the body, not the whole of it.
+   *
+   * Low on purpose. This also catches lifts nobody recognised, and counting an
+   * unknown lift too heavily raises fatigue for a reason the lifter cannot
+   * see, while counting it too lightly leaves them where they were before
+   * bodyweight counted at all.
+   */
+  BW_SHARE_OTHER: 0.3,
 } as const;
 
 export const DAY_MS = 86_400_000;
@@ -157,6 +188,11 @@ export function brzycki(weight: number, reps: number): number {
  * Estimated 1RM for a lift: the best Epley estimate from working sets in the
  * trailing 90 days. Warm-ups can be heavy singles and would poison this, and so
  * would anything that was not a full-range rep — see `countsForRecords`.
+ *
+ * Built on the weight logged, never the effective weight the fatigue model
+ * uses. On a bodyweight lift that makes it a record of the added load, which
+ * is the number the lifter chooses and progresses; folding in an estimated
+ * share of their bodyweight would move every max when the setting changed.
  */
 export function e1RM(sets: LoggedSet[], now: number, windowDays = MODEL.NORMALISE_DAYS): number {
   const cutoff = now - windowDays * DAY_MS;
@@ -293,10 +329,37 @@ export function repEquivalent(row: Pick<LoggedSet, 'repStyle' | 'holdSec'>): num
   }
 }
 
-/** Kilograms moved by one row, with its reps scaled to normal-rep equivalents. */
+/**
+ * Kilograms moved by one row, with its reps scaled to normal-rep equivalents.
+ *
+ * The weight on the bar, or the plate on the belt: what the lifter loaded.
+ * Every tonnage the app shows is built on this, so a set of pull-ups shows no
+ * volume, which is true of the plates. The fatigue model counts the body as
+ * well — see `EffectiveWeight` — and the two are kept apart on purpose: a
+ * displayed volume that quietly included an estimate of the lifter's weight
+ * could not be checked against the plates, and would jump every time the
+ * bodyweight setting changed.
+ */
 export function rowTonnage(row: Pick<LoggedSet, 'weightKg' | 'reps' | 'repStyle' | 'holdSec'>): number {
-  return row.weightKg * row.reps * repEquivalent(row);
+  return loadTonnage(row, row.weightKg);
 }
+
+/** The same tonnage at a weight the caller chose, multiplied in the same order. */
+function loadTonnage(row: Pick<LoggedSet, 'reps' | 'repStyle' | 'holdSec'>, weightKg: number): number {
+  return weightKg * row.reps * repEquivalent(row);
+}
+
+/**
+ * The weight a row counts at in the fatigue model, in kilograms.
+ *
+ * For a loaded lift, the weight logged. For a bodyweight lift, the share of
+ * the lifter's own weight the movement moves plus whatever was added, so ten
+ * pull-ups cost something. Built from settings this file cannot read, and
+ * passed in. Absent means every row counts exactly as logged.
+ */
+export type EffectiveWeight = (exerciseId: string, weightKg: number) => number;
+
+const AS_LOGGED: EffectiveWeight = (_exerciseId, weightKg) => weightKg;
 
 export type SessionLoad = {
   /** Epoch ms of the session, used for decay. */
@@ -327,14 +390,19 @@ export type SessionLoad = {
  * 1RM is deliberate. It answers "how close was this to what you actually did
  * today", which is the question, and it self-corrects on a light day.
  */
-export function sessionLoad(sets: LoggedSet[]): number {
+export function sessionLoad(sets: LoggedSet[], effectiveKg: EffectiveWeight = AS_LOGGED): number {
+  const weightOf = (s: LoggedSet) => effectiveKg(s.exerciseId, s.weightKg);
+
   // The heaviest working set per lift is the reference each warm-up is measured
-  // against. Built once rather than per warm-up.
+  // against. Built once rather than per warm-up. Effective weights on both
+  // sides, so bodyweight pull-ups before a weighted set are measured body and
+  // all, not as nothing against a plate.
   const topWorking = new Map<string, number>();
   for (const s of sets) {
     if (!countsAsWork(s.type)) continue;
     const best = topWorking.get(s.exerciseId) ?? 0;
-    if (s.weightKg > best) topWorking.set(s.exerciseId, s.weightKg);
+    const weight = weightOf(s);
+    if (weight > best) topWorking.set(s.exerciseId, weight);
   }
 
   // Every piece of a drop or cluster set is its own row at its own weight, reps
@@ -342,8 +410,9 @@ export function sessionLoad(sets: LoggedSet[]): number {
   // weight — which is true.
   let total = 0;
   for (const s of sets) {
+    const weight = weightOf(s);
     if (countsAsWork(s.type)) {
-      total += rowTonnage(s) * (s.rpe / 10);
+      total += loadTonnage(s, weight) * (s.rpe / 10);
       continue;
     }
 
@@ -357,16 +426,16 @@ export function sessionLoad(sets: LoggedSet[]): number {
     // `rpeEstimated` is true when the programmed target was recorded on their
     // behalf, which for a warm-up is the working target and far too high.
     const effort = s.rpeEstimated
-      ? Math.min(1, s.weightKg / reference) ** MODEL.WARMUP_CURVE
+      ? Math.min(1, weight / reference) ** MODEL.WARMUP_CURVE
       : s.rpe / 10;
 
-    total += rowTonnage(s) * effort * MODEL.WARMUP_SHARE;
+    total += loadTonnage(s, weight) * effort * MODEL.WARMUP_SHARE;
   }
   return total;
 }
 
 /** Group logged sets into per-session loads, oldest first. */
-export function buildLoads(sessions: Session[], sets: LoggedSet[]): SessionLoad[] {
+export function buildLoads(sessions: Session[], sets: LoggedSet[], effectiveKg?: EffectiveWeight): SessionLoad[] {
   const bySession = new Map<number, LoggedSet[]>();
   for (const s of sets) {
     const arr = bySession.get(s.sessionId);
@@ -379,7 +448,7 @@ export function buildLoads(sessions: Session[], sets: LoggedSet[]): SessionLoad[
     if (session.id === undefined) continue;
     const owned = bySession.get(session.id);
     if (!owned || owned.length === 0) continue;
-    const load = sessionLoad(owned);
+    const load = sessionLoad(owned, effectiveKg);
     if (load <= 0) continue;
     // The session's own timestamp is when it started; decay should measure from
     // when the work actually happened, which is the last set.
@@ -531,6 +600,7 @@ function sumBetween(loads: SessionLoad[], from: number, to: number): number {
 /**
  * Tonnage over the trailing 7 days, in kilograms. Working sets only, with reps
  * scaled to normal-rep equivalents so a set of 21s is not read as 21 full reps.
+ * What was loaded, not the body under it — see `rowTonnage`.
  */
 export function volumeLoad(sets: LoggedSet[], now: number, days = 7): number {
   const cutoff = now - days * DAY_MS;

@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { brzycki, epley, fmtClock } from '@/lib/calc';
+import { brzycki, epley, fmtClock, toDisplay, toKg } from '@/lib/calc';
+import { BODYWEIGHT_MAX_KG } from '@/lib/bodyweight';
 import { db, isPersisted } from '@/lib/db';
 import { weightMax, weightPrecision } from '@/lib/numberEntry';
 import { buildEnvelope, downloadEnvelope } from '@/lib/exchange';
@@ -434,6 +435,8 @@ function Settings() {
         }
       />
 
+      <Bodyweight />
+
       <Row
         title="On-device data"
         titleSize={14}
@@ -495,6 +498,41 @@ function Settings() {
         Running setup again replaces your plan. Workouts, logged sets and history all stay.
       </span>
     </Section>
+  );
+}
+
+/**
+ * One number, not a tracker: no history and no graph, because tracking
+ * bodyweight is not what Bompa is for. It exists so pull-ups and dips cost
+ * something in the fatigue model. Typed in the display unit and converted to
+ * kilograms once, on the way in.
+ */
+function Bodyweight() {
+  const b = useBompa();
+  const { unit } = b.s;
+  const kg = b.bodyweightKg;
+  return (
+    <Row
+      title="Your bodyweight"
+      titleSize={14}
+      sub="Counts pull-ups, dips, push-ups and other bodyweight lifts toward fatigue and readiness. Type 0 to clear it."
+      right={
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, flex: 'none' }}>
+          <EditableNumber
+            label="Your bodyweight"
+            unit={unit}
+            value={kg === null ? 0 : toDisplay(kg, unit)}
+            min={0}
+            max={toDisplay(BODYWEIGHT_MAX_KG, unit)}
+            precision={weightPrecision(unit)}
+            onCommit={(next) => b.setBodyweightKg(next > 0 ? toKg(next, unit) : null)}
+            {...(kg === null ? { display: '—', spoken: 'Your bodyweight not set', openEmpty: true } : {})}
+            style={{ minWidth: 50, fontSize: 15, fontWeight: 800 }}
+          />
+          <UnitLabel>{unit}</UnitLabel>
+        </div>
+      }
+    />
   );
 }
 

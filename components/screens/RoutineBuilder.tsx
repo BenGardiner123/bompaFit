@@ -5,7 +5,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { toDisplay, toKg } from '@/lib/calc';
-import { isBodyweightLift, weightSpoken } from '@/lib/bodyweight';
+import { weightSpoken } from '@/lib/bodyweight';
 import { groupNoun } from '@/lib/methods';
 import { REPS_MAX, SETS_MAX, weightMax, weightPrecision } from '@/lib/numberEntry';
 import { describeMethod } from '@/lib/methodPresets';
@@ -291,7 +291,6 @@ export function RoutineBuilder({ routineId, onClose }: { routineId: string; onCl
                   ) : (
                     <WeightField
                       exerciseId={slot.exerciseId}
-                      known={isBodyweightLift(exercise)}
                       weightKg={slot.targetWeightKg ?? 0}
                       onChange={(kg) => setSlot(index, { targetWeightKg: kg })}
                     />
@@ -537,19 +536,17 @@ function Field({
  */
 function WeightField({
   exerciseId,
-  known,
   weightKg,
   onChange,
 }: {
   exerciseId: string;
-  known: boolean;
   weightKg: number;
   onChange: (kg: number) => void;
 }) {
   const { unit } = useBompa().s;
   const weight = toDisplay(weightKg, unit);
   const setWeight = (next: number) => onChange(toKg(Math.max(0, next), unit));
-  const bodyweight = useBodyweight(exerciseId, known, weight, setWeight);
+  const bodyweight = useBodyweight(exerciseId, weight, setWeight);
   // "BW" rather than the full word: the field is a third of a phone wide.
   const display = weight === 0 ? 'BW' : bodyweight.on ? `BW + ${weight}` : undefined;
   return (

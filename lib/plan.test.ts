@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { DAY_MS, addDays as addDaysAcross, buildLoads, dateKey, daysBetween } from './calc';
-import { TEMPLATE_BY_ID } from './data';
+import { DAY_MS, addDays as addDaysAcross, buildLoads, dateKey, daysBetween, fromDateKey } from './calc';
+import { bodyweightShare, effectiveWeight, isBodyweightLift as isLibraryBodyweight } from './bodyweight';
+import { EXERCISE_BY_ID, TEMPLATE_BY_ID } from './data';
 import {
   DEFAULT_BLOCKS,
   DELOAD_VOLUME_FACTOR,
@@ -16,7 +17,7 @@ import {
   weekShape,
 } from './plan';
 import { isOverBudget, renumber, weekBudget, weekSlots } from './schedule';
-import type { Block, LoggedSet, PlannedSession, Session } from './types';
+import type { Block, LoggedSet, PlannedSession, Routine, Session } from './types';
 
 const NOW = new Date(2026, 7, 19, 18, 0, 0).getTime(); // Wed 19 Aug 2026
 const TODAY = dateKey(NOW);
@@ -352,6 +353,67 @@ describe('plannedSessionLoad', () => {
     const routine = TEMPLATE_BY_ID.get('meet-openers')!;
     const load = plannedSessionLoad(routine, 1, { 'back-squat': 200, 'barbell-bench-press': 120, deadlift: 240 });
     expect(load).toBeGreaterThan(0);
+  });
+
+  describe('a bodyweight session', () => {
+    // An 80 kg lifter: pull-ups at bodyweight, hyperextensions marked by hand
+    // and done with 10 kg.
+    const WEEK = '2026-08-17';
+    const marked = new Set(['hyperextensions-back-extensions']);
+    const weigh = effectiveWeight({
+      bodyweightKg: 80,
+      isBodyweight: (id) => marked.has(id) || isLibraryBodyweight(EXERCISE_BY_ID.get(id)),
+      share: (id) => bodyweightShare(EXERCISE_BY_ID.get(id)),
+    })!;
+    const routine: Routine = {
+      id: 'calisthenics',
+      name: 'Calisthenics',
+      source: 'user',
+      phase: 'hypertrophy',
+      estMinutes: 30,
+      slots: [
+        { exerciseId: 'pullups', order: 0, sets: 3, reps: 10, targetWeightKg: 0, targetPct1RM: null, targetRpe: 8, supersetGroup: null },
+        { exerciseId: 'hyperextensions-back-extensions', order: 1, sets: 3, reps: 12, targetWeightKg: 10, targetPct1RM: null, targetRpe: 8, supersetGroup: null },
+      ],
+    };
+
+    it('is priced as the share of the lifter each lift moves', () => {
+      // Pull-ups: 3 × 10 × 80 × 0.8 = 1920. Hyperextensions: 3 × 12 × (40 + 10) × 0.8 = 1440.
+      expect(plannedSessionLoad(routine, 1, {}, weigh)).toBeCloseTo(3360, 9);
+      // Without a bodyweight the pull-ups are free and only the plate counts:
+      // 3 × 12 × 10 × 0.8 = 288, exactly as before.
+      expect(plannedSessionLoad(routine, 1, {})).toBeCloseTo(288, 9);
+    });
+
+    it('done exactly as planned, lands on budget', () => {
+      const at = fromDateKey(WEEK) + 18 * 3600_000;
+      const sets: LoggedSet[] = routine.slots.flatMap((slot) =>
+        [1, 2, 3].map((setNo) => ({
+          sessionId: 1,
+          exerciseId: slot.exerciseId,
+          setNo,
+          type: 'working' as const,
+          weightKg: slot.targetWeightKg ?? 0,
+          reps: slot.reps,
+          rpe: slot.targetRpe,
+          rpeEstimated: true,
+          at,
+        })),
+      );
+      const sessions: Session[] = [
+        { id: 1, date: WEEK, routineId: routine.id, routineName: routine.name, exerciseIds: ['pullups'], startedAt: at, lastSetAt: at, elapsedMs: 0, finishedAt: at },
+      ];
+      const logged = buildLoads(sessions, sets, weigh).reduce((total, l) => total + l.load, 0);
+      const slot: PlannedSession = {
+        id: 1, planId: 1, blockId: 1, weekStart: WEEK, slotIndex: 0, routineId: routine.id, status: 'done', date: WEEK, adjustedByBompa: false, volumeFactor: 1,
+      };
+
+      const budget = weekBudget({ planned: [slot], weekStart: WEEK, slotLoad: () => plannedSessionLoad(routine, 1, {}, weigh), loggedLoad: logged });
+      expect(budget.budget).toBeCloseTo(3360, 9);
+      expect(budget.projected).toBeCloseTo(3360, 9);
+      expect(budget.overshoot).toBeCloseTo(0, 9);
+      expect(isOverBudget(budget, false)).toBe(false);
+    });
   });
 });
 

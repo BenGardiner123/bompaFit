@@ -5,11 +5,12 @@
 // weight on a bodyweight lift reads "BW + 10 kg", because "0 kg" for a set of
 // pull-ups says the set was nothing.
 
-import { useState, type CSSProperties } from 'react';
-import { weightSpoken } from '@/lib/bodyweight';
+import type { CSSProperties } from 'react';
+import { isBodyweightLift as isLibraryBodyweight, weightSpoken } from '@/lib/bodyweight';
 import { weightMax, weightPrecision } from '@/lib/numberEntry';
 import { onInk } from '@/lib/tokens';
 import type { Unit } from '@/lib/types';
+import { useBompa } from '@/state/BompaContext';
 import { EditableNumber, InkChip } from '@/components/ui';
 
 /**
@@ -81,36 +82,28 @@ export function BodyweightChip({ on, onClick }: { on: boolean; onClick: () => vo
  * Whether a lift is being done as bodyweight, and the chip's tap.
  *
  * On at zero, for a lift the library knows is bodyweight, or for one the
- * lifter marked with the chip. The mark lives here, not in storage: a stored
- * weight of zero already says "bodyweight", and the mark only decides whether
- * added weight reads "BW + 10 kg" or "10 kg" while the screen is open.
+ * lifter marked with the chip. The mark is kept with the lifter's settings, so
+ * weighted hyperextensions still read "BW + 10 kg" after leaving Train, and the
+ * fatigue model counts the body under the plate. Unmarking takes both away.
  *
- * `key` names the lift the mark belongs to, so marking dips doesn't mark the
- * bench press after a swipe.
+ * `exerciseId` names the lift the mark belongs to, so marking dips doesn't
+ * mark the bench press after a swipe.
  */
-export function useBodyweight(key: string | undefined, known: boolean, weight: number, setWeight: (next: number) => void) {
-  const [marked, setMarked] = useState<ReadonlySet<string>>(() => new Set());
-  const isMarked = key !== undefined && marked.has(key);
-  const on = weight === 0 || known || isMarked;
-
-  const mark = (yes: boolean) => {
-    if (key === undefined) return;
-    setMarked((prev) => {
-      const next = new Set(prev);
-      if (yes) next.add(key);
-      else next.delete(key);
-      return next;
-    });
-  };
+export function useBodyweight(exerciseId: string | undefined, weight: number, setWeight: (next: number) => void) {
+  const b = useBompa();
+  const known = isLibraryBodyweight(exerciseId === undefined ? undefined : b.exerciseById.get(exerciseId));
+  const on = weight === 0 || (exerciseId !== undefined && b.isBodyweightLift(exerciseId));
 
   const toggle = () => {
+    if (exerciseId === undefined) return;
     // Marked by hand with plates on: the lifter is taking the mark back off,
-    // and the weight stays as it is.
+    // and the weight stays as it is. A library bodyweight lift has no mark to
+    // take off, so the tap goes to plain bodyweight instead.
     if (on && weight > 0 && !known) {
-      mark(false);
+      b.markBodyweightLift(exerciseId, false);
       return;
     }
-    mark(true);
+    if (!known) b.markBodyweightLift(exerciseId, true);
     if (weight !== 0) setWeight(0);
   };
 

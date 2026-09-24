@@ -518,6 +518,82 @@ describe('starting maxes', () => {
   });
 });
 
+describe('bodyweight', () => {
+  const CALISTHENICS: Routine = {
+    id: 'my-calisthenics',
+    name: 'Calisthenics',
+    source: 'user',
+    phase: 'hypertrophy',
+    estMinutes: 30,
+    slots: [
+      { exerciseId: 'pullups', order: 0, sets: 3, reps: 10, targetWeightKg: 0, targetPct1RM: null, targetRpe: 8, supersetGroup: null },
+    ],
+  };
+
+  it('is empty until entered, then persists as kilograms across a reload', async () => {
+    const first = await mount();
+    expect(first.result.current.bodyweightKg).toBeNull();
+    await act(async () => first.result.current.setBodyweightKg(80));
+    await waitFor(async () => expect((await db.settings.get('bodyweightKg'))?.value).toBe(80));
+    first.unmount();
+
+    const second = await mount();
+    expect(second.result.current.bodyweightKg).toBe(80);
+    await act(async () => second.result.current.setBodyweightKg(null));
+    expect(second.result.current.bodyweightKg).toBeNull();
+  });
+
+  it('knows library bodyweight lifts, and remembers the ones marked by hand until unmarked', async () => {
+    const first = await mount();
+    expect(first.result.current.isBodyweightLift('pullups')).toBe(true);
+    expect(first.result.current.isBodyweightLift('hyperextensions-back-extensions')).toBe(false);
+    expect(first.result.current.isBodyweightLift(null)).toBe(false);
+
+    await act(async () => first.result.current.markBodyweightLift('hyperextensions-back-extensions', true));
+    expect(first.result.current.isBodyweightLift('hyperextensions-back-extensions')).toBe(true);
+    await waitFor(async () =>
+      expect((await db.settings.get('bodyweightLifts'))?.value).toEqual(['hyperextensions-back-extensions']),
+    );
+    first.unmount();
+
+    const second = await mount();
+    expect(second.result.current.isBodyweightLift('hyperextensions-back-extensions')).toBe(true);
+    await act(async () => second.result.current.markBodyweightLift('hyperextensions-back-extensions', false));
+    expect(second.result.current.isBodyweightLift('hyperextensions-back-extensions')).toBe(false);
+    // A library lift has no mark to take off.
+    await act(async () => second.result.current.markBodyweightLift('pullups', false));
+    expect(second.result.current.isBodyweightLift('pullups')).toBe(true);
+  });
+
+  it('turns logged pull-ups into load, and prices the planned slot the same way', async () => {
+    const view = await mount();
+    const { result } = view;
+    await act(async () => result.current.saveRoutine(CALISTHENICS));
+    await act(async () =>
+      result.current.createPlanFromSetup({ rotation: [CALISTHENICS.id], sessionsPerWeek: 1, phase: 'hypertrophy', weeks: 4 }),
+    );
+    await waitFor(() => expect(result.current.plan).not.toBeNull());
+
+    await act(async () => result.current.startSession(CALISTHENICS.id));
+    await waitFor(() => expect(result.current.openSession).not.toBeNull());
+    expect(result.current.s.entryWeight).toBe(0);
+    for (let i = 0; i < 3; i++) await act(async () => result.current.logSet());
+    await act(async () => result.current.finishSession());
+    await waitFor(() => expect(result.current.sets).toHaveLength(3));
+
+    // With no bodyweight, three sets of pull-ups weigh nothing.
+    expect(result.current.loads).toHaveLength(0);
+    expect(result.current.scores.fatigue).toBe(0);
+
+    await act(async () => result.current.setBodyweightKg(80));
+    // 3 × 10 × 80 × 0.8 = 1920, whatever volume the week was planned at.
+    await waitFor(() => expect(result.current.loads).toHaveLength(1));
+    expect(result.current.loads[0]!.load).toBeCloseTo(1920, 6);
+    expect(result.current.scores.fatigue).toBeGreaterThan(0);
+    expect(result.current.budget.budget).toBeGreaterThan(0);
+  });
+});
+
 describe('adding an unplanned lift', () => {
   it('appends it to this session without touching the routine', async () => {
     const { result } = await mount();
