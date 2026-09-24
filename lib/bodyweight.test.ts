@@ -117,9 +117,10 @@ describe('effectiveWeight', () => {
     expect(weigh('hyperextensions-back-extensions', 10)).toBe(50);
   });
 
-  it('counts a zero on any lift as bodyweight, and leaves loaded lifts alone', () => {
+  it('counts only lifts known to be bodyweight, not a stray zero on a loaded lift', () => {
     const weigh = make(80)!;
-    expect(weigh('bodyweight-squat', 0)).toBeCloseTo(56, 9); // 80 × 0.7
+    // A zero logged on bench press is a slip, not a bodyweight set: it stays zero.
+    expect(weigh('barbell-bench-press', 0)).toBe(0);
     expect(weigh('barbell-bench-press', 100)).toBe(100);
   });
 });

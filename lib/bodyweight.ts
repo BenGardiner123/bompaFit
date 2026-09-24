@@ -111,8 +111,11 @@ export function effectiveWeight(args: {
 }): EffectiveWeight | undefined {
   const { bodyweightKg, isBodyweight, share } = args;
   if (bodyweightKg === null || !(bodyweightKg > 0)) return undefined;
-  return (exerciseId, weightKg) =>
-    weightKg === 0 || isBodyweight(exerciseId) ? bodyweightKg * share(exerciseId) + weightKg : weightKg;
+  // Only lifts known to be bodyweight — marked by the lifter, or listed as
+  // bodyweight equipment — count the body. A 0 on a barbell lift is more likely
+  // a slip than a bodyweight set, and silently pricing it at a share of the
+  // lifter's weight would raise fatigue for a reason nobody could see.
+  return (exerciseId, weightKg) => (isBodyweight(exerciseId) ? bodyweightKg * share(exerciseId) + weightKg : weightKg);
 }
 
 /** Heaviest bodyweight worth believing, in kilograms. Beyond it, a typing slip. */
