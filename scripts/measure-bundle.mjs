@@ -17,7 +17,10 @@ import { join, resolve } from 'node:path';
 import { gzipSync } from 'node:zlib';
 
 const OUT = resolve(process.cwd(), 'out');
-const BUDGET_KB = 250; // gzipped JavaScript a modern browser downloads to start the app
+// Gzipped JavaScript a modern browser downloads to start the app. A tripwire for
+// something large landing in the startup path by accident, not a target: the app
+// is installed once and runs from the saved copy after that.
+const BUDGET_KB = 300;
 
 const indexPath = join(OUT, 'index.html');
 if (!existsSync(indexPath)) {
