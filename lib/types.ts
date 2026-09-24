@@ -191,6 +191,14 @@ export type Routine = {
   warmup?: WarmupItem[];
   /** Show the lifter's default warm-up instead of `warmup`. Absent means false. */
   warmupUsesDefault?: boolean;
+  /**
+   * Set only on a copy made for one block: the workout it was copied from and
+   * the block it was made for. It is how that block finds its own version
+   * again instead of making a second one. Optional and unindexed, so older
+   * rows need no migration — and a copy made before this existed simply has
+   * no lineage. Never guess it from the name; names get edited.
+   */
+  versionOf?: { routineId: string; blockId: number };
 };
 
 /**

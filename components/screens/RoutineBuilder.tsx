@@ -4,13 +4,14 @@
 // to set up their first one, and the app is stuck shipping routines it invented.
 
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
-import { toDisplay, toKg } from '@/lib/calc';
+import { fmtDayMonth, toDisplay, toKg } from '@/lib/calc';
 import { weightSpoken } from '@/lib/bodyweight';
 import { groupNoun } from '@/lib/methods';
 import { REPS_MAX, SETS_MAX, weightMax, weightPrecision } from '@/lib/numberEntry';
 import { describeMethod } from '@/lib/methodPresets';
+import { blocksUsing } from '@/lib/plan';
 import { normaliseRoutine } from '@/lib/supersets';
-import { C, R, TOUCH, num } from '@/lib/tokens';
+import { C, PHASE_LABEL, R, TOUCH, num } from '@/lib/tokens';
 import type { Routine, RoutineSlot } from '@/lib/types';
 import { useBompa } from '@/state/BompaContext';
 import { Btn, EditableNumber, Empty, Eyebrow, Pill } from '@/components/ui';
@@ -33,6 +34,29 @@ const SUPERSET_LETTERS = ['A', 'B', 'C'];
  * the second lift isn't ruined by the first.
  */
 const SUPERSET_GAPS = [0, 10, 15, 30];
+
+/**
+ * Every block that runs a workout changes with it, and a version made for one
+ * block looks like any other workout in the builder — so say which it is
+ * before anyone starts editing. Nothing to say for a workout only one block uses.
+ */
+function reachLine(routine: Routine, b: ReturnType<typeof useBompa>): string | null {
+  const users = blocksUsing(routine.id, b.blocks, b.planned, b.plan);
+  if (users.length > 1) {
+    // Two blocks of one phase would read "Strength block, Strength block"; the
+    // start date is what tells them apart on the Mesocycle list too.
+    const names = users.map((block) => {
+      const name = `${PHASE_LABEL[block.phase]} block`;
+      return users.some((other) => other !== block && other.phase === block.phase) ? `${name} from ${fmtDayMonth(block.startDate)}` : name;
+    });
+    return `Used in: ${names.join(', ')} — changes apply to all of them.`;
+  }
+  const lineage = routine.versionOf;
+  const madeFor = lineage && b.blocks.find((block) => block.id === lineage.blockId);
+  if (!lineage || !madeFor) return null;
+  const original = b.routineById(lineage.routineId);
+  return `Version for the ${PHASE_LABEL[madeFor.phase]} block${original ? `, made from ${original.name}` : ''}.`;
+}
 
 export function RoutineBuilder({ routineId, onClose }: { routineId: string; onClose: () => void }) {
   const b = useBompa();
@@ -58,6 +82,8 @@ export function RoutineBuilder({ routineId, onClose }: { routineId: string; onCl
   const dirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(source), [draft, source]);
 
   if (!draft) return null;
+
+  const reach = reachLine(draft, b);
 
   const setSlot = (index: number, next: Partial<RoutineSlot>) => {
     const slots = draft.slots.map((slot, i) => (i === index ? { ...slot, ...next } : slot));
@@ -162,6 +188,8 @@ export function RoutineBuilder({ routineId, onClose }: { routineId: string; onCl
             ✕
           </Btn>
         </div>
+
+        {reach && <span style={{ fontSize: 12.5, lineHeight: 1.45, color: C.ink60, marginTop: -6 }}>{reach}</span>}
 
         <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <Eyebrow style={{ letterSpacing: '.12em' }}>Name</Eyebrow>

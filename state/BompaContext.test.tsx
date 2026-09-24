@@ -787,6 +787,68 @@ describe('moving, dropping and swapping', () => {
   });
 });
 
+describe("a block's own version of a workout", () => {
+  it('records which workout and block it was made for, and reuses it instead of making another', async () => {
+    const view = await mount();
+    await withPlan(view);
+    const { result } = view;
+    const blockId = result.current.blocks[0]!.id!;
+    const pushSlot = result.current.thisWeekSlots.find((p) => p.routineId === 'my-push')!;
+
+    act(() => result.current.makeBlockVersion(pushSlot.id!));
+    const version = await waitFor(() => {
+      const found = result.current.routines.find((r) => r.name === 'My Push Day (Strength)');
+      expect(found).toBeDefined();
+      return found!;
+    });
+    expect(version.versionOf).toEqual({ routineId: 'my-push', blockId });
+    expect(result.current.s.editingRoutineId).toBe(version.id);
+    await waitFor(async () => expect((await db.routines.get(version.id))?.versionOf).toEqual({ routineId: 'my-push', blockId }));
+
+    // Undo puts the slots back on the original but keeps the copy.
+    const adjustment = await waitFor(() => {
+      const found = result.current.adjustments.find((a) => a.narrative.startsWith('You made My Push Day (Strength)'));
+      expect(found).toBeDefined();
+      return found!;
+    });
+    await act(async () => result.current.undoAdjustment(adjustment));
+    await waitFor(() => expect(result.current.thisWeekSlots.find((p) => p.id === pushSlot.id)?.routineId).toBe('my-push'));
+    expect(result.current.routines.some((r) => r.id === version.id)).toBe(true);
+
+    // Asking again goes back to that copy; the library does not grow.
+    const count = result.current.routines.length;
+    act(() => {
+      result.current.patch({ editingRoutineId: null });
+      result.current.makeBlockVersion(pushSlot.id!);
+    });
+    await waitFor(() => expect(result.current.thisWeekSlots.find((p) => p.id === pushSlot.id)?.routineId).toBe(version.id));
+    expect(result.current.routines).toHaveLength(count);
+    expect(result.current.s.editingRoutineId).toBe(version.id);
+  });
+
+  it('a duplicate of a version belongs to no block', async () => {
+    const view = await mount();
+    await withPlan(view);
+    const { result } = view;
+    const pushSlot = result.current.thisWeekSlots.find((p) => p.routineId === 'my-push')!;
+    act(() => result.current.makeBlockVersion(pushSlot.id!));
+    const version = await waitFor(() => {
+      const found = result.current.routines.find((r) => r.versionOf);
+      expect(found).toBeDefined();
+      return found!;
+    });
+    await act(async () => {
+      await result.current.duplicateRoutine(version.id);
+    });
+    const copy = await waitFor(() => {
+      const found = result.current.routines.find((r) => r.name === `${version.name} copy`);
+      expect(found).toBeDefined();
+      return found!;
+    });
+    expect(copy.versionOf).toBeUndefined();
+  });
+});
+
 describe('filling a slot versus adding to the week', () => {
   it('training a pending routine fills its slot, budget unchanged', async () => {
     const view = await mount();

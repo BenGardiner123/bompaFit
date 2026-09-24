@@ -323,6 +323,26 @@ export function repointInBlock(args: { planned: PlannedSession[]; blockId: numbe
     .map((p) => ({ ...p, routineId: to, userModified: true }));
 }
 
+/**
+ * The blocks that use a workout: in a slot still to do, a slot already
+ * trained or skipped, or the list the block cycles through. Editing the
+ * workout changes what every one of them shows, so this is who to warn.
+ */
+export function blocksUsing(
+  routineId: string,
+  blocks: Block[],
+  planned: PlannedSession[],
+  plan: Pick<Plan, 'rotation'> | null,
+): Block[] {
+  const inSlots = new Set(planned.filter((p) => p.routineId === routineId).map((p) => p.blockId));
+  return blocks.filter((b) => inSlots.has(b.id!) || blockRotation(b, plan).includes(routineId));
+}
+
+/** This block's own copy of a workout, if one was made for it. */
+export function blockVersion(routines: Routine[], routineId: string, blockId: number): Routine | undefined {
+  return routines.find((r) => r.versionOf?.routineId === routineId && r.versionOf.blockId === blockId);
+}
+
 /** A rotation with one workout replaced by another, in the same position. */
 export function replaceInRotation(rotation: string[], from: string, to: string): string[] {
   return rotation.map((id) => (id === from ? to : id));

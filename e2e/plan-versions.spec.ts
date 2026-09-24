@@ -99,7 +99,7 @@ test('a version for this block replaces the workout here only, and can be undone
   await expect.poll(async () => (await readPlanned(page)).filter((r) => r.blockId === 2).length).toBeGreaterThan(0);
 
   await page.getByRole('button', { name: 'Options for Push A' }).click();
-  await page.getByRole('button', { name: 'Make a version of Push A for this block' }).click();
+  await page.getByRole('button', { name: 'Edit for this block only' }).click();
   await expect(builder(page)).toHaveAccessibleName('Edit Push A (Strength)');
   await addLift(page, 'Overhead Press');
   await saveBuilder(page);

@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { EXERCISE_SOURCES } from '@/lib/data';
+import { blocksUsing } from '@/lib/plan';
 import { C, HERO_SIZE, PH, R } from '@/lib/tokens';
 import type { Routine } from '@/lib/types';
 import { useBompa } from '@/state/BompaContext';
@@ -187,12 +188,14 @@ function RoutineRow({ routine }: { routine: Routine }) {
   const tag = active ? 'ACTIVE' : isTemplate ? 'TEMPLATE' : pending ? 'THIS WEEK' : routine.source === 'import' ? 'IMPORT' : 'MINE';
   const highlight = tag === 'THIS WEEK' || tag === 'ACTIVE';
   const lifts = [...routine.slots].sort((a, x) => a.order - x.order);
+  // Editing a workout changes every block that runs it; say so before the pencil is tapped.
+  const blocks = isTemplate ? 0 : blocksUsing(routine.id, b.blocks, b.planned, b.plan).length;
 
   return (
     <Row
       titleSize={16}
       title={routine.name}
-      sub={`${lifts.length} ${lifts.length === 1 ? 'lift' : 'lifts'} · ~${routine.estMinutes} min`}
+      sub={`${lifts.length} ${lifts.length === 1 ? 'lift' : 'lifts'} · ~${routine.estMinutes} min${blocks > 1 ? ` · used in ${blocks} blocks` : ''}`}
       lead={<span aria-hidden style={{ width: 9, height: 9, borderRadius: 2, background: PH[routine.phase], flex: 'none' }} />}
       right={
         <Tag bg={highlight ? C.amberBg : C.tagBg} fg={highlight ? C.amberDark : C.ink60}>

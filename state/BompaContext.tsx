@@ -61,6 +61,7 @@ import {
   addToEveryWeek,
   addToWeek,
   blockRotation,
+  blockVersion,
   generatePlan,
   predictPeak,
   replaceInRotation,
@@ -2071,13 +2072,26 @@ function useBompaState() {
       const slot = planned.find((p) => p.id === slotId);
       const original = slot ? routineById(slot.routineId) : undefined;
       const block = slot ? blocks.find((b) => b.id === slot.blockId) : undefined;
-      if (!slot || !original || !block || slot.status !== 'plan') return;
+      if (!slot || !original || !block?.id || slot.status !== 'plan') return;
+
+      // One version per workout per block. A slot still on the original — added
+      // after the version was made, or put back by Undo — goes to the one that
+      // exists, or the block would collect "(Strength) 2", "(Strength) 3".
+      const existing = blockVersion(routines, original.id, block.id);
+      if (existing) {
+        repointBlock(slot, existing, `You put this block back on ${existing.name}. Other blocks keep ${original.name}.`);
+        patch({ editingRoutineId: existing.id });
+        return;
+      }
 
       const takenNames = new Set(routines.map((r) => r.name));
       const takenIds = new Set(routines.map((r) => r.id));
       const phase = PHASE_LABEL[block.phase];
       const name = versionName(original.name, phase, (n) => takenNames.has(n));
-      const copy = copyRoutine(original, uniqueId(name, (candidate) => takenIds.has(candidate)), name);
+      const copy: Routine = {
+        ...copyRoutine(original, uniqueId(name, (candidate) => takenIds.has(candidate)), name),
+        versionOf: { routineId: original.id, blockId: block.id },
+      };
       void persistRoutine(copy);
       repointBlock(slot, copy, `You made ${name} for this ${phase.toLowerCase()} block. Other blocks keep ${original.name}.`);
       patch({ editingRoutineId: copy.id });
@@ -2889,8 +2903,12 @@ function useBompaState() {
 
 /** A routine of the user's own with the same lifts, under a new id and name. */
 function copyRoutine(from: Routine, id: string, name: string): Routine {
+  // A duplicate of a block's version is not that block's version; carrying the
+  // lineage over would give the block two and the lookup would pick either.
+  const rest: Routine = { ...from };
+  delete rest.versionOf;
   return {
-    ...from,
+    ...rest,
     id,
     name,
     source: 'user',

@@ -9,6 +9,8 @@ import {
   addToWeek,
   blockContaining,
   blockRotation,
+  blockVersion,
+  blocksUsing,
   generatePlan,
   mesocycleCurve,
   plannedSessionLoad,
@@ -672,6 +674,47 @@ describe('pointing a block at a different workout', () => {
     expect(repointInBlock({ planned, blockId: 1, from: 'pull', to: 'legs' }).map((p) => p.id)).toEqual([4, 7]);
     expect(repointInBlock({ planned, blockId: 2, from: 'pull', to: 'legs' }).map((p) => p.id)).toEqual([10]);
     expect(repointInBlock({ planned, blockId: 1, from: 'pull', to: 'pull' })).toEqual([]);
+  });
+
+  it('finds every block a workout appears in, trained, skipped or still to do', () => {
+    const blocks: Block[] = [
+      { id: 1, planId: 1, phase: 'hypertrophy', weeks: 3, deloadWeeks: 1, startDate: '2026-08-10' },
+      { id: 2, planId: 1, phase: 'strength', weeks: 3, deloadWeeks: 1, startDate: '2026-09-07' },
+      { id: 3, planId: 1, phase: 'peak', weeks: 2, deloadWeeks: 0, startDate: '2026-10-05', rotation: ['legs'] },
+    ];
+    const ids = (routineId: string, rows = planned, plan: { rotation: string[] } | null = { rotation: ['push', 'pull'] }) =>
+      blocksUsing(routineId, blocks, rows, plan).map((b) => b.id);
+    expect(ids('push')).toEqual([1, 2]);
+    // Block 3 has no slots yet, but its own list says it will run legs.
+    expect(ids('legs')).toEqual([3]);
+    expect(ids('arms')).toEqual([]);
+    // A block that only trained or skipped it still counts: editing changes what it shows.
+    const onlyHistory = planned.filter((p) => p.blockId === 1 && p.status !== 'plan');
+    expect(ids('push', onlyHistory, null)).toEqual([1]);
+    // A block with no list of its own reads the plan's.
+    expect(ids('pull', [], { rotation: ['pull'] })).toEqual([1, 2]);
+  });
+
+  it("finds a block's own version of a workout only by its recorded lineage", () => {
+    const routine = (id: string, name: string, versionOf?: Routine['versionOf']): Routine => ({
+      id,
+      name,
+      source: 'user',
+      phase: 'strength',
+      estMinutes: 45,
+      slots: [],
+      ...(versionOf ? { versionOf } : {}),
+    });
+    const routines = [
+      routine('push', 'Push A'),
+      // Named like a version but with no lineage: an older copy, never guessed at.
+      routine('push-strength', 'Push A (Strength)'),
+      routine('push-strength-2', 'Push A (Strength) 2', { routineId: 'push', blockId: 2 }),
+      routine('pull-strength', 'Pull A (Strength)', { routineId: 'pull', blockId: 2 }),
+    ];
+    expect(blockVersion(routines, 'push', 2)?.id).toBe('push-strength-2');
+    expect(blockVersion(routines, 'push', 1)).toBeUndefined();
+    expect(blockVersion(routines, 'legs', 2)).toBeUndefined();
   });
 
   it('leaves every week in the same order', () => {

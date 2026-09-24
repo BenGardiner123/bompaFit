@@ -2,10 +2,10 @@
 
 import { useState, type CSSProperties, type ReactNode } from 'react';
 import { dateKey, daysBetween, fmtDayMonth } from '@/lib/calc';
-import { blockContaining, blockRotation, mesocycleCurve } from '@/lib/plan';
+import { blockContaining, blockRotation, blocksUsing, mesocycleCurve } from '@/lib/plan';
 import { weekIsUserModified } from '@/lib/schedule';
 import { C, HERO_SIZE, ON_PHASE, PH, PHASE_ABBR, PHASE_LABEL, PH_ON_INK, R, TOUCH, num, onInk } from '@/lib/tokens';
-import type { Phase, PlannedSession } from '@/lib/types';
+import type { Phase, PlannedSession, Routine } from '@/lib/types';
 import { useBompa, type PlanTab } from '@/state/BompaContext';
 import { Btn, Hero, HeroEyebrow, HeroNumeral, HeroTabs, HeroText, Row, Scroller, Section, Segmented, Sheet, Tag } from '@/components/ui';
 import { macrocycle, nextBlockStart } from './PlanMacrocycle';
@@ -260,29 +260,12 @@ function Calendar() {
                     </SlotBtn>
                   </div>
                   {/* People look for the workout itself where they see it scheduled.
-                      Editing it here changes every week, because each slot points
-                      to the workout rather than holding a copy of it — so the
-                      version button beside it is how one block trains differently. */}
-                  {routine && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      <div style={{ display: 'flex' }}>
-                        <SlotBtn onClick={() => b.patch({ editingRoutineId: routine.id })} label={`Edit workout ${routine.name}`}>
-                          ✎ Edit {routine.name}
-                        </SlotBtn>
-                      </div>
-                      <div style={{ display: 'flex' }}>
-                        <SlotBtn
-                          onClick={() => {
-                            b.makeBlockVersion(slot.id!);
-                            setOpen(null);
-                          }}
-                          label={`Make a version of ${routine.name} for this block`}
-                        >
-                          Make a version for this block
-                        </SlotBtn>
-                      </div>
-                    </div>
-                  )}
+                      Each slot points to the workout rather than holding a copy,
+                      so when other blocks use it too, one quiet Edit would change
+                      them all under the same name. Asking first is the fix: this
+                      block gets its own version, or the change goes everywhere
+                      knowingly. A block's own version is only this block's. */}
+                  {routine && <EditChoice routine={routine} slot={slot} onDone={() => setOpen(null)} />}
                   {b.routines.length > 1 && (
                     <Segmented
                       label="Swap in"
@@ -445,6 +428,42 @@ function AddWorkout() {
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+/** Edit the slot's workout, asking which blocks the change is for when more than this one use it. */
+function EditChoice({ routine, slot, onDone }: { routine: Routine; slot: PlannedSession; onDone: () => void }) {
+  const b = useBompa();
+  const users = blocksUsing(routine.id, b.blocks, b.planned, b.plan).length;
+  const edit = () => b.patch({ editingRoutineId: routine.id });
+  if (users < 2 || routine.versionOf?.blockId === slot.blockId) {
+    return (
+      <div style={{ display: 'flex' }}>
+        <SlotBtn onClick={edit} label={`Edit workout ${routine.name}`}>
+          ✎ Edit {routine.name}
+        </SlotBtn>
+      </div>
+    );
+  }
+  // Stacked, not side by side: at phone width two of these would wrap mid-word.
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ display: 'flex' }}>
+        <SlotBtn
+          onClick={() => {
+            b.makeBlockVersion(slot.id!);
+            onDone();
+          }}
+        >
+          ✎ Edit for this block only
+        </SlotBtn>
+      </div>
+      <div style={{ display: 'flex' }}>
+        <SlotBtn onClick={edit}>
+          Edit everywhere (<span style={num}>{users}</span> blocks)
+        </SlotBtn>
+      </div>
     </div>
   );
 }
