@@ -1,0 +1,365 @@
+{
+  "version": 1,
+  "exportedAt": "2026-09-24T08:00:00.000Z",
+  "exercises": [],
+  "routines": [
+    {
+      "id": "methods-schemes",
+      "name": "Methods · schemes",
+      "source": "user",
+      "phase": "strength",
+      "estMinutes": 60,
+      "slots": [
+        {
+          "exerciseId": "back-squat",
+          "order": 0,
+          "sets": 6,
+          "reps": 7,
+          "targetWeightKg": 100,
+          "targetPct1RM": null,
+          "targetRpe": 8,
+          "supersetGroup": null,
+          "tempo": [2, 1, 1, 0],
+          "scheme": [
+            { "reps": 7, "load": { "kind": "rel", "x": 0.85 } },
+            { "reps": 5, "load": { "kind": "rel", "x": 0.9 } },
+            { "reps": 3, "load": { "kind": "rel", "x": 0.95 } },
+            { "reps": 7, "load": { "kind": "rel", "x": 0.875 } },
+            { "reps": 5, "load": { "kind": "rel", "x": 0.925 } },
+            { "reps": 3, "load": { "kind": "rel", "x": 1 } }
+          ],
+          "restSec": 150,
+          "note": "Two down, one hold, one up."
+        },
+        {
+          "exerciseId": "barbell-bench-press",
+          "order": 1,
+          "sets": 5,
+          "reps": 5,
+          "targetWeightKg": 80,
+          "targetPct1RM": null,
+          "targetRpe": 8,
+          "supersetGroup": null,
+          "scheme": [
+            { "reps": 5, "load": { "kind": "rel", "x": 1 }, "restSec": 90 },
+            { "reps": 5, "load": { "kind": "rel", "x": 0.95 }, "restSec": 60 },
+            { "reps": 5, "load": { "kind": "rel", "x": 0.9 }, "restSec": 45 },
+            { "reps": 5, "load": { "kind": "rel", "x": 0.85 }, "restSec": 30 },
+            { "reps": 5, "load": { "kind": "rel", "x": 0.8 } }
+          ]
+        },
+        {
+          "exerciseId": "overhead-press",
+          "order": 2,
+          "sets": 3,
+          "reps": 5,
+          "targetWeightKg": 45,
+          "targetPct1RM": null,
+          "targetRpe": 8,
+          "supersetGroup": null,
+          "scheme": [
+            { "reps": 5, "load": { "kind": "pct", "x": 0.585 } },
+            { "reps": 5, "load": { "kind": "pct", "x": 0.675 } },
+            { "reps": 5, "load": { "kind": "pct", "x": 0.765 }, "amrap": true }
+          ],
+          "restSec": 180
+        },
+        {
+          "exerciseId": "barbell-row",
+          "order": 3,
+          "sets": 6,
+          "reps": 4,
+          "targetWeightKg": 70,
+          "targetPct1RM": null,
+          "targetRpe": 8,
+          "supersetGroup": null,
+          "scheme": [
+            { "reps": 4, "load": { "kind": "rel", "x": 0.94 } },
+            { "reps": 4, "load": { "kind": "rel", "x": 0.96 } },
+            { "reps": 4, "load": { "kind": "rel", "x": 0.98 } },
+            { "reps": 4, "load": { "kind": "rel", "x": 1 } },
+            { "reps": 10, "load": { "kind": "rel", "x": 0.7 }, "type": "backoff" },
+            { "reps": 20, "load": { "kind": "rel", "x": 0.5 }, "type": "backoff" }
+          ],
+          "restSec": 120
+        },
+        {
+          "exerciseId": "leg-press",
+          "order": 4,
+          "sets": 3,
+          "reps": 8,
+          "targetWeightKg": 140,
+          "targetPct1RM": null,
+          "targetRpe": 8,
+          "supersetGroup": null,
+          "repStyle": "one-and-half",
+          "repsMax": 12
+        },
+        {
+          "exerciseId": "hammer-curl",
+          "order": 5,
+          "sets": 3,
+          "reps": 21,
+          "targetWeightKg": 12,
+          "targetPct1RM": null,
+          "targetRpe": 9,
+          "supersetGroup": null,
+          "repStyle": "twenty-ones"
+        },
+        {
+          "exerciseId": "shrug",
+          "order": 6,
+          "sets": 3,
+          "reps": 10,
+          "targetWeightKg": 120,
+          "targetPct1RM": null,
+          "targetRpe": 8,
+          "supersetGroup": null,
+          "repStyle": "partial"
+        },
+        {
+          "exerciseId": "romanian-deadlift",
+          "order": 7,
+          "sets": 3,
+          "reps": 3,
+          "targetWeightKg": 130,
+          "targetPct1RM": null,
+          "targetRpe": 8,
+          "supersetGroup": null,
+          "repStyle": "eccentric-only",
+          "restSec": 240,
+          "note": "Needs a spotter."
+        },
+        {
+          "exerciseId": "calf-raise",
+          "order": 8,
+          "sets": 3,
+          "reps": 3,
+          "targetWeightKg": 60,
+          "targetPct1RM": null,
+          "targetRpe": 8,
+          "supersetGroup": null,
+          "repStyle": "isometric",
+          "holdSec": 10
+        }
+      ]
+    },
+    {
+      "id": "methods-pieces",
+      "name": "Methods · pieces",
+      "source": "user",
+      "phase": "hypertrophy",
+      "estMinutes": 45,
+      "slots": [
+        {
+          "exerciseId": "barbell-bench-press",
+          "order": 0,
+          "sets": 3,
+          "reps": 8,
+          "targetWeightKg": 80,
+          "targetPct1RM": null,
+          "targetRpe": 8,
+          "supersetGroup": null,
+          "segments": { "style": "drop", "segmentReps": [null, null], "intraRestSec": 0, "dropFraction": 0.2 }
+        },
+        {
+          "exerciseId": "deadlift",
+          "order": 1,
+          "sets": 3,
+          "reps": 1,
+          "targetWeightKg": 140,
+          "targetPct1RM": null,
+          "targetRpe": 8,
+          "supersetGroup": null,
+          "segments": { "style": "cluster", "segmentReps": [1, 1, 1, 1], "intraRestSec": 15, "dropFraction": 0 },
+          "restSec": 240
+        },
+        {
+          "exerciseId": "lat-pulldown",
+          "order": 2,
+          "sets": 1,
+          "reps": 6,
+          "targetWeightKg": 50,
+          "targetPct1RM": null,
+          "targetRpe": 9,
+          "supersetGroup": null,
+          "segments": { "style": "rest-pause", "segmentReps": [], "intraRestSec": 15, "dropFraction": 0.05, "totalReps": 50 },
+          "restSec": 180
+        },
+        {
+          "exerciseId": "cable-fly",
+          "order": 3,
+          "sets": 2,
+          "reps": 10,
+          "targetWeightKg": 15,
+          "targetPct1RM": null,
+          "targetRpe": 9,
+          "supersetGroup": null,
+          "segments": {
+            "style": "mechanical-drop",
+            "segmentReps": [null],
+            "intraRestSec": 0,
+            "dropFraction": 0,
+            "labels": ["incline", "flat"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "methods-groups",
+      "name": "Methods · groups",
+      "source": "user",
+      "phase": "hypertrophy",
+      "estMinutes": 40,
+      "slots": [
+        {
+          "exerciseId": "face-pull",
+          "order": 0,
+          "sets": 3,
+          "reps": 15,
+          "targetWeightKg": 20,
+          "targetPct1RM": null,
+          "targetRpe": 8,
+          "supersetGroup": "B",
+          "gapAfterSec": 10
+        },
+        {
+          "exerciseId": "rope-extension",
+          "order": 1,
+          "sets": 3,
+          "reps": 12,
+          "targetWeightKg": 25,
+          "targetPct1RM": null,
+          "targetRpe": 8,
+          "supersetGroup": "B",
+          "gapAfterSec": 10
+        },
+        {
+          "exerciseId": "hammer-curl",
+          "order": 2,
+          "sets": 3,
+          "reps": 12,
+          "targetWeightKg": 14,
+          "targetPct1RM": null,
+          "targetRpe": 8,
+          "supersetGroup": "B",
+          "restSec": 180
+        },
+        {
+          "exerciseId": "shrug",
+          "order": 3,
+          "sets": 2,
+          "reps": 12,
+          "targetWeightKg": 100,
+          "targetPct1RM": null,
+          "targetRpe": 8,
+          "supersetGroup": "C"
+        },
+        {
+          "exerciseId": "calf-raise",
+          "order": 4,
+          "sets": 2,
+          "reps": 15,
+          "targetWeightKg": 60,
+          "targetPct1RM": null,
+          "targetRpe": 8,
+          "supersetGroup": "C"
+        },
+        {
+          "exerciseId": "leg-press",
+          "order": 5,
+          "sets": 2,
+          "reps": 12,
+          "targetWeightKg": 120,
+          "targetPct1RM": null,
+          "targetRpe": 8,
+          "supersetGroup": "C"
+        },
+        {
+          "exerciseId": "barbell-row",
+          "order": 6,
+          "sets": 2,
+          "reps": 12,
+          "targetWeightKg": 50,
+          "targetPct1RM": null,
+          "targetRpe": 8,
+          "supersetGroup": "C"
+        }
+      ],
+      "supersetRest": {}
+    }
+  ],
+  "plans": [],
+  "blocks": [],
+  "plannedSessions": [],
+  "sessions": [
+    {
+      "id": 1,
+      "date": "2026-09-22",
+      "routineId": "methods-pieces",
+      "routineName": "Methods · pieces",
+      "exerciseIds": ["barbell-bench-press", "deadlift", "lat-pulldown", "cable-fly"],
+      "startedAt": 1790060400000,
+      "lastSetAt": 1790060700000,
+      "elapsedMs": 1800000,
+      "finishedAt": 1790062200000
+    }
+  ],
+  "sets": [
+    {
+      "id": 1,
+      "sessionId": 1,
+      "exerciseId": "barbell-bench-press",
+      "setNo": 1,
+      "type": "working",
+      "weightKg": 80,
+      "reps": 8,
+      "rpe": 8,
+      "rpeEstimated": false,
+      "at": 1790060500000
+    },
+    {
+      "id": 2,
+      "sessionId": 1,
+      "exerciseId": "barbell-bench-press",
+      "setNo": 1,
+      "type": "working",
+      "weightKg": 65,
+      "reps": 6,
+      "rpe": 10,
+      "rpeEstimated": true,
+      "at": 1790060510000,
+      "segment": 1,
+      "segmentStyle": "drop"
+    },
+    {
+      "id": 3,
+      "sessionId": 1,
+      "exerciseId": "barbell-bench-press",
+      "setNo": 1,
+      "type": "working",
+      "weightKg": 52.5,
+      "reps": 5,
+      "rpe": 10,
+      "rpeEstimated": true,
+      "at": 1790060520000,
+      "segment": 2,
+      "segmentStyle": "drop"
+    },
+    {
+      "id": 4,
+      "sessionId": 1,
+      "exerciseId": "barbell-bench-press",
+      "setNo": 2,
+      "type": "working",
+      "weightKg": 80,
+      "reps": 7,
+      "rpe": 9,
+      "rpeEstimated": false,
+      "at": 1790060700000
+    }
+  ],
+  "adjustments": [],
+  "competitions": [],
+  "settings": [{ "key": "setupComplete", "value": true }]
+}

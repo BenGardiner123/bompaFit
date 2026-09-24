@@ -1,0 +1,4 @@
+{
+  "_provenance": "Documented schema of GET /api/v1/liveness (exercisedb-v2.json: { status: string }). The value 'ok' is assumed. NOT a recorded live response.",
+  "status": "ok"
+}

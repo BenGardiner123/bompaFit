@@ -1,0 +1,25 @@
+node_modules/
+.next/
+out/
+build/
+dist/
+
+*.tsbuildinfo
+next-env.d.ts
+
+.env
+.env.local
+.env*.local
+
+.DS_Store
+Thumbs.db
+
+coverage/
+.vercel
+
+# Playwright: run output, never source.
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+

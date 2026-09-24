@@ -1,0 +1,117 @@
+/* Global CSS is limited to what inline styles genuinely cannot express:
+   keyframes, focus rings, scrollbar hiding, and the reduced-motion override. */
+
+* {
+  -webkit-tap-highlight-color: transparent;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: #edebe6;
+  color: #141410;
+  font-family: var(--font-geist-sans), Geist, system-ui, sans-serif;
+  letter-spacing: -0.01em;
+  overscroll-behavior-y: none;
+}
+
+a {
+  color: #b45309;
+  text-decoration: none;
+}
+
+a:hover {
+  color: #f59e0b;
+}
+
+button {
+  font-family: inherit;
+}
+
+/* Every interactive element shows a visible focus ring, so the app works by keyboard. Focus-visible
+   rather than focus, so a thumb tap mid-set doesn't leave a ring behind. */
+:focus-visible {
+  outline: 2px solid #b45309;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Screen-reader-only text, for labels that would clutter the visual design. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@keyframes bompaPulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes bompaRise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes bompaSheet {
+  from {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.rise {
+  animation: bompaRise 0.28s ease;
+}
+
+.sheet {
+  animation: bompaSheet 0.24s ease;
+}
+
+.pulse {
+  animation: bompaPulse 2.4s ease-in-out infinite;
+}
+
+/* Respect the system setting for people who get motion sick from animation. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,0 +1,9 @@
+/* The one thing inline styles cannot reach on the dark search box: its
+   placeholder. The browser's default placeholder grey is unreadable on the
+   dark fill, and the placeholder is the only thing telling you what you can
+   search by. The colour is passed in as a variable from lib/tokens, so no
+   colour value lives here. */
+.search::placeholder {
+  color: var(--placeholder);
+  opacity: 1;
+}

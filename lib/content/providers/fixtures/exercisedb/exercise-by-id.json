@@ -1,0 +1,39 @@
+{
+  "_provenance": "Transcribed from AscendAPI's documented example (docs.ascendapi.com/products/edb-v2/overview.md and the exercisedb-v2.json OpenAPI spec, GET /api/v1/exercises/{exerciseId}), 2026-09-24. NOT a recorded live response. Re-record with a real key.",
+  "success": true,
+  "data": {
+    "exerciseId": "exr_41n2hxnFMotsXTj3",
+    "name": "Bench Press",
+    "imageUrl": "https://cdn.exercisedb.dev/media/images/CNKJtB2O5Y.webp",
+    "imageUrls": {
+      "360p": "https://cdn.exercisedb.dev/media/images/bYjT0KGRUo.webp",
+      "480p": "https://cdn.exercisedb.dev/media/images/CNKJtB2O5Y.webp",
+      "720p": "https://cdn.exercisedb.dev/media/images/AetqvRI4jK.webp",
+      "1080p": "https://cdn.exercisedb.dev/media/images/VM46gFp1mS.webp"
+    },
+    "equipments": ["BARBELL"],
+    "bodyParts": ["CHEST"],
+    "exerciseType": "STRENGTH",
+    "targetMuscles": ["PECTORALIS MAJOR STERNAL HEAD"],
+    "secondaryMuscles": ["PECTORALIS MAJOR CLAVICULAR HEAD", "ANTERIOR DELTOID", "TRICEPS BRACHII"],
+    "videoUrl": "https://cdn.exercisedb.dev/videos/Trn4QDW/41n2hxnFMotsXTj3__Barbell-Bench-Press_Chest2_.mp4",
+    "keywords": ["Chest workout with barbell", "Barbell bench press exercise", "Strength training for chest"],
+    "overview": "The Bench Press is a classic strength training exercise that primarily targets the chest, shoulders, and triceps, contributing to upper body muscle development. It is suitable for anyone, from beginners to professional athletes, looking to improve their upper body strength and muscular endurance.",
+    "instructions": [
+      "Grip the barbell with your hands slightly wider than shoulder-width apart, palms facing your feet, and lift it off the rack, holding it straight over your chest with your arms fully extended.",
+      "Slowly lower the barbell down to your chest while keeping your elbows at a 90-degree angle.",
+      "Once the barbell touches your chest, push it back up to the starting position while keeping your back flat on the bench.",
+      "Repeat this process for the desired number of repetitions, always maintaining control of the barbell and ensuring your form is correct."
+    ],
+    "exerciseTips": [
+      "Avoid Arching Your Back: One common mistake is excessively arching the back during the lift. This can lead to lower back injuries. Your lower back should have a natural arch, but it should not be overly exaggerated. Your butt, shoulders, and head should maintain contact with the bench at all times.",
+      "Controlled Movement: Avoid the temptation to lift the barbell too quickly. A controlled, steady lift is more effective and reduces the risk of injury.",
+      "Don't Lift Alone:"
+    ],
+    "variations": [
+      "Decline Bench Press: This variation is performed on a decline bench to target the lower part of the chest.",
+      "Close-Grip Bench Press: This variation focuses on the triceps and the inner part of the chest by placing the hands closer together on the bar."
+    ],
+    "relatedExerciseIds": ["exr_41n2hPFTn4fEG8Bx", "exr_41n2hfGATUH6QYu5"]
+  }
+}

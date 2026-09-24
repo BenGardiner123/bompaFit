@@ -1,0 +1,9 @@
+{
+  "_provenance": "Documented ErrUnauthorized schema (exercisedb-v2.json components.schemas). The RapidAPI gateway may answer 401/403/429 before reaching AscendAPI, with its own body shape, which is undocumented; the adapter reads only the status code for that reason.",
+  "error": {
+    "code": "UNAUTHORIZED",
+    "docs": "https://docs.exercisedb.dev/errors/code/UNAUTHORIZED",
+    "message": "No valid API key was provided.",
+    "requestId": "req_12345"
+  }
+}

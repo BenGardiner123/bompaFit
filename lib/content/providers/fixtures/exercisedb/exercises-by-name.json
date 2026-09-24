@@ -1,0 +1,39 @@
+{
+  "_provenance": "Built from the documented response schema of GET /api/v1/exercises (exercisedb-v2.json OpenAPI spec: success, meta, data[] with exerciseId, name, equipments, bodyParts, exerciseType, targetMuscles, secondaryMuscles, imageUrl, keywords), 2026-09-24. Ids and names come from the documented Bench Press example and its relatedExerciseIds; the second and third entries' names and fields are illustrative. NOT a recorded live response. Re-record with a real key.",
+  "success": true,
+  "meta": { "total": 3, "hasNextPage": false, "hasPreviousPage": false },
+  "data": [
+    {
+      "exerciseId": "exr_41n2hxnFMotsXTj3",
+      "name": "Bench Press",
+      "equipments": ["BARBELL"],
+      "bodyParts": ["CHEST"],
+      "exerciseType": "STRENGTH",
+      "targetMuscles": ["PECTORALIS MAJOR STERNAL HEAD"],
+      "secondaryMuscles": ["PECTORALIS MAJOR CLAVICULAR HEAD", "ANTERIOR DELTOID", "TRICEPS BRACHII"],
+      "imageUrl": "https://cdn.exercisedb.dev/media/images/CNKJtB2O5Y.webp",
+      "keywords": ["Chest workout with barbell"]
+    },
+    {
+      "exerciseId": "exr_41n2hPFTn4fEG8Bx",
+      "name": "Decline Bench Press",
+      "equipments": ["Barbell"],
+      "bodyParts": ["Chest"],
+      "exerciseType": "strength",
+      "targetMuscles": ["Pectoralis Major Sternal Head"],
+      "secondaryMuscles": ["Triceps Brachii"],
+      "imageUrl": "",
+      "keywords": []
+    },
+    {
+      "exerciseId": "exr_41n2hfGATUH6QYu5",
+      "name": "Close-Grip Bench Press",
+      "equipments": ["Barbell"],
+      "bodyParts": ["Chest"],
+      "exerciseType": "strength",
+      "targetMuscles": ["Triceps Brachii"],
+      "secondaryMuscles": [],
+      "keywords": []
+    }
+  ]
+}
