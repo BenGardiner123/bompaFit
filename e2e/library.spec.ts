@@ -22,7 +22,7 @@ async function openHowTo(page: import('@playwright/test').Page) {
 test.describe('the movement library', () => {
   test('search reaches movements far outside the seeded fourteen', async ({ page }) => {
     await gotoApp(page);
-    await expect(page.getByText(/^Setting up · /)).toBeVisible();
+    await expect(page.getByText(/^Step \d+ of \d+ · /)).toBeVisible();
 
     // Straight to step 3, where a workout gets built.
     await page.getByRole('button', { name: 'Next', exact: true }).click();
@@ -53,7 +53,7 @@ test.describe('the movement library', () => {
     await completeSetup(page, { workouts: [[INGESTED_LIFT]] });
 
     await goToTab(page, 'Today');
-    await page.getByRole('button', { name: /^(Start workout|Train anyway)$/ }).click();
+    await page.getByRole('button', { name: /^(Start .+|Train anyway)$/ }).click();
 
     const sheet = await openHowTo(page);
     await expect(sheet).toBeVisible();
@@ -88,7 +88,7 @@ test.describe('the movement library', () => {
     await context.setOffline(true);
 
     await goToTab(page, 'Today');
-    await page.getByRole('button', { name: /^(Start workout|Train anyway)$/ }).click();
+    await page.getByRole('button', { name: /^(Start .+|Train anyway)$/ }).click();
 
     // This sheet has never been opened, so the cue file has never been fetched
     // by the app. With the network gone it can only come from the cache.

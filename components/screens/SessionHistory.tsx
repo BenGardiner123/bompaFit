@@ -19,12 +19,13 @@ import {
   weekdayShort,
   type SessionSummary,
 } from '@/lib/history';
-import { C, FONT, HERO_SIZE, TOUCH, num, onInk } from '@/lib/tokens';
+import { C, FONT, HERO_SIZE, T, TOUCH, num, onInk } from '@/lib/tokens';
 import type { LoggedSet, Unit } from '@/lib/types';
 import { weightShort } from '@/lib/bodyweight';
 import { useBompa } from '@/state/BompaContext';
 import { Btn, Empty, Hero, HeroEyebrow, HeroNumeral, Section, Sheet } from '@/components/ui';
 import { pieceNoun } from '@/components/screens/SegmentControls';
+import { Icon } from '@/components/icons';
 
 /** The By session view: the last seven days in the hero, every finished session below. */
 export function SessionHistory({ tabs }: { tabs: ReactNode }) {
@@ -92,12 +93,17 @@ function LastSevenDays() {
     sub = 'level with last week';
   }
 
+  // Average working weight against your estimated max over the same week: how
+  // heavy the volume above was, not just how much of it there was.
+  const intensity = b.metrics.intensity;
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <HeroEyebrow>Last 7 days</HeroEyebrow>
+      <HeroEyebrow>7-day volume</HeroEyebrow>
       <HeroNumeral
         value={figure}
         size={HERO_SIZE.screen}
+        color={onInk.text}
         label={unitWord}
         sub={sub}
         subColor={subColor}
@@ -120,7 +126,7 @@ function LastSevenDays() {
                   width: '100%',
                   height: d.kg > 0 ? `${Math.round((d.kg / peak) * 100)}%` : 3,
                   borderRadius: 3,
-                  background: d.kg > 0 ? C.amber : onInk.line,
+                  background: d.kg > 0 ? onInk.body : onInk.line,
                 }}
               />
             </div>
@@ -128,12 +134,21 @@ function LastSevenDays() {
         </div>
         <div aria-hidden style={{ display: 'flex', gap: 4 }}>
           {days.map((d) => (
-            <span key={d.key} style={{ flex: 1, textAlign: 'center', fontSize: 10.5, fontWeight: 700, color: onInk.muted }}>
+            <span key={d.key} style={{ flex: 1, textAlign: 'center', fontSize: T.xs, fontWeight: 700, color: onInk.muted }}>
               {weekdayShort(d.key)}
             </span>
           ))}
         </div>
       </div>
+
+      {/* A description list, so the figure is read with its name. */}
+      <dl style={{ margin: 0, paddingTop: 10, display: 'flex', flexDirection: 'column-reverse', gap: 1 }}>
+        <dt style={{ fontSize: T.xs, fontWeight: 700, color: onInk.muted }}>7-day intensity</dt>
+        <dd style={{ margin: 0, display: 'flex', alignItems: 'baseline', gap: 2 }}>
+          <span style={{ fontSize: T.xl, fontWeight: 800, color: onInk.text, ...num }}>{intensity === null ? '—' : Math.round(intensity * 100)}</span>
+          {intensity !== null && <span style={{ fontSize: T.sm, fontWeight: 700, color: onInk.muted }}>% of your max</span>}
+        </dd>
+      </dl>
     </div>
   );
 }
@@ -168,7 +183,7 @@ function SessionRow({
         </span>
         <span style={{ fontSize: 12, fontWeight: 700, color: C.tertiary, flex: 'none', ...num }}>
           {day}
-          {!empty && <span aria-hidden>{expanded ? ' ▴' : ' ▾'}</span>}
+          {!empty && <Icon name={expanded ? 'chevron-up' : 'chevron-down'} size={14} style={{ marginLeft: 4, verticalAlign: '-2px' }} />}
         </span>
       </span>
 
@@ -184,7 +199,7 @@ function SessionRow({
       )}
 
       {session.autoClosed && (
-        <span style={{ fontSize: 11, fontWeight: 700, color: C.amberDark }}>Closed automatically — four hours passed with nothing logged.</span>
+        <span style={{ fontSize: T.xs, fontWeight: 700, color: C.amberDark }}>Closed automatically — four hours passed with nothing logged.</span>
       )}
     </>
   );
@@ -226,7 +241,7 @@ function SessionRow({
             <div key={lift.exerciseId} style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
               {/* Custom and archived lifts are in the same lookup, so a
                   retired movement still shows its name. */}
-              <h3 style={{ margin: 0, fontSize: 10.5, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: C.amberDark }}>
+              <h3 style={{ margin: 0, fontSize: T.xs, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: C.tertiary }}>
                 {b.exerciseById.get(lift.exerciseId)?.name ?? lift.exerciseId}
               </h3>
               {withPieces(lift.sets).map(({ row, pieces }, i) =>

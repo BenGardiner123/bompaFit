@@ -29,11 +29,12 @@ import {
   segmentStyleLabel,
   type PresetGroup,
 } from '@/lib/methodPresets';
-import { C, FONT, R, TOUCH, num, onInk } from '@/lib/tokens';
+import { C, FONT, R, T, TOUCH, num, onInk } from '@/lib/tokens';
 import type { RepStyle, RoutineSlot, SegmentPlan, SegmentStyle, SetPrescription, Unit } from '@/lib/types';
 import { useBompa } from '@/state/BompaContext';
 import { Btn, DarkSheet, InkButton, InkChip } from '@/components/ui';
 import { SheetHeading, sheetHairline } from '@/components/SheetParts';
+import { Icon } from '@/components/icons';
 
 /** What a new piece of a set starts as, per style, when chosen by hand rather than from a preset. */
 const SEGMENT_DEFAULTS: Record<SegmentStyle, SegmentPlan> = {
@@ -87,7 +88,7 @@ export function MethodPicker({
   return (
     <DarkSheet open onClose={close} title="Method" eyebrow={exerciseName} label={`Method for ${exerciseName}`} gap={16}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span data-testid="method-summary" style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 700, color: onInk.body, ...num }}>
+        <span data-testid="method-summary" style={{ flex: 1, minWidth: 0, fontSize: T.md, fontWeight: 700, color: onInk.body, ...num }}>
           {summary}
         </span>
         <InkButton height={TOUCH} disabled={plain} onClick={() => onChange(clearMethod(slot))}>
@@ -113,7 +114,7 @@ export function MethodPicker({
                 onClick={() => onChange(preset.apply(slot))}
                 style={{ flex: 1, minWidth: 0, minHeight: TOUCH, padding: '9px 0', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 2 }}
               >
-                <span style={{ fontSize: 14, fontWeight: 800, color: onInk.text, ...num }}>{preset.label}</span>
+                <span style={{ fontSize: T.md, fontWeight: 800, color: onInk.text, ...num }}>{preset.label}</span>
                 <span style={{ fontSize: 12, fontWeight: 600, color: onInk.muted, ...num }}>{preset.description}</span>
               </Btn>
               <HelpButton label={`About ${preset.label}`} onClick={() => guide(preset.guide)} />
@@ -205,7 +206,7 @@ export function MethodPicker({
             }
             style={{ ...inputStyle, height: 'auto', padding: '10px 12px', resize: 'none', fontWeight: 600 }}
           />
-          <span style={{ alignSelf: 'flex-end', fontSize: 11, color: onInk.muted, ...num }}>
+          <span style={{ alignSelf: 'flex-end', fontSize: T.xs, color: onInk.muted, ...num }}>
             {(slot.note ?? '').length}/{METHOD_LIMITS.NOTE_MAX}
           </span>
         </label>
@@ -249,7 +250,7 @@ function SchemeEditor({
   if (!scheme || scheme.length === 0) {
     return (
       <Block title="Sets" onGuide={onGuide} guideLabel="About per-set schemes">
-        <span style={{ fontSize: 12.5, color: onInk.muted }}>Same reps and weight every set.</span>
+        <span style={{ fontSize: T.sm, color: onInk.muted }}>Same reps and weight every set.</span>
         <InkButton
           height={TOUCH}
           onClick={() =>
@@ -296,7 +297,7 @@ function SchemeEditor({
             <div key={index} role="group" aria-label={`Set ${index + 1}`} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span style={{ width: 38, flex: 'none', height: TOUCH, display: 'flex', flexDirection: 'column', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: onInk.body, ...num }}>
                 {index + 1}
-                {tag && <span style={{ fontSize: 9.5, fontWeight: 700, color: C.amberLight }}>{tag}</span>}
+                {tag && <span style={{ fontSize: T.xs, fontWeight: 700, color: C.amberLight }}>{tag}</span>}
               </span>
               <NumberField
                 compact
@@ -352,7 +353,7 @@ function SchemeEditor({
                   })
                 }
               >
-                ✕
+                <Icon name="close" size={16} />
               </InkButton>
             </div>
           );
@@ -568,7 +569,7 @@ function TempoField({
       <span
         aria-live="polite"
         data-testid="tempo-reading"
-        style={{ fontSize: 12.5, fontWeight: 600, color: text.trim() !== '' && !parsed ? C.redLight : onInk.muted }}
+        style={{ fontSize: T.sm, fontWeight: 600, color: text.trim() !== '' && !parsed ? C.redLight : onInk.muted }}
       >
         {feedback}
       </span>
@@ -596,7 +597,7 @@ const inputStyle: CSSProperties = {
 };
 
 function FieldLabel({ children }: { children: ReactNode }) {
-  return <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: onInk.muted }}>{children}</span>;
+  return <span style={{ fontSize: T.xs, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: onInk.muted }}>{children}</span>;
 }
 
 function Block({ title, children, onGuide, guideLabel }: { title: string; children: ReactNode; onGuide: () => void; guideLabel: string }) {
@@ -613,8 +614,8 @@ function Block({ title, children, onGuide, guideLabel }: { title: string; childr
 
 function HelpButton({ label, onClick }: { label: string; onClick: () => void }) {
   return (
-    <InkButton shape="circle" height={TOUCH} label={label} onClick={onClick} fontSize={14} color={onInk.muted}>
-      ?
+    <InkButton shape="circle" height={TOUCH} label={label} onClick={onClick} fontSize={T.md} color={onInk.muted}>
+      <Icon name="help" size={20} />
     </InkButton>
   );
 }

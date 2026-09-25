@@ -57,7 +57,7 @@ test.describe('offline', () => {
     await context.setOffline(true);
 
     await goToTab(page, 'Today');
-    await page.getByRole('button', { name: /^(Start workout|Train anyway)$/ }).click();
+    await page.getByRole('button', { name: /^(Start .+|Train anyway)$/ }).click();
     await goToTab(page, 'Train');
     await page.getByRole('button', { name: 'Log set' }).click();
     await skipRest(page);

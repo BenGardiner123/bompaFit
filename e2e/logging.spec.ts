@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { completeSetup, dismissSummary, gotoApp, goToTab, restScreen, skipRest } from './helpers';
+import { completeSetup, finishSession, gotoApp, goToTab, restScreen, skipRest } from './helpers';
 
 // The logger — the path the app exists for. Everything here runs against real
 // IndexedDB in a real browser, which is what separates it from the provider
@@ -7,7 +7,7 @@ import { completeSetup, dismissSummary, gotoApp, goToTab, restScreen, skipRest }
 
 async function startSession(page: Page) {
   await goToTab(page, 'Today');
-  await page.getByRole('button', { name: /^(Start workout|Train anyway)$/ }).click();
+  await page.getByRole('button', { name: /^(Start .+|Train anyway)$/ }).click();
   await goToTab(page, 'Train');
   await expect(page.getByRole('button', { name: 'Log set' })).toBeVisible();
 }
@@ -34,7 +34,7 @@ test.describe('logging sets', () => {
     // The write is fire-and-forget, so the set's dot must be on screen
     // before storage has been asked anything.
     await expect(page.getByRole('button', { name: /^Edit set 1\b/ })).toBeVisible();
-    await expect(page.getByRole('button', { name: /^Bench 1\/\d/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Bench, 1 of \d+ sets$/ })).toBeVisible();
   });
 
   test('steppers change the entry without touching stored units', async ({ page }) => {
@@ -48,17 +48,34 @@ test.describe('logging sets', () => {
     await expect(page.getByRole('timer')).toBeVisible();
   });
 
-  test('the step button cycles through the unit’s increments', async ({ page }) => {
+  test('holding a weight stepper cycles the step, and the steppers use it', async ({ page }) => {
+    // The hold is timed on the page's clock, moved on by hand, so a slow
+    // machine can neither cut it short nor stretch a tap into one.
+    await page.clock.install();
+    await page.reload();
+    await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible({ timeout: 15_000 });
     await startSession(page);
-    const step = page.getByRole('button', { name: /^Weight step/ });
-    await expect(step).toHaveText('±2.5');
-    await step.click();
-    await expect(step).toHaveText('±5');
-    await step.click();
-    await expect(step).toHaveText('±1.25');
+    const plus = page.getByRole('button', { name: /^Increase weight by/ });
+    await expect(plus).toHaveAccessibleName('Increase weight by 2.5 kg. Hold to change the step.');
+    await expect(plus).toContainText('2.5');
 
-    // And the stepper uses it.
-    await page.getByRole('button', { name: 'Increase weight' }).click();
+    // Held for longer than half a second: the step moves on, and the tap that
+    // ends the hold does not also add weight.
+    await plus.hover();
+    await page.mouse.down();
+    await page.clock.runFor(700);
+    await page.mouse.up();
+    await expect(page.getByText('Step 5 kg')).toBeVisible();
+    await expect(plus).toHaveAccessibleName('Increase weight by 5 kg. Hold to change the step.');
+    await expect(page.getByRole('button', { name: 'Log set 40 × 8' })).toBeVisible();
+
+    // The keyboard way: the context-menu key on the focused stepper.
+    await plus.focus();
+    await page.keyboard.press('Shift+F10');
+    await expect(plus).toHaveAccessibleName('Increase weight by 1.25 kg. Hold to change the step.');
+
+    // An ordinary tap steps by it.
+    await plus.click();
     await expect(page.getByRole('button', { name: 'Log set 41.25 × 8' })).toBeVisible();
   });
 
@@ -75,7 +92,7 @@ test.describe('logging sets', () => {
     // The warm-up still gets its own dot, so it can be found and corrected.
     await expect(page.getByRole('button', { name: /^Edit set 1 \(Warm-up\)/ })).toBeVisible();
     // And the chip count ignores it.
-    await expect(page.getByRole('button', { name: /^Bench 0\/\d/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Bench, 0 of \d+ sets$/ })).toBeVisible();
   });
 
   test('rest can be extended, shortened and skipped', async ({ page }) => {
@@ -94,7 +111,8 @@ test.describe('logging sets', () => {
 
   test('a lift can be added to a running session', async ({ page }) => {
     await startSession(page);
-    await page.getByRole('button', { name: 'Add a lift to this session' }).click();
+    await page.getByRole('button', { name: 'Session menu', exact: true }).click();
+    await page.getByRole('dialog', { name: 'Session menu' }).getByRole('button', { name: 'Add a lift' }).click();
 
     const picker = page.getByRole('dialog');
     await expect(picker).toBeVisible();
@@ -107,8 +125,7 @@ test.describe('logging sets', () => {
     await startSession(page);
     await page.getByRole('button', { name: 'Log set' }).click();
     await skipRest(page);
-    await page.getByRole('button', { name: 'Finish' }).click();
-    await dismissSummary(page);
+    await finishSession(page);
 
     // Finishing returns to Today deliberately — there is nothing left to do on
     // the logger, and leaving someone staring at an empty form is worse.

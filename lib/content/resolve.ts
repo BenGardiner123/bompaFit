@@ -303,7 +303,7 @@ export function statusSentence(status: ContentStatus): string | null {
     case 'unreachable':
       return `Couldn't reach ${status.providerName} — showing Bompa's cues.`;
     case 'not-downloaded':
-      return `${status.providerName}'s instructions for this haven't been downloaded yet. Tools → Exercise content → Download for offline.`;
+      return `${status.providerName}'s instructions for this haven't been downloaded yet. Settings → Exercise instructions → Download for offline.`;
     case 'expired':
       return `Your saved copy from ${status.providerName} expired. It will refresh next time you're online.`;
     case 'no-storage':

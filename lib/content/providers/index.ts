@@ -1,4 +1,4 @@
-// The adapters Bompa knows about, in the order the Tools screen lists them.
+// The adapters Bompa knows about, in the order the Exercise instructions screen lists them.
 //
 // Adding an adapter:
 //   1. Write lib/content/providers/<id>.ts exporting a `ContentProvider` whose

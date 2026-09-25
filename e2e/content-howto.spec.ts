@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { WGER, connectWger, fakeWger, reviewSheet, wgerBenchPress } from './content-fakes';
-import { completeSetup, goToTab, gotoApp } from './helpers';
+import { completeSetup, goToTab, gotoApp, openSettingsView } from './helpers';
 import { testCuesBody } from './test-cues';
 
 // The How-to sheet and the exercise-content services it can draw on. Nothing
@@ -15,7 +15,7 @@ async function startWorkoutWith(page: Page, lift: string) {
   await gotoApp(page);
   await completeSetup(page, { workouts: [[lift]] });
   await goToTab(page, 'Today');
-  await page.getByRole('button', { name: /^(Start workout|Train anyway)$/ }).click();
+  await page.getByRole('button', { name: /^(Start .+|Train anyway)$/ }).click();
 }
 
 async function openHowTo(page: Page) {
@@ -129,24 +129,24 @@ test.describe('How-to sheet and content services', () => {
 
   // ── With a service connected ──────────────────────────────────────────
   //
-  // wger is connected through Tools, the way a person does it, and the Bench
+  // wger is connected through Settings, the way a person does it, and the Bench
   // Press suggestion accepted. A backup file cannot carry a connection — it
   // would hold the API key, which never leaves the phone — so there is no
   // shortcut through import. wger itself is a route answering with the entry
   // recorded from the real service.
 
-  /** Tools → connect wger → accept the Bench Press link → start the workout. */
+  /** Settings → Exercise instructions → connect wger → accept the Bench Press link → start the workout. */
   async function startWithWger(page: Page) {
     await fakeWger(page.context(), [wgerBenchPress()]);
     await gotoApp(page);
     await completeSetup(page, { workouts: [[SEEDED_LIFT]] });
-    await goToTab(page, 'Tools');
+    await openSettingsView(page, 'Exercise instructions');
     await connectWger(page);
     const review = await reviewSheet(page);
     await review.getByRole('button', { name: `Accept ${SEEDED_LIFT}` }).click();
     await review.getByRole('button', { name: 'Close' }).click();
     await goToTab(page, 'Today');
-    await page.getByRole('button', { name: /^(Start workout|Train anyway)$/ }).click();
+    await page.getByRole('button', { name: /^(Start .+|Train anyway)$/ }).click();
   }
 
   /** The first step of the recorded entry, as the adapter turns it into plain text. */

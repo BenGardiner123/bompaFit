@@ -13,7 +13,17 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { C, DEVICE, FRAME_BREAKPOINT } from '@/lib/tokens';
 
-export function AndroidFrame({ children, dark = false }: { children: ReactNode; /** Paint the status bar ink, for the Train screen. */ dark?: boolean }) {
+export function AndroidFrame({
+  children,
+  dark = false,
+  urgent = false,
+}: {
+  children: ReactNode;
+  /** Paint the status bar ink, for the Train screen. */
+  dark?: boolean;
+  /** Paint it amber, for the rest screen's last ten seconds. */
+  urgent?: boolean;
+}) {
   const [framed, setFramed] = useState(false);
 
   useEffect(() => {
@@ -53,14 +63,14 @@ export function AndroidFrame({ children, dark = false }: { children: ReactNode; 
           boxSizing: 'border-box',
         }}
       >
-        <StatusBar dark={dark} />
+        <StatusBar dark={dark} urgent={urgent} />
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>{children}</div>
       </div>
     </div>
   );
 }
 
-function StatusBar({ dark }: { dark: boolean }) {
+function StatusBar({ dark, urgent }: { dark: boolean; urgent: boolean }) {
   return (
     <div
       style={{
@@ -73,10 +83,10 @@ function StatusBar({ dark }: { dark: boolean }) {
         position: 'relative',
         // Matches whatever the screen under it starts with, the way a real
         // phone tints its status bar to the app.
-        background: dark ? C.ink : C.screen,
+        background: urgent ? C.amber : dark ? C.ink : C.screen,
         fontFamily: 'Roboto, system-ui, sans-serif',
         fontSize: 13,
-        color: dark ? C.white : '#171d1b',
+        color: dark && !urgent ? C.white : C.ink,
       }}
       aria-hidden
     >

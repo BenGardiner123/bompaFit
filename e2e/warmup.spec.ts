@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { builder, completeSetup, gotoApp, goToTab, readRoutines, restScreen, saveBuilder, skipRest } from './helpers';
+import { builder, completeSetup, gotoApp, goToTab, openSettingsView, openWorkoutRow, readRoutines, restScreen, saveBuilder, skipRest } from './helpers';
 
 // The warm-up checklist: built in the workout builder, ticked on Train. It is a
 // reminder, not training data, so ticking never logs a set.
@@ -10,8 +10,8 @@ test.beforeEach(async ({ page }) => {
 });
 
 async function editWorkout(page: Page, name: string) {
-  await goToTab(page, 'Today');
-  await page.getByRole('button', { name: 'Open workout library' }).click();
+  await goToTab(page, 'Workouts');
+  await openWorkoutRow(page, name);
   await page.getByRole('button', { name: `Edit ${name}` }).click();
   await expect(builder(page)).toBeVisible();
   return builder(page).getByRole('region', { name: 'Warm-up' });
@@ -19,7 +19,7 @@ async function editWorkout(page: Page, name: string) {
 
 async function startWorkout(page: Page) {
   await goToTab(page, 'Today');
-  await page.getByRole('button', { name: /^(Start workout|Train anyway)$/ }).click();
+  await page.getByRole('button', { name: /^(Start .+|Train anyway)$/ }).click();
   await goToTab(page, 'Train');
 }
 
@@ -34,7 +34,7 @@ test('a warm-up built from common moves and a typed item is a checklist on Train
   await moves.getByRole('button', { name: 'Cat-cow', exact: true }).click();
   await moves.getByRole('button', { name: 'Hip aeroplanes', exact: true }).click();
   // Picked once is picked: the chip now reads as added and can't add twice.
-  await expect(moves.getByRole('button', { name: '✓ Cat-cow' })).toBeDisabled();
+  await expect(moves.getByRole('button', { name: 'Cat-cow', exact: true })).toBeDisabled();
   await section.getByRole('button', { name: 'Done adding common moves' }).click();
 
   await section.getByRole('textbox', { name: 'Warm-up move' }).fill('Kettlebell halos');
@@ -64,10 +64,10 @@ test('a warm-up built from common moves and a typed item is a checklist on Train
   await expect(card(page).getByRole('button', { name: 'How to do Kettlebell halos' })).toHaveCount(0);
 
   // Ticking logged nothing; logging a set still works underneath the card.
-  await expect(page.getByText(/· 0 sets ·/)).toBeVisible();
+  await expect(page.getByText(/· 0 of \d+ sets ·/)).toBeVisible();
   await page.getByRole('button', { name: /^Log set/ }).click();
   if (await restScreen(page).isVisible()) await skipRest(page);
-  await expect(page.getByText(/· 1 sets ·/)).toBeVisible();
+  await expect(page.getByText(/· 1 of \d+ sets ·/)).toBeVisible();
 
   // Hide folds the list away and keeps the count.
   await card(page).getByRole('button', { name: 'Hide warm-up' }).click();
@@ -82,7 +82,7 @@ test('a warm-up built from common moves and a typed item is a checklist on Train
 });
 
 test('a workout set to use the default shows the default list', async ({ page }) => {
-  await goToTab(page, 'Tools');
+  await openSettingsView(page, 'Default warm-up');
   const tools = page;
   await tools.getByRole('textbox', { name: 'Warm-up move' }).fill('Leg swings');
   await tools.getByRole('textbox', { name: 'How much' }).fill('10 each way');

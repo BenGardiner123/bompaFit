@@ -44,7 +44,7 @@ export function useCues(deadline: (now: number) => number | null, active: boolea
   }, [active]);
 }
 
-/** The Tools clock: countdown and end tone for AMRAP and EMOM, nothing for the stopwatch. */
+/** The interval timer: countdown and end tone for AMRAP and EMOM, nothing for the stopwatch. */
 export function useIntervalAlerts(clock: IntervalClock): void {
   const running = clock.startedAt !== null && clock.mode !== 'stopwatch';
   useCues((now) => intervalDeadline(clock, now), running);

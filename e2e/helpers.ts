@@ -9,7 +9,7 @@ import { expect, type Page } from '@playwright/test';
 // longer writes.
 
 /** Tab labels, as the tab bar renders them. */
-export type TabName = 'Today' | 'Train' | 'Plan' | 'History' | 'Tools';
+export type TabName = 'Today' | 'Train' | 'Plan' | 'History' | 'Workouts';
 
 /**
  * Load the app and wait for hydration.
@@ -24,7 +24,7 @@ export async function gotoApp(page: Page) {
 
 /** True when the app is sitting in first-run setup. */
 export function setupHeading(page: Page) {
-  return page.getByText(/^Setting up · /);
+  return page.getByText(/^Step \d+ of \d+ · /);
 }
 
 /** Dismiss setup without building a plan. Skipping is allowed, and sticks. */
@@ -123,6 +123,56 @@ export async function goToTab(page: Page, tab: TabName) {
   await expect(nav.getByRole('button', { name: tab })).toHaveAttribute('aria-current', 'page');
 }
 
+/** The Settings sheet, opened from the gear on Today. */
+export function settingsSheet(page: Page) {
+  return page.getByRole('dialog', { name: 'Settings' });
+}
+
+/** Go to Today and open Settings from its gear. */
+export async function openSettings(page: Page) {
+  await goToTab(page, 'Today');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(settingsSheet(page)).toBeVisible();
+}
+
+/**
+ * Open one of the settings too long for the sheet, which push a screen of
+ * their own: 'Timer alerts', 'Default warm-up' or 'Exercise instructions'.
+ */
+export async function openSettingsView(page: Page, row: 'Timer alerts' | 'Default warm-up' | 'Exercise instructions') {
+  await openSettings(page);
+  await settingsSheet(page).getByRole('button', { name: new RegExp(`^${row}`) }).click();
+  await expect(settingsSheet(page)).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Back to Settings' })).toBeVisible();
+}
+
+/** Open a tool from the Workouts tab: 'Interval timer' or '1RM calculator'. */
+export async function openTool(page: Page, tool: 'Interval timer' | '1RM calculator') {
+  await goToTab(page, 'Workouts');
+  await page.getByRole('button', { name: new RegExp(`^${tool}`) }).click();
+  await expect(page.getByRole('heading', { name: tool, level: 1 })).toBeVisible();
+}
+
+/**
+ * Open a workout's row on the Workouts tab, so its Start and Edit buttons
+ * show. One row is open at a time; the others are a line with a chevron.
+ */
+export async function openWorkoutRow(page: Page, name: string) {
+  // The row's name is the workout's name, then its tag or its lift count.
+  const row = new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}( |$)`);
+  const closed = page.getByRole('button', { name: row, expanded: false });
+  if (await closed.count()) await closed.first().click();
+  await expect(page.getByRole('button', { name: row, expanded: true })).toBeVisible();
+}
+
+/** Start a workout from the Workouts tab, by name. Lands on Train. */
+export async function startFromWorkouts(page: Page, name: string) {
+  await goToTab(page, 'Workouts');
+  await openWorkoutRow(page, name);
+  await page.getByRole('button', { name: `Start ${name}`, exact: true }).click();
+  await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Train' })).toHaveAttribute('aria-current', 'page');
+}
+
 /** Read every routine currently in IndexedDB, for assertions storage-side. */
 export async function readRoutines(page: Page) {
   return page.evaluate(async () => {
@@ -146,7 +196,7 @@ export async function readRoutines(page: Page) {
  * Matching "Log set" as a prefix lets the button carry the weight and reps.
  */
 export async function trainOneSession(page: Page) {
-  await page.getByRole('button', { name: /^(Start workout|Train anyway|Resume workout)$/ }).click();
+  await page.getByRole('button', { name: /^(Start .+|Train anyway|Resume workout)$/ }).click();
   await page.getByRole('button', { name: /^Log set/ }).click();
   await finishSession(page);
   await goToTab(page, 'Today');
@@ -162,7 +212,7 @@ export async function trainOneSession(page: Page) {
  */
 export async function trainAndFinish(page: Page, sets: ('warmup' | 'working')[]) {
   await goToTab(page, 'Today');
-  await page.getByRole('button', { name: /^(Start workout|Train anyway)$/ }).click();
+  await page.getByRole('button', { name: /^(Start .+|Train anyway)$/ }).click();
   await goToTab(page, 'Train');
   for (const type of sets) {
     await page.getByRole('button', { name: type === 'warmup' ? 'Warm-up' : 'Working', exact: true }).click();
@@ -185,24 +235,44 @@ export async function dismissSummary(page: Page) {
   await expect(summary).toBeHidden();
 }
 
-/** The full-screen rest countdown that logging a set opens. */
+/**
+ * The full-screen screen that logging a set opens: the rest countdown, or
+ * "That's the plan done" after the last planned set.
+ */
 export function restScreen(page: Page) {
-  return page.getByRole('dialog', { name: 'Resting' });
-}
-
-/** End a rest from the full-screen countdown, so the logger underneath is usable. */
-export async function skipRest(page: Page) {
-  await restScreen(page).getByRole('button', { name: 'Skip rest' }).click();
-  await expect(restScreen(page)).toBeHidden();
+  return page.getByRole('dialog', { name: /^(Resting|Session complete)$/ });
 }
 
 /**
- * Finish the running session from Train and dismiss its summary, landing on
- * Today. Ends a running rest first: the full-screen countdown covers the
- * Finish button, just as it would for a person.
+ * Get the rest screen out of the way, so the logger underneath is usable: Skip
+ * rest, or Keep training on the plan-done screen.
  */
-export async function finishSession(page: Page) {
+export async function skipRest(page: Page) {
+  const screen = restScreen(page);
+  const skip = screen.getByRole('button', { name: 'Skip rest' });
+  if (await skip.isVisible()) await skip.click();
+  else await screen.getByRole('button', { name: 'Keep training' }).click();
+  await expect(screen).toBeHidden();
+}
+
+/**
+ * Finish the running session from Train, through the session menu, and stop
+ * at the summary. With a planned lift untrained the finish guard asks first,
+ * and this answers "Finish anyway".
+ */
+export async function finishToSummary(page: Page) {
   if (await restScreen(page).isVisible()) await skipRest(page);
-  await page.getByRole('button', { name: 'Finish', exact: true }).click();
+  await page.getByRole('button', { name: 'Session menu', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Session menu' }).getByRole('button', { name: 'Finish session' }).click();
+  const guard = page.getByRole('dialog', { name: /not trained yet$/ });
+  const summary = page.getByRole('dialog', { name: 'Session summary' });
+  await expect(guard.or(summary)).toBeVisible();
+  if (await guard.isVisible()) await guard.getByRole('button', { name: 'Finish anyway' }).click();
+  await expect(summary).toBeVisible();
+}
+
+/** Finish the running session and dismiss its summary, landing on Today. */
+export async function finishSession(page: Page) {
+  await finishToSummary(page);
   await dismissSummary(page);
 }

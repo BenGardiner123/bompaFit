@@ -1,8 +1,8 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { EXERCISEDB_API, connectWger, exercisedbFixture, fakeWger as routeWger, providerRow, reviewSheet, wgerEntry } from './content-fakes';
-import { completeSetup, finishSession, goToTab, gotoApp } from './helpers';
+import { completeSetup, finishSession, goToTab, gotoApp, openSettingsView } from './helpers';
 
-// Tools → Exercise content: connecting a service, reviewing the links it
+// Settings → Exercise instructions: connecting a service, reviewing the links it
 // suggests, downloading for offline, and disconnecting.
 //
 // Every provider host is faked with a route. Nothing here may reach the real
@@ -52,33 +52,33 @@ function fakeWger(context: BrowserContext, opts: Parameters<typeof routeWger>[2]
   return routeWger(context, WGER_ENTRIES, opts);
 }
 
-async function openTools(page: Page) {
+async function openContentSettings(page: Page) {
   await gotoApp(page);
   await completeSetup(page, { workouts: [['Bench Press', 'Overhead Press']], names: ['Push A'] });
-  await goToTab(page, 'Tools');
+  await openSettingsView(page, 'Exercise instructions');
 }
 
 // ─── Tests ────────────────────────────────────────────────────
 
 test('with no service connected, a normal session sends nothing off the device', async ({ page, context }) => {
   const sent = outbound(context, page);
-  await openTools(page);
+  await openContentSettings(page);
   await expect(page.getByText('Nothing is sent anywhere unless you connect a service.', { exact: false })).toBeVisible();
 
   // Every tab, and a workout from start to finish.
-  for (const tab of ['Today', 'Plan', 'History', 'Tools'] as const) await goToTab(page, tab);
+  for (const tab of ['Today', 'Plan', 'History', 'Workouts'] as const) await goToTab(page, tab);
   await goToTab(page, 'Today');
-  await page.getByRole('button', { name: /^(Start workout|Train anyway)$/ }).click();
+  await page.getByRole('button', { name: /^(Start .+|Train anyway)$/ }).click();
   await goToTab(page, 'Train');
   await page.getByRole('button', { name: /^Log set/ }).click();
   await finishSession(page);
-  await goToTab(page, 'Tools');
+  await openSettingsView(page, 'Exercise instructions');
 
   expect(sent()).toEqual([]);
 });
 
 test('says what a connected service is sent, and what it never is', async ({ page }) => {
-  await openTools(page);
+  await openContentSettings(page);
   const text = page.getByText(/Nothing is sent anywhere unless you connect a service/);
   await expect(text).toBeVisible();
   await expect(text).toContainText('only exercise names and ids');
@@ -87,7 +87,7 @@ test('says what a connected service is sent, and what it never is', async ({ pag
 
 test('connects wger after a passing test, then accepts one suggestion and says no match to another', async ({ page, context }) => {
   await fakeWger(context);
-  await openTools(page);
+  await openContentSettings(page);
 
   await connectWger(page);
   // Connecting looks for matches once, so there is something to review.
@@ -114,7 +114,7 @@ test('connects wger after a passing test, then accepts one suggestion and says n
 
 test('choosing another entry links the movement to the one picked', async ({ page, context }) => {
   await fakeWger(context);
-  await openTools(page);
+  await openContentSettings(page);
   await connectWger(page);
 
   const sheet = await reviewSheet(page);
@@ -144,7 +144,7 @@ test('a keyed service needs a passing test before Connect, and never shows the s
     if (answer !== 200) return route.fulfill({ status: answer, headers: cors, json: exercisedbFixture('error-unauthorized') });
     return route.fulfill({ status: 200, headers: { ...cors, 'x-ratelimit-remaining': '482' }, json: exercisedbFixture('liveness') });
   });
-  await openTools(page);
+  await openContentSettings(page);
 
   await providerRow(page, 'ExerciseDB').click();
   const connect = page.getByRole('button', { name: 'Connect', exact: true });
@@ -180,7 +180,7 @@ test('a keyed service needs a passing test before Connect, and never shows the s
 
   // Once saved, the key is never put back on screen — not after a reload either.
   await page.reload();
-  await goToTab(page, 'Tools');
+  await openSettingsView(page, 'Exercise instructions');
   await providerRow(page, 'ExerciseDB').click();
   await expect(page.getByLabel('API key')).toHaveCount(0);
   expect(await page.content()).not.toContain(KEY);
@@ -190,7 +190,7 @@ test('a keyed service needs a passing test before Connect, and never shows the s
 
 test('disconnecting keeps links unless asked to forget them', async ({ page, context }) => {
   await fakeWger(context);
-  await openTools(page);
+  await openContentSettings(page);
   await connectWger(page);
   const sheet = await reviewSheet(page);
   await sheet.getByRole('button', { name: /^Accept all/ }).click();
@@ -214,7 +214,7 @@ test('disconnecting keeps links unless asked to forget them', async ({ page, con
 test('download for offline shows progress, and stops on a spent quota with a reason', async ({ page, context }) => {
   // The first entry downloads; the second is refused as too many requests.
   await fakeWger(context, { detailStatus: (_uuid, call) => (call >= 2 ? 429 : 200) });
-  await openTools(page);
+  await openContentSettings(page);
   await connectWger(page);
   const sheet = await reviewSheet(page);
   await sheet.getByRole('button', { name: /^Accept all/ }).click();
@@ -227,12 +227,12 @@ test('download for offline shows progress, and stops on a spent quota with a rea
 
 test('download for offline waits while a session is in progress', async ({ page, context }) => {
   await fakeWger(context);
-  await openTools(page);
+  await openContentSettings(page);
   await connectWger(page);
 
   await goToTab(page, 'Today');
-  await page.getByRole('button', { name: /^(Start workout|Train anyway)$/ }).click();
-  await goToTab(page, 'Tools');
+  await page.getByRole('button', { name: /^(Start .+|Train anyway)$/ }).click();
+  await openSettingsView(page, 'Exercise instructions');
   await providerRow(page, 'wger').click();
   await expect(page.getByRole('button', { name: 'Download for offline' })).toBeDisabled();
   await expect(page.getByText('Downloads wait until your session is finished.')).toBeVisible();

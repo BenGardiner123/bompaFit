@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { C, FONT, R, onInk } from '@/lib/tokens';
+import { C, FONT, R, T, onInk } from '@/lib/tokens';
 import { useBompa } from '@/state/BompaContext';
 import { DarkSheet, Row } from '@/components/ui';
 import { sheetHairline } from '@/components/SheetParts';
@@ -114,7 +114,7 @@ export function ExercisePicker({
 
       <div style={{ display: 'flex', flexDirection: 'column' }}>
         {results.length === 0 && (
-          <span style={{ fontSize: 14, color: onInk.muted, padding: '14px 0', ...sheetHairline }}>Nothing matches “{query}”.</span>
+          <span style={{ fontSize: T.md, color: onInk.muted, padding: '14px 0', ...sheetHairline }}>Nothing matches “{query}”.</span>
         )}
         {results.map((exercise) => (
           <Row
@@ -124,7 +124,7 @@ export function ExercisePicker({
             sub={`${exercise.muscle} · ${exercise.equipment}`}
             right={
               taken.has(exercise.id) && (
-                <span style={{ flex: 'none', fontSize: 10.5, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: C.amberLight }}>
+                <span style={{ flex: 'none', fontSize: T.xs, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: C.amberLight }}>
                   Added
                 </span>
               )

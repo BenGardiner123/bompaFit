@@ -1,12 +1,12 @@
 'use client';
 
 /**
- * Tools → Exercise content: connecting a service, reviewing suggested links,
+ * Settings → Exercise instructions: connecting a service, reviewing suggested links,
  * downloading for offline, and each provider's credits.
  *
  * Nothing on this screen talks to a provider by itself. Every request starts
  * from a button the user pressed, or from the one automatic match run right
- * after they connect — so opening Tools with nothing connected sends nothing.
+ * after they connect — so opening this screen with nothing connected sends nothing.
  */
 
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
@@ -14,7 +14,7 @@ import type { ContentProvider, TestResult } from '@/lib/content/provider';
 import { loadProvider } from '@/lib/content/registry';
 import type { DownloadRun } from '@/lib/content/resolve';
 import type { MatchRun } from '@/lib/content/match';
-import { C, FONT, R, TOUCH, num } from '@/lib/tokens';
+import { C, FONT, R, T, TOUCH, num } from '@/lib/tokens';
 import { useBompa } from '@/state/BompaContext';
 import { Btn, Row, Section, Segmented, Tag } from '@/components/ui';
 import { LinkReviewSheet } from '@/components/LinkReviewSheet';
@@ -29,12 +29,12 @@ export function ContentProviders() {
 
   return (
     <Section title="Exercise content" right="optional">
-      <p style={{ margin: '0 0 12px', fontSize: 12.5, lineHeight: 1.5, color: C.tertiary }}>
+      <p style={{ margin: '0 0 12px', fontSize: T.sm, lineHeight: 1.5, color: C.tertiary }}>
         Nothing is sent anywhere unless you connect a service. Once you do, lookups send that service only exercise names and ids — never
         your training.
       </p>
       {entries.length === 0 && (
-        <span style={{ fontSize: 12.5, lineHeight: 1.5, color: C.tertiary, paddingTop: 12, borderTop: `1px solid ${C.line}` }}>
+        <span style={{ fontSize: T.sm, lineHeight: 1.5, color: C.tertiary, paddingTop: 12, borderTop: `1px solid ${C.line}` }}>
           No services can be connected in this version of Bompa.
         </span>
       )}
@@ -56,7 +56,7 @@ export function ContentProviders() {
                   CONNECTED
                 </Tag>
               ) : (
-                <span style={{ fontSize: 12.5, fontWeight: 800, color: C.amberDark }}>{expanded ? 'Close' : 'Connect'}</span>
+                <span style={{ fontSize: T.sm, fontWeight: 800, color: C.amberDark }}>{expanded ? 'Close' : 'Connect'}</span>
               )
             }
           >
@@ -72,7 +72,7 @@ export function ContentProviders() {
 
 /**
  * The adapters themselves, for what each can do and how it signs in. They are
- * loaded when Tools is opened — code from Bompa's own origin, never a request
+ * loaded when this screen is opened — code from Bompa's own origin, never a request
  * to the provider — so a person who never visits this screen never pays for them.
  */
 function useAdapters(ids: string[]): Map<string, ContentProvider | null> {
@@ -244,7 +244,7 @@ function ConnectPanel({ provider, onDone }: { provider: ContentProvider; onDone:
           Connect
         </Btn>
       </div>
-      <div role="status" style={{ fontSize: 12.5, lineHeight: 1.5, fontWeight: 700, color: result && !result.ok ? C.redDark : C.greenDark, ...num }}>
+      <div role="status" style={{ fontSize: T.sm, lineHeight: 1.5, fontWeight: 700, color: result && !result.ok ? C.redDark : C.greenDark, ...num }}>
         {!online ? 'Needs a connection.' : result ? testSentence(result, provider) : ''}
       </div>
     </div>
@@ -480,7 +480,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 
 function Note({ children, live = false }: { children: ReactNode; live?: boolean }) {
   return (
-    <span role={live ? 'status' : undefined} style={{ fontSize: 12.5, lineHeight: 1.5, color: C.tertiary, ...num }}>
+    <span role={live ? 'status' : undefined} style={{ fontSize: T.sm, lineHeight: 1.5, color: C.tertiary, ...num }}>
       {children}
     </span>
   );
@@ -496,7 +496,7 @@ const input: CSSProperties = {
   color: C.ink,
   padding: '0 12px',
   fontFamily: FONT,
-  fontSize: 14,
+  fontSize: T.md,
   fontWeight: 600,
 };
 
@@ -519,7 +519,7 @@ const link: CSSProperties = {
   minHeight: TOUCH,
   display: 'inline-flex',
   alignItems: 'center',
-  fontSize: 12.5,
+  fontSize: T.sm,
   fontWeight: 800,
   color: C.amberDark,
 };

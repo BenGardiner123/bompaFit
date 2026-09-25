@@ -1,15 +1,17 @@
 'use client';
 
-// Declared working maxes. Lives outside Tools because first-run setup shows the
-// same control — one stored value, two entry points. Both places put it on the
-// light sheet, so it draws as a flat section of hairline rows, not a card.
+// Declared working maxes. Its own component because first-run setup and
+// History › By lift show the same control: one stored value, two entry points.
+// Both put it on the light sheet, so it draws as a flat section of hairline rows, not a card.
 
+import type { ReactNode } from 'react';
 import { toDisplay, toKg } from '@/lib/calc';
 import { startingMaxLifts } from '@/lib/maxes';
 import { weightMax, weightPrecision } from '@/lib/numberEntry';
 import { C, R, TOUCH } from '@/lib/tokens';
 import { useBompa } from '@/state/BompaContext';
 import { Btn, EditableNumber, Row, Section } from '@/components/ui';
+import { Icon } from '@/components/icons';
 
 /**
  * A new user has no history, so every routine priced as a percentage of 1RM
@@ -54,7 +56,7 @@ export function StartingMaxes() {
                   onClick={() => b.setStartingMax(exercise.id, Math.max(0, toKg(Math.max(0, toDisplay(declared, s.unit) - step), s.unit)))}
                   label={`Lower starting max for ${exercise.name}`}
                 >
-                  −
+                  <Icon name="minus" size={18} />
                 </MaxStepper>
                 {/* Typed in the display unit and converted once, here. */}
                 <EditableNumber
@@ -72,7 +74,7 @@ export function StartingMaxes() {
                   onClick={() => b.setStartingMax(exercise.id, toKg(toDisplay(declared, s.unit) + step, s.unit))}
                   label={`Raise starting max for ${exercise.name}`}
                 >
-                  +
+                  <Icon name="plus" size={18} />
                 </MaxStepper>
               </div>
             }
@@ -87,7 +89,7 @@ export function StartingMaxes() {
 }
 
 /** The design drew these at 40px; they are raised to the 44px a thumb can reliably hit. */
-function MaxStepper({ onClick, label, children }: { onClick: () => void; label: string; children: string }) {
+function MaxStepper({ onClick, label, children }: { onClick: () => void; label: string; children: ReactNode }) {
   return (
     <Btn
       onClick={onClick}

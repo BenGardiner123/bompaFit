@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import path from 'node:path';
-import { goToTab, gotoApp, restScreen, skipRest, skipSetup } from './helpers';
+import { gotoApp, goToTab, openSettings, restScreen, settingsSheet, skipRest, skipSetup, startFromWorkouts } from './helpers';
 
 // Drop sets, clusters and rest-pause on the Train screen: one set made of
 // several logged rows. What these check is that the pieces stay one set — in
@@ -28,9 +28,9 @@ async function readSets(page: Page): Promise<Row[]> {
 }
 
 async function importFixture(page: Page) {
-  await goToTab(page, 'Tools');
-  await page.getByLabel('Bompa backup file').setInputFiles(FIXTURE);
-  await page.getByRole('button', { name: 'Import it' }).click();
+  await openSettings(page);
+  await settingsSheet(page).getByLabel('Bompa backup file').setInputFiles(FIXTURE);
+  await settingsSheet(page).getByRole('button', { name: 'Import it' }).click();
   await expect.poll(async () => (await readSets(page)).length).toBe(4);
   // The restore writes to storage; a fresh load is what reads it back in.
   await page.reload();
@@ -38,15 +38,7 @@ async function importFixture(page: Page) {
 }
 
 async function startPieces(page: Page) {
-  await goToTab(page, 'Today');
-  await page.getByRole('button', { name: 'Open workout library' }).click();
-  const row = page
-    .locator('div')
-    .filter({ hasText: 'Methods · pieces' })
-    .filter({ has: page.getByRole('button', { name: 'Start this workout' }) })
-    .last();
-  await row.getByRole('button', { name: 'Start this workout' }).click();
-  await goToTab(page, 'Train');
+  await startFromWorkouts(page, 'Methods · pieces');
   await expect(page.getByRole('heading', { name: /Bench Press/ })).toBeVisible();
 }
 
@@ -269,12 +261,14 @@ test.describe('an unplanned drop', () => {
     await expect(restScreen(page).getByRole('button', { name: 'Drop the weight and carry on this set' })).toBeHidden();
     await restScreen(page).getByRole('button', { name: 'Minimise' }).click();
     await expect(page.getByRole('button', { name: 'Drop the weight and carry on this set' })).toBeHidden();
-    await page.getByRole('button', { name: 'Skip', exact: true }).click();
+    await page.getByRole('button', { name: /^Rest, / }).click();
+    await skipRest(page);
 
     await page.getByRole('button', { name: 'Working', exact: true }).click();
     await logButton(page).click();
     await logButton(page).click();
-    await restScreen(page).getByRole('button', { name: 'Minimise' }).click();
+    // Minimised once, so this rest starts minimised too.
+    await expect(restScreen(page)).toBeHidden();
     await page.getByRole('button', { name: 'Drop the weight and carry on this set' }).click();
     await expect(card(page)).toContainText('Drop 2');
   });

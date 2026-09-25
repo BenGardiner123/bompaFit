@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { C, ON_PHASE, PH, PH_ON_INK, onInk } from './tokens';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join, relative } from 'node:path';
+import { C, ON_PHASE, PH, PH_ON_INK, T, onInk } from './tokens';
 
 // WCAG relative luminance and contrast ratio, straight from the spec. Kept here
 // rather than pulled in as a dependency — it is nine lines.
@@ -147,3 +149,92 @@ describe('contrast ratios', () => {
     expect(contrast(C.white, PH.strength)).toBeLessThan(3);
   });
 });
+
+describe('phase colours', () => {
+  it('are none of the status colours, so a phase never reads as a state', () => {
+    const status = [C.green, C.red, C.blue, C.amber].map((c) => c.toUpperCase());
+    for (const [phase, colour] of Object.entries(PH)) {
+      expect(status, `${phase} fill`).not.toContain(colour.toUpperCase());
+    }
+  });
+
+  it('are five different colours', () => {
+    expect(new Set(Object.values(PH)).size).toBe(5);
+  });
+});
+
+describe('type scale', () => {
+  it('starts at the 11px floor', () => {
+    expect(Math.min(...Object.values(T))).toBe(11);
+  });
+
+  // The scanner the floor test below runs, tried on sizes written every way
+  // the codebase could write one. A scanner that misses a form passes every
+  // file written in it.
+  it('the floor scanner catches every way of writing a size', () => {
+    const sizes = (source: string) => smallFontSizes(source).map((hit) => hit.size);
+    expect(sizes('fontSize: 9')).toEqual([9]);
+    expect(sizes('fontSize={9}')).toEqual([9]);
+    expect(sizes('font-size: 9px;')).toEqual([9]);
+    expect(sizes("fontSize: '9px'")).toEqual([9]);
+    expect(sizes("font: '700 9px Inter'")).toEqual([9]);
+    expect(sizes('font: 700 0.5rem/1.2 Inter;')).toEqual([8]);
+    expect(sizes("fontSize: '0.6em'")).toEqual([9.6]);
+    expect(sizes('fontSize: big ? 14 : 9')).toEqual([9]);
+    // Sizes at or over the floor, and numbers that are not sizes.
+    expect(sizes('fontSize: 12')).toEqual([]);
+    expect(sizes('fontSize: T.xs')).toEqual([]);
+    expect(sizes('fontSize: HERO_SIZE.step * 0.5')).toEqual([]);
+    expect(sizes("font: '700 12px/1 Inter'")).toEqual([]);
+    expect(sizes('font-size: 0.75rem;')).toEqual([]);
+    expect(sizes('figure.fontSize : 0')).toEqual([]);
+    expect(sizes('fontWeight: 800')).toEqual([]);
+    // Reports the line, so a failure points at the file's own numbering.
+    expect(smallFontSizes('a\nb\nfontSize: 9')).toEqual([{ line: 3, size: 9 }]);
+  });
+
+  // Scans the source rather than the rendered page so a size nobody's test
+  // happens to render still gets caught.
+  it('no component sets text under 11px', () => {
+    const roots = ['components', 'app'];
+    const files: string[] = [];
+    const walk = (dir: string) => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const path = join(dir, entry.name);
+        if (entry.isDirectory()) walk(path);
+        else if (/\.(tsx|ts|css)$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name)) files.push(path);
+      }
+    };
+    for (const root of roots) walk(join(process.cwd(), root));
+    expect(files.length).toBeGreaterThan(10);
+
+    const offenders = files.flatMap((file) =>
+      smallFontSizes(readFileSync(file, 'utf8')).map((hit) => `${relative(process.cwd(), file)}:${hit.line} → ${hit.size}`),
+    );
+    expect(offenders).toEqual([]);
+  });
+});
+
+/**
+ * Font sizes under the floor written into source: `fontSize: 9` in a style,
+ * `fontSize={9}` in a prop, `font-size: 9px` in a stylesheet, `'9px'` as a
+ * string, the `font:` shorthand, and rem or em (at 16px to the rem). A bare
+ * number is pixels, except in the shorthand, where it is a weight or a line
+ * height. A number after * or / scales another size rather than being one,
+ * and a read after a dot (`figure.fontSize : 0`) sets nothing.
+ */
+function smallFontSizes(source: string): { line: number; size: number }[] {
+  const assignment = /(?<![.\w-])(fontSize\s*(?::|=(?!=))|font-size\s*:|font\s*:)([^,;}\n]*)/g;
+  const literal = /(?<![*/]\s*)(?<![\w.])(\d+(?:\.\d+)?)(px|rem|em)?(?![\w.%])/g;
+  const hits: { line: number; size: number }[] = [];
+  for (const match of source.matchAll(assignment)) {
+    const shorthand = /^font\s*:/.test(match[1]!);
+    for (const value of match[2]!.matchAll(literal)) {
+      const unit = value[2];
+      if (shorthand && !unit) continue;
+      const size = Number(value[1]) * (unit === 'rem' || unit === 'em' ? 16 : 1);
+      if (size < T.xs) hits.push({ line: source.slice(0, match.index).split('\n').length, size });
+    }
+  }
+  return hits;
+}

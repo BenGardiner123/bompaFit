@@ -3,7 +3,7 @@
 // Kept out of the component so the thresholds and the chart maths can be
 // tested with plain numbers.
 
-import { scores, type SessionLoad } from './calc';
+import { MODEL, daysBetween, scores, type SessionLoad } from './calc';
 import { C, onInk } from './tokens';
 import type { Session } from './types';
 
@@ -11,20 +11,67 @@ const DAY_MS = 86_400_000;
 
 export type ReadinessBand = 'primed' | 'steady' | 'buried';
 
+/** Where each band starts. The scale under the numeral is drawn from these, so the two cannot disagree. */
+export const READY_AT = { primed: 75, steady: 45 } as const;
+
 export function readinessBand(readiness: number): ReadinessBand {
-  if (readiness >= 75) return 'primed';
-  if (readiness >= 45) return 'steady';
+  if (readiness >= READY_AT.primed) return 'primed';
+  if (readiness >= READY_AT.steady) return 'steady';
   return 'buried';
 }
 
-/** The word beside the numeral. The arrow is the glance; the word is for anyone who needs it spelt out. */
+/**
+ * The word beside the numeral. No arrow: the scale track under the number
+ * already shows where it sits, and the word carries the band's colour.
+ */
 export const READY_LABEL: Record<ReadinessBand, string> = {
-  primed: '↑ Primed',
-  steady: '→ Steady',
-  buried: '↓ Buried',
+  primed: 'Primed',
+  steady: 'Steady',
+  buried: 'Buried',
 };
 
-/** The same, without the arrow, for a screen reader: "up arrow primed" helps nobody. */
+/**
+ * The three stretches of the 0–100 scale under the numeral, lowest first, each
+ * sized by how much of the scale its band covers.
+ */
+export function readinessScale(): { band: ReadinessBand; share: number }[] {
+  return [
+    { band: 'buried', share: READY_AT.steady },
+    { band: 'steady', share: READY_AT.primed - READY_AT.steady },
+    { band: 'primed', share: 100 - READY_AT.primed },
+  ];
+}
+
+/** Where the marker sits on the scale, as a percentage, clamped so it never leaves the track. */
+export function readinessMarker(readiness: number): number {
+  return Math.max(0, Math.min(100, readiness));
+}
+
+export type LoadWord = 'ok' | 'high' | 'too high';
+
+/**
+ * A word for this week's load against what you have a base for. Above the
+ * danger line it is too high; above the top of the usual range, high. Below
+ * the usual range still reads ok here: an easy week is not a warning on Today,
+ * and the insight list says so when it lasts.
+ */
+export function loadWord(ratio: number | null): LoadWord | null {
+  if (ratio === null) return null;
+  if (ratio > MODEL.ACWR_DANGER) return 'too high';
+  if (ratio > MODEL.ACWR_HIGH) return 'high';
+  return 'ok';
+}
+
+/**
+ * Whole days from today to the meet, or null with no meet set. A meet already
+ * past reads as zero rather than a negative count.
+ */
+export function daysToMeet(todayKey: string, meetDate: string | undefined): number | null {
+  if (!meetDate) return null;
+  return Math.max(0, daysBetween(todayKey, meetDate));
+}
+
+/** The same in lower case, for the middle of the sentence a screen reader hears. */
 export const READY_WORD: Record<ReadinessBand, string> = {
   primed: 'primed',
   steady: 'steady',

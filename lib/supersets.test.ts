@@ -169,6 +169,39 @@ describe('nextInRound', () => {
   it('returns null for a lift that is not in the group', () => {
     expect(nextInRound(group, [], 'bench')).toBeNull();
   });
+
+  describe('members planned for different numbers of sets', () => {
+    // Bench 4, fly 3: the last round is bench alone.
+    const uneven = supersetGroups({
+      ...ROUTINE,
+      slots: [slot('bench', 0, 'B', 4), slot('fly', 1, 'B', 3)],
+    }).get('B')!;
+    const rounds = (n: number) => Array.from({ length: n }, () => [logged('bench'), logged('fly')]).flat();
+
+    it('does not hand on to a member that has done all its planned sets', () => {
+      const rows = [...rounds(3), logged('bench')];
+      expect(nextInRound(uneven, rows, 'bench')).toBeNull();
+      // So the fourth bench ends the round with the full rest.
+      expect(restAfterSet({ group: uneven, sessionSetsAfterLogging: rows, exerciseId: 'bench', fullRestSec: 150 })).toEqual({
+        sec: 150,
+        kind: 'full',
+      });
+    });
+
+    it('still hands on while that member has sets left', () => {
+      expect(nextInRound(uneven, [...rounds(2), logged('bench')], 'bench')?.exerciseId).toBe('fly');
+    });
+
+    it('takes the planned count it is given over the slot, since a trimmed lift owes fewer', () => {
+      const rows = [...rounds(2), logged('bench')];
+      expect(nextInRound(uneven, rows, 'bench', { bench: 4, fly: 2 })).toBeNull();
+    });
+
+    it('past the plan for every member, an extra round still runs through the group', () => {
+      const rows = [...rounds(3), logged('bench'), logged('bench')];
+      expect(nextInRound(uneven, rows, 'bench')?.exerciseId).toBe('fly');
+    });
+  });
 });
 
 describe('restAfterSet', () => {

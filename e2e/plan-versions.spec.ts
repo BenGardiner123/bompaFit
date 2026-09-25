@@ -36,13 +36,13 @@ function count(rows: StoredSlot[], blockId: number, routineId: string, pending: 
   return rows.filter((r) => r.blockId === blockId && r.routineId === routineId && (r.status === 'plan') === pending).length;
 }
 
-const views = (page: Page) => page.getByRole('group', { name: 'Plan view' });
+const openBuilder = (page: Page) => page.getByRole('button', { name: 'Add a block', exact: true }).click();
 const blockList = (page: Page) => page.getByRole('list', { name: 'Blocks in your plan' }).getByRole('listitem');
 
 async function addBlock(page: Page) {
-  await views(page).getByRole('button', { name: 'Mesocycle' }).click();
+  await openBuilder(page);
   await page.getByRole('button', { name: 'Add block to calendar' }).click();
-  await expect(views(page).getByRole('button', { name: 'Calendar' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('dialog', { name: 'Add a block' })).toHaveCount(0);
 }
 
 /** The Undo beside the adjustment whose sentence matches. */
@@ -62,7 +62,7 @@ test.beforeEach(async ({ page }) => {
 test('a new block runs the workouts picked for it, in the order picked', async ({ page }) => {
   const [push, pull] = [await idOf(page, 'Push A'), await idOf(page, 'Pull A')];
   await goToTab(page, 'Plan');
-  await views(page).getByRole('button', { name: 'Mesocycle' }).click();
+  await openBuilder(page);
 
   // Starts on the plan's own list.
   for (const name of ['Push A', 'Legs B', 'Pull A']) {
@@ -84,8 +84,7 @@ test('a new block runs the workouts picked for it, in the order picked', async (
   const firstWeek = rows.filter((r) => r.weekStart === added.startDate).sort((a, b) => a.slotIndex - b.slotIndex);
   expect(firstWeek.map((r) => r.routineId)).toEqual([pull, push, pull, push]);
 
-  // The Mesocycle view says which block runs what.
-  await views(page).getByRole('button', { name: 'Mesocycle' }).click();
+  // The plan says which block runs what.
   await expect(blockList(page).nth(0)).toContainText('Push A, Legs B, Pull A');
   await expect(blockList(page).nth(1)).toContainText('Its own workouts: Pull A, Push A');
 });
@@ -122,13 +121,11 @@ test('a version for this block replaces the workout here only, and can be undone
   expect(count(rows, 2, version, true)).toBe(0);
   expect(count(rows, 2, push, true)).toBeGreaterThan(0);
 
-  await views(page).getByRole('button', { name: 'Mesocycle' }).click();
   await expect(blockList(page).nth(0)).toContainText('Its own workouts: Push A (Strength), Legs B, Pull A');
   await expect(blockList(page).nth(1)).toContainText('Push A, Legs B, Pull A');
   await expect(blockList(page).nth(1)).not.toContainText('Its own workouts');
 
   // One Undo puts every slot and the block's list back.
-  await views(page).getByRole('button', { name: 'Calendar' }).click();
   await undoFor(page, /^You made Push A \(Strength\) for this strength block/).click();
   await expect(page.getByRole('button', { name: 'Options for Push A', exact: true })).toBeVisible();
   await expect.poll(async () => count(await readPlanned(page), 1, version, true)).toBe(0);

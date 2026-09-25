@@ -35,6 +35,7 @@ import {
   fmtDayMonth,
   fromDateKey,
   intensityAvg,
+  nextStep,
   startOfWeek,
   toDisplay,
   toKg,
@@ -50,12 +51,14 @@ import { loadProvider, providerEntries, providerEntry } from '@/lib/content/regi
 import { countCached, deleteConnection, deleteLink, putConnection, putLinks, sweepExpired } from '@/lib/content/store';
 import { loadHowTo } from '@/lib/howtos';
 import { bodyweightShare, effectiveWeight, isBodyweightLift as isLibraryBodyweight, readBodyweightKg, readBodyweightLifts } from '@/lib/bodyweight';
+import { LAST_EXPORT_KEY } from '@/lib/exchange';
 import { db, onStorageFailure, queue, readSettings, requestPersistence, warn, writeSetting } from '@/lib/db';
 import { readWarmupItems, readWarmupTicks, resolveWarmup, toggleTick, type WarmupTicks } from '@/lib/warmup';
 import { copyName, uniqueId, versionName } from '@/lib/ids';
 import { PHASE_LABEL } from '@/lib/tokens';
 import { summariseSessions, type SessionSummary } from '@/lib/history';
 import { buildInsights, type Insight } from '@/lib/insights';
+import { moveLift, nextLift as nextLiftToTrain, planDone, roundSets, unratedSets, untrainedLifts, type LiftPlan } from '@/lib/train';
 import {
   DEFAULT_BLOCKS,
   addToEveryWeek,
@@ -79,6 +82,7 @@ import {
   planWeekOf,
   planWeekStart,
   renumber,
+  restoreDropped,
   trimToBudget,
   weekBudget,
   weekProgress,
@@ -170,16 +174,73 @@ export const WARMUP_TICKS_KEY = 'warmupTicks';
  */
 export const SETUP_DONE_KEY = 'setupComplete';
 
+/**
+ * How many sessions have been finished, for as long as Train's hint line is
+ * still worth showing. Counted rather than a yes/no so the hint can stay for
+ * the first few sessions and then get out of the way.
+ */
+export const TRAIN_HINTS_KEY = 'trainHintsSeen';
+
+/** Train's hint line shows until this many sessions have been finished. */
+export const TRAIN_HINTS_SESSIONS = 3;
+
+/** How long a finished session can be taken back. */
+export const UNDO_FINISH_MS = 30_000;
+
 /** A session with no set logged for this long is closed automatically. */
 const SESSION_IDLE_TIMEOUT_MS = 4 * 3600_000;
 /** Elapsed time flushes on this cadence rather than every tick. */
 const ELAPSED_FLUSH_MS = 10_000;
-const TOAST_MS = 3600;
 
-export type Tab = 'home' | 'log' | 'plan' | 'stats' | 'tools';
-export type PlanTab = 'cal' | 'meso' | 'peak';
+export type Tab = 'home' | 'log' | 'plan' | 'stats' | 'workouts';
 
-type Toast = { id: number; text: string } | null;
+/**
+ * A screen pushed over the current tab: the tools on the Workouts tab, and the
+ * longer settings that do not fit the Settings sheet. It keeps the tab it was
+ * opened from lit, and Back returns to where it came from.
+ */
+export type PushedView = 'timer' | 'calc' | 'alerts' | 'warmup' | 'content';
+
+/** Where Back goes from a pushed view: the tab underneath, or the Settings sheet it was opened from. */
+export type Pushed = { view: PushedView; from: 'tab' | 'settings' } | null;
+
+/**
+ * A set identified the way the rest screen needs it: by session, lift and set
+ * number, which the row has from the moment it is logged. The database id
+ * arrives a moment later, and rating waits for it.
+ */
+export type SetKey = { sessionId: number; exerciseId: string; setNo: number };
+
+/** The rating sheet: which lift, and the sets it asks about, fixed when it opens. */
+/**
+ * The rating sheet: which sets, and whose name heads it. `title` stands in for
+ * the lift's name when the sets span several lifts, as a superset round does.
+ */
+export type RateSheet = { exerciseId: string; setIds: number[]; title?: string } | null;
+
+/**
+ * What finishing a session changed, kept for the short time it can be undone:
+ * the session as it was open, and the planned slot exactly as it was before it
+ * was marked done (null when the session filled no slot).
+ */
+export type LastFinished = {
+  session: Session;
+  plannedBefore: PlannedSession | null;
+  at: number;
+  /** The hint count before the finish, so undo restores exactly that, cap or not. */
+  hintsBefore: number;
+} | null;
+
+/** Something the toast offers to do about what it just said, e.g. put it back. */
+export type ToastAction = { label: string; run: () => void };
+
+/**
+ * A short message after something happened. How long it stays, and pausing
+ * while a finger is on it, belong to the component that draws it: this is only
+ * what to say. A new object every time, even for the same words, so saying the
+ * same thing twice restarts the clock.
+ */
+export type Toast = { text: string; action?: ToastAction } | null;
 
 /**
  * A set in progress that is made of pieces — a drop set between its drops, a
@@ -226,8 +287,11 @@ export type SegmentState = {
 
 type UIState = {
   tab: Tab;
-  planTab: PlanTab;
-  library: boolean;
+  /** The Settings sheet, opened from the gear on Today. */
+  settingsOpen: boolean;
+  pushed: Pushed;
+  /** When a backup was last exported, for "Last backup N days ago". Null for never. */
+  lastExportAt: number | null;
   howToKey: string | null;
   editingRoutineId: string | null;
   /** The logged set being amended, if any. Id, never the object — see deleteSet. */
@@ -246,6 +310,31 @@ type UIState = {
    */
   restFull: boolean;
   /**
+   * Once the lifter minimises a rest, later rests in the same session start
+   * minimised too. Someone who put the countdown away once has said they
+   * would rather see the logger; asking again after every set is nagging.
+   */
+  restPrefersMinimised: boolean;
+  /**
+   * The set or sets the rest screen asks "How did that feel?" about: the set
+   * just finished, or every set of a superset round. Cleared by the next set.
+   */
+  justLogged: SetKey[];
+  /**
+   * The lift just left with sets still unrated, for the catch-up line on
+   * Train. Cleared by the next set, and drawn only while it has unrated sets.
+   */
+  catchUpLift: string | null;
+  /** The rest screen's "That's the plan done" variant, after the last planned set. */
+  sessionComplete: boolean;
+  /** The session menu: add a lift, reorder, finish. */
+  sessionMenuOpen: boolean;
+  /** The sheet that asks before finishing with lifts untrained. */
+  finishGuardOpen: boolean;
+  rateSheet: RateSheet;
+  /** Sessions finished so far, capped where the hint stops; see TRAIN_HINTS_KEY. */
+  trainHintsSeen: number;
+  /**
    * What the session just finished looked like, shown once on its own screen.
    * Null the rest of the time. It holds a copy rather than an id so the summary
    * cannot shift under the reader if history recomputes behind it.
@@ -260,7 +349,6 @@ type UIState = {
   exIdx: number;
   entryWeight: number;
   entryReps: number;
-  entryRpe: number | null;
   entryType: SetType;
   /**
    * Seconds per hold for an isometric set, in the entry card. Null means the
@@ -285,8 +373,9 @@ type UIState = {
 
 const INITIAL: UIState = {
   tab: 'home',
-  planTab: 'cal',
-  library: false,
+  settingsOpen: false,
+  pushed: null,
+  lastExportAt: null,
   howToKey: null,
   editingRoutineId: null,
   editingSetId: null,
@@ -296,6 +385,14 @@ const INITIAL: UIState = {
   toast: null,
   statsLift: 'barbell-bench-press',
   restFull: false,
+  restPrefersMinimised: false,
+  justLogged: [],
+  catchUpLift: null,
+  sessionComplete: false,
+  sessionMenuOpen: false,
+  finishGuardOpen: false,
+  rateSheet: null,
+  trainHintsSeen: 0,
   summary: null,
 
   unit: 'kg',
@@ -306,7 +403,6 @@ const INITIAL: UIState = {
   exIdx: 0,
   entryWeight: 80,
   entryReps: 8,
-  entryRpe: null,
   entryType: 'working',
   entryHoldSec: null,
 
@@ -406,18 +502,24 @@ function useBompaState() {
    */
   const [restKind, setRestKind] = useState<RestKind | null>(null);
   const [segment, setSegment] = useState<SegmentState | null>(null);
+  const [lastFinished, setLastFinished] = useState<LastFinished>(null);
 
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTick = useRef(Date.now());
   const lastFlush = useRef(0);
 
   const patch = useCallback((next: Partial<UIState>) => setS((prev) => ({ ...prev, ...next })), []);
 
-  const say = useCallback((text: string) => {
-    if (toastTimer.current) clearTimeout(toastTimer.current);
-    const id = Date.now();
-    setS((prev) => ({ ...prev, toast: { id, text } }));
-    toastTimer.current = setTimeout(() => setS((prev) => (prev.toast?.id === id ? { ...prev, toast: null } : prev)), TOAST_MS);
+  const say = useCallback((text: string, action?: ToastAction) => {
+    setS((prev) => ({ ...prev, toast: action ? { text, action } : { text } }));
+  }, []);
+
+  /**
+   * Take a toast down, but only if it is still the one showing. A timer or a
+   * swipe that finishes just after a newer toast arrived must not take the
+   * newer one with it.
+   */
+  const dismissToast = useCallback((toast: Toast) => {
+    setS((prev) => (prev.toast === toast ? { ...prev, toast: null } : prev));
   }, []);
 
   // ───────────────────────────────────────────────────────────
@@ -521,6 +623,8 @@ function useBompaState() {
           step: (settingsRow.step as number) ?? (unit === 'kg' ? 2.5 : 5),
           restPresetSec: (settingsRow.restPresetSec as number) ?? INITIAL.restPresetSec,
           statsLift: (settingsRow.statsLift as string) ?? INITIAL.statsLift,
+          trainHintsSeen: readCount(settingsRow[TRAIN_HINTS_KEY]),
+          lastExportAt: readTime(settingsRow[LAST_EXPORT_KEY]),
           hydrated: true,
         });
         setRestTotalMs(((settingsRow.restPresetSec as number) ?? INITIAL.restPresetSec) * 1000);
@@ -547,7 +651,6 @@ function useBompaState() {
 
     return () => {
       cancelled = true;
-      if (toastTimer.current) clearTimeout(toastTimer.current);
     };
     // Runs once on mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -636,9 +739,11 @@ function useBompaState() {
       setRestEndsAt(at + sec * 1000);
       setRestTotalMs(sec * 1000);
       setRestKind(kind);
-      patch({ restFull: kind === 'full' });
+      // Read from the latest state rather than a closure: the preference can
+      // change on the same tap that logs the next set.
+      setS((prev) => ({ ...prev, restFull: kind === 'full' && !prev.restPrefersMinimised }));
     },
-    [patch],
+    [],
   );
 
   /**
@@ -829,7 +934,11 @@ function useBompaState() {
     [sets, openSession],
   );
 
-  const exerciseIds = openSession?.exerciseIds ?? activeRoutine?.slots.map((slot) => slot.exerciseId) ?? [];
+  // Memoised so the many callbacks that read it are not rebuilt every render.
+  const exerciseIds = useMemo(
+    () => openSession?.exerciseIds ?? activeRoutine?.slots.map((slot) => slot.exerciseId) ?? [],
+    [openSession, activeRoutine],
+  );
   const activeExerciseId = exerciseIds[Math.min(s.exIdx, Math.max(0, exerciseIds.length - 1))] ?? null;
 
   const activeSlot = useMemo(
@@ -883,6 +992,21 @@ function useBompaState() {
   }, [activeSlot, activeTarget, sessionSets, e1rmByExercise, s.restPresetSec]);
 
   /**
+   * The session's plan, lift by lift in session order, with each lift's set
+   * count as adaptation left it. Lifts added mid-session have no plan and are
+   * left out, so nothing waits on them.
+   */
+  const sessionPlan: LiftPlan[] = useMemo(
+    () =>
+      exerciseIds.flatMap((exerciseId) => {
+        const slot = activeRoutine?.slots.find((x) => x.exerciseId === exerciseId);
+        if (!slot) return [];
+        return [{ exerciseId, planned: resolveTarget(slot, prescriptions, e1rmByExercise[exerciseId] ?? 0).sets }];
+      }),
+    [exerciseIds, activeRoutine, prescriptions, e1rmByExercise],
+  );
+
+  /**
    * The entry card for a slot's next set. For straight sets this is exactly the
    * adapted target it has always been. For a scheme it is the next entry's
    * reps, weight and type, rounded to the plate step so the stepper shows a
@@ -910,6 +1034,39 @@ function useBompaState() {
       };
     },
     [prescriptions, e1rmByExercise, s.unit, s.step],
+  );
+
+  /**
+   * The rest screen's "Next": the lift Train will show after this rest and
+   * that lift's next planned set, read from the plan rather than from whatever
+   * is left in the steppers. A lift whose planned sets are all done hands on
+   * to the next lift still owed some. Null once the plan is done. A lift
+   * outside the plan has nothing to read, so it shows what is in the steppers.
+   */
+  const restNext = useMemo(() => {
+    if (!activeExerciseId) return null;
+    const id = nextLiftToTrain(sessionPlan, sessionSets, activeExerciseId);
+    if (!id) return null;
+    const setNo = workingSetCount(sessionSets, id) + 1;
+    const slot = activeRoutine?.slots.find((x) => x.exerciseId === id);
+    if (!slot) return { exerciseId: id, setNo, weight: s.entryWeight, reps: s.entryReps };
+    const entry = entryFor(slot, sessionSets);
+    return { exerciseId: id, setNo, weight: entry.entryWeight, reps: entry.entryReps };
+  }, [activeExerciseId, sessionPlan, sessionSets, activeRoutine, entryFor, s.entryWeight, s.entryReps]);
+
+  /**
+   * The rows the rest screen asks about, as they are now: the set itself, not
+   * its pieces. A row deleted since drops out.
+   */
+  const justLoggedRows = useMemo(
+    () =>
+      s.justLogged.flatMap((key) => {
+        const row = sessionSets.find(
+          (x) => isSet(x) && x.sessionId === key.sessionId && x.exerciseId === key.exerciseId && x.setNo === key.setNo,
+        );
+        return row ? [row] : [];
+      }),
+    [s.justLogged, sessionSets],
   );
 
   // ───────────────────────────────────────────────────────────
@@ -946,11 +1103,23 @@ function useBompaState() {
     writeSetting('step', step, Date.now());
   }, [patch]);
 
+  /**
+   * Hold − or + on Train to move to the next weight step. Said in a toast,
+   * because the step changes nothing visible until the next tap.
+   */
+  const setStepByLongPress = useCallback(() => {
+    const next = nextStep(s.step, s.unit);
+    setStep(next);
+    say(`Step ${next} ${s.unit}`);
+  }, [s.step, s.unit, setStep, say]);
+
   const setRestPreset = useCallback((seconds: number) => {
     patch({ restPresetSec: seconds });
-    setRestTotalMs(seconds * 1000);
+    // The default is for the next rest. One already running keeps its own
+    // length, or its ring and "of 2:30" would jump mid-countdown.
+    if (restEndsAt === null) setRestTotalMs(seconds * 1000);
     writeSetting('restPresetSec', seconds, Date.now());
-  }, [patch]);
+  }, [patch, restEndsAt]);
 
   /** Kilograms, converted by the caller once on entry. Zero or less clears it. */
   const setBodyweightKg = useCallback((kg: number | null) => {
@@ -988,7 +1157,32 @@ function useBompaState() {
   // Navigation
   // ───────────────────────────────────────────────────────────
 
-  const go = useCallback((tab: Tab) => patch({ tab, library: false, howToKey: null }), [patch]);
+  // A tab tap always lands on the tab itself, never on a view or sheet left
+  // open over it earlier.
+  const go = useCallback((tab: Tab) => patch({ tab, pushed: null, settingsOpen: false, howToKey: null }), [patch]);
+
+  const openSettings = useCallback(() => patch({ settingsOpen: true }), [patch]);
+  const closeSettings = useCallback(() => patch({ settingsOpen: false }), [patch]);
+
+  /** Push a view over the current tab. From Settings, the sheet closes so the view is not drawn under it. */
+  const openView = useCallback(
+    (view: PushedView, from: 'tab' | 'settings' = 'tab') => patch({ pushed: { view, from }, settingsOpen: false }),
+    [patch],
+  );
+
+  /** Back from a pushed view: to the Settings sheet if that is where it was opened, otherwise to the tab. */
+  const closeView = useCallback(() => {
+    patch({ pushed: null, settingsOpen: s.pushed?.from === 'settings' });
+  }, [patch, s.pushed]);
+
+  /** Remember that a backup file was just handed over, for the "Last backup" line. */
+  const recordExport = useCallback(
+    (at: number) => {
+      patch({ lastExportAt: at });
+      writeSetting(LAST_EXPORT_KEY, at, at);
+    },
+    [patch],
+  );
 
   const pickExercise = useCallback(
     (index: number) => {
@@ -996,8 +1190,14 @@ function useBompaState() {
       if (!id) return;
       const slot = activeRoutine?.slots.find((x) => x.exerciseId === id);
 
+      // Leaving a lift with sets still unrated puts a catch-up line on Train.
+      // A lift left with nothing owing keeps whatever line was already there.
+      const leaving = activeExerciseId;
+      const catchUpLift =
+        leaving && leaving !== id && unratedSets(sessionSets, leaving).length > 0 ? leaving : s.catchUpLift;
+
       if (slot) {
-        patch({ exIdx: index, entryRpe: null, ...entryFor(slot, sessionSets) });
+        patch({ exIdx: index, catchUpLift, ...entryFor(slot, sessionSets) });
         return;
       }
 
@@ -1007,13 +1207,35 @@ function useBompaState() {
       const last = history[history.length - 1];
       patch({
         exIdx: index,
+        catchUpLift,
         entryWeight: last ? toDisplay(last.weightKg, s.unit) : s.entryWeight,
         entryReps: last?.reps ?? s.entryReps,
-        entryRpe: null,
         entryType: 'working',
       });
     },
-    [exerciseIds, activeRoutine, entryFor, sessionSets, sets, s.unit, s.entryWeight, s.entryReps, patch],
+    [exerciseIds, activeRoutine, activeExerciseId, entryFor, sessionSets, sets, s.unit, s.entryWeight, s.entryReps, s.catchUpLift, patch],
+  );
+
+  /**
+   * Move a lift up or down this session's list. Only the session's own copy of
+   * the order changes; the routine is left as it was. A superset moves as one
+   * block. The lift on screen stays on screen wherever it lands.
+   */
+  const moveSessionLift = useCallback(
+    (index: number, dir: -1 | 1) => {
+      if (!openSession) return;
+      const letterOf = (exerciseId: string) =>
+        activeRoutine?.slots.find((x) => x.exerciseId === exerciseId)?.supersetGroup ?? null;
+      const order = moveLift(openSession.exerciseIds, index, dir, letterOf);
+      if (order.every((id, i) => id === openSession.exerciseIds[i])) return;
+      const updated: Session = { ...openSession, exerciseIds: order };
+      setOpenSession(updated);
+      setSessions((prev) => prev.map((x) => (x.id === updated.id ? updated : x)));
+      void db.sessions.put(updated).catch(warn);
+      queue('sessions', 'put', updated, Date.now());
+      if (activeExerciseId) patch({ exIdx: Math.max(0, order.indexOf(activeExerciseId)) });
+    },
+    [openSession, activeRoutine, activeExerciseId, patch],
   );
 
   /** Add a lift that isn't in today's routine, without changing the routine. */
@@ -1022,7 +1244,7 @@ function useBompaState() {
       if (!openSession) return;
       if (openSession.exerciseIds.includes(exerciseId)) {
         const index = openSession.exerciseIds.indexOf(exerciseId);
-        patch({ exIdx: index, library: false });
+        patch({ exIdx: index });
         return;
       }
 
@@ -1037,7 +1259,6 @@ function useBompaState() {
         exIdx: updated.exerciseIds.length - 1,
         entryWeight: last ? toDisplay(last.weightKg, s.unit) : s.entryWeight,
         entryReps: last?.reps ?? s.entryReps,
-        entryRpe: null,
         entryType: 'working',
       });
       say(`${EXERCISE_BY_ID.get(exerciseId)?.name ?? 'Lift'} added to this session only.`);
@@ -1045,15 +1266,27 @@ function useBompaState() {
     [openSession, sets, s.unit, s.entryWeight, s.entryReps, patch, say],
   );
 
-  const persistAdjustments = useCallback(async (rows: Adjustment[]) => {
-    if (rows.length === 0) return;
+  /** Stores the rows and returns them with their database ids, so a caller can offer to undo one. */
+  const persistAdjustments = useCallback(async (rows: Adjustment[]): Promise<Adjustment[]> => {
+    if (rows.length === 0) return [];
     const ids = await db.adjustments.bulkAdd(rows, { allKeys: true }).catch((err) => {
       warn(err);
       return [] as number[];
     });
     const withIds = rows.map((row, i) => ({ ...row, id: (ids as number[])[i] }));
     setAdjustments((prev) => [...withIds, ...prev]);
+    return withIds;
   }, []);
+
+  /**
+   * The current `undoAdjustment`, for a toast's Undo to call. A toast outlives
+   * the render that raised it, and the copy of `undoAdjustment` from that
+   * render restores from the plan as it stood then, which would throw away
+   * anything changed since. It is declared further down, hence a ref.
+   */
+  const undoAdjustmentRef = useRef<(adjustment: Adjustment) => void>(() => {});
+  /** The same, for a dropped slot's Undo. */
+  const undoDropRef = useRef<(dropped: PlannedSession, before: PlannedSession[], after: PlannedSession[]) => void>(() => {});
 
   // ───────────────────────────────────────────────────────────
   // First-run setup
@@ -1117,10 +1350,12 @@ function useBompaState() {
     patch({ tab: 'home' });
   }, [patch]);
 
-  /** Re-open setup from Tools. */
+  /** Re-open setup from Settings. */
   const restartSetup = useCallback(() => {
     setSetupDone(false);
-  }, []);
+    // Setup owns the screen; the sheet it was started from must not float over it.
+    patch({ settingsOpen: false, pushed: null });
+  }, [patch]);
 
   /**
    * Accept the offer to bring an over-budget week back on plan.
@@ -1283,7 +1518,7 @@ function useBompaState() {
       if (!routine) return;
 
       if (openSession) {
-        patch({ tab: 'log', library: false });
+        patch({ tab: 'log', pushed: null, settingsOpen: false });
         return;
       }
 
@@ -1331,9 +1566,14 @@ function useBompaState() {
       const first = routine.slots[0];
       patch({
         tab: 'log',
-        library: false,
+        pushed: null,
+        settingsOpen: false,
         exIdx: 0,
-        entryRpe: null,
+        // Everything that belonged to the last session's sets starts clean.
+        restPrefersMinimised: false,
+        justLogged: [],
+        catchUpLift: null,
+        sessionComplete: false,
         ...(first
           ? entryFor(first, [])
           : { entryWeight: 60, entryReps: 8, entryType: 'working' as SetType, entryHoldSec: null }),
@@ -1378,55 +1618,88 @@ function useBompaState() {
     (args: {
       after: LoggedSet[];
       exerciseId: string;
+      /** The finished set's own number, which its pieces share. */
+      setNo: number;
+      sessionId: number;
       type: SetType;
       setIndex: number;
       at: number;
       /** What to say when nothing more specific applies. */
       toast: string | null;
     }) => {
-      const { after, exerciseId, type, setIndex, at } = args;
+      const { after, exerciseId, setNo, sessionId, type, setIndex, at } = args;
       const slot = activeRoutine?.slots.find((x) => x.exerciseId === exerciseId) ?? null;
       const group = groupFor(activeRoutine, exerciseId);
       // A warm-up sits outside the round, so it neither advances the group nor
       // borrows its gap; it gets the ordinary rest like any lone lift.
       const roundGroup = type === 'warmup' ? null : group;
+      // "That's the plan done" belongs to the set that finished the plan, and
+      // only that one: an extra set after it must not say it again. Worked out
+      // before any hand-off, so the set that finishes the plan always says so.
+      const withoutThis = after.filter((row) => !(row.exerciseId === exerciseId && row.setNo === setNo));
+      const complete = planDone(sessionPlan, after) && !planDone(sessionPlan, withoutThis);
+      const planned = Object.fromEntries(sessionPlan.map((lift) => [lift.exerciseId, lift.planned]));
       const rest = restAfterSet({
-        group: roundGroup,
+        group: complete ? null : roundGroup,
         sessionSetsAfterLogging: after,
         exerciseId,
         fullRestSec: type === 'warmup' ? s.restPresetSec : fullRestSec(slot, setIndex, s.restPresetSec),
+        planned,
       });
       if (rest.sec > 0) beginRest(at, rest.sec, rest.kind);
       else clearRest();
 
-      const nextLift = roundGroup ? nextInRound(roundGroup, after, exerciseId) : null;
+      const nextLift = roundGroup && !complete ? nextInRound(roundGroup, after, exerciseId, planned) : null;
       if (nextLift) {
         const index = exerciseIds.indexOf(nextLift.exerciseId);
-        patch({ entryRpe: null, ...(index >= 0 ? { exIdx: index } : {}), ...entryFor(nextLift, after) });
+        patch({ ...(index >= 0 ? { exIdx: index } : {}), ...entryFor(nextLift, after) });
         const nextName = EXERCISE_BY_ID.get(nextLift.exerciseId)?.name ?? 'the next lift';
         say(rest.kind === 'transition' ? `${rest.sec}s, then ${nextName}.` : `Straight into ${nextName} — no rest yet.`);
         return;
       }
 
-      // Back to the top of the group for the next round, so the sequence reads
-      // the same way every time.
-      const restartAt = group?.slots[0];
-      if (restartAt && restartAt.exerciseId !== exerciseId) {
-        const index = exerciseIds.indexOf(restartAt.exerciseId);
-        patch({ entryRpe: null, ...(index >= 0 ? { exIdx: index } : {}), ...entryFor(restartAt, after) });
+      // What the rest screen asks about: the set just finished, or at the end
+      // of a round every set in it, since nothing was asked mid-round. A member
+      // that sat this round out (its planned sets were already done) was asked
+      // about in its own last round, so it is not asked again.
+      const round = workingSetCount(after, exerciseId);
+      const asked: SetKey[] = roundGroup
+        ? roundSets(
+            roundGroup.slots.map((x) => x.exerciseId).filter((id) => workingSetCount(after, id) === round),
+            after,
+          ).map((row) => ({ sessionId: row.sessionId, exerciseId: row.exerciseId, setNo: row.setNo }))
+        : [{ sessionId, exerciseId, setNo }];
+      patch({ justLogged: rest.kind === 'full' || complete ? asked : [], sessionComplete: complete });
+
+      // Where Train goes next is the lift the rest screen names: this one (or
+      // the top of its group, so every round reads the same way) while it has
+      // planned sets left, otherwise the
+      // next lift still owed some. Staying put on a finished lift would have
+      // the next tap of Log record a set nobody planned. Once the whole plan
+      // is done there is nowhere to go, so it stays.
+      const stayId = group?.slots[0]?.exerciseId ?? exerciseId;
+      const goId = nextLiftToTrain(sessionPlan, after, stayId) ?? stayId;
+      const goSlot = activeRoutine?.slots.find((x) => x.exerciseId === goId) ?? null;
+      if (goSlot && goId !== exerciseId) {
+        const index = exerciseIds.indexOf(goId);
+        // Moving off a lift with sets still unrated puts the catch-up line up,
+        // as moving by hand would.
+        const leftGroup = !group || !group.slots.some((x) => x.exerciseId === goId);
+        const catchUp = leftGroup && unratedSets(after, exerciseId).length > 0 ? { catchUpLift: exerciseId } : {};
+        patch({ ...(index >= 0 ? { exIdx: index } : {}), ...catchUp, ...entryFor(goSlot, after) });
       } else if (slot && type !== 'warmup' && resolveSlotMethod(slot).scheme) {
         // A scheme's next set has its own reps, weight and type. Changing the
         // weight mid-workout overrides one set; the next is still the scheme's.
-        patch({ entryRpe: null, ...entryFor(slot, after) });
+        patch({ ...entryFor(slot, after) });
       } else {
-        patch({ entryRpe: null, entryType: 'working' });
+        patch({ entryType: 'working' });
       }
 
       if (args.toast !== null) say(args.toast);
       else if (group) say(`Round done. Rest running.`);
       else say('Set logged. Rest running.');
     },
-    [activeRoutine, exerciseIds, entryFor, s.restPresetSec, beginRest, clearRest, patch, say],
+    [activeRoutine, exerciseIds, entryFor, sessionPlan, s.restPresetSec, beginRest, clearRest, patch, say],
   );
 
   /**
@@ -1458,7 +1731,6 @@ function useBompaState() {
         // As many as possible starts from what the last piece managed, which is
         // the nearest thing to a guess the lifter would make themselves.
         entryReps: next.reps ?? (left === null ? lastReps : Math.max(1, Math.min(lastReps, left))),
-        entryRpe: null,
       });
       return true;
     },
@@ -1480,8 +1752,8 @@ function useBompaState() {
       // The one place a piece's display weight becomes a stored one.
       weightKg: toKg(s.entryWeight, s.unit),
       reps: s.entryReps,
-      rpe: s.entryRpe ?? fallbackRpe,
-      rpeEstimated: s.entryRpe === null,
+      rpe: fallbackRpe,
+      rpeEstimated: true,
       at,
       segment: segment.next,
       segmentStyle: segment.style,
@@ -1501,12 +1773,14 @@ function useBompaState() {
     settleSet({
       after: [...sessionSets, row],
       exerciseId: segment.exerciseId,
+      setNo: segment.setNo,
+      sessionId: segment.sessionId,
       type: segment.type,
       setIndex: segment.setIndex,
       at,
       toast: 'Set done. Rest running.',
     });
-  }, [segment, openSession, s.entryWeight, s.entryReps, s.entryRpe, s.unit, sessionSets, writeRow, advanceSegment, settleSet]);
+  }, [segment, openSession, s.entryWeight, s.entryReps, s.unit, sessionSets, writeRow, advanceSegment, settleSet]);
 
   /** Finish a set made of pieces early. The full rest starts, as it would after the last piece. */
   const endSegments = useCallback(() => {
@@ -1515,6 +1789,8 @@ function useBompaState() {
     settleSet({
       after: sessionSets,
       exerciseId: segment.exerciseId,
+      setNo: segment.setNo,
+      sessionId: segment.sessionId,
       type: segment.type,
       setIndex: segment.setIndex,
       at: Date.now(),
@@ -1593,10 +1869,15 @@ function useBompaState() {
       return;
     }
     if (!openSession?.id || !activeExerciseId) return;
+    // A new set moves the conversation on: the question about the last one,
+    // the catch-up line and the plan-done screen all belong to what came before.
+    patch({ justLogged: [], catchUpLift: null, sessionComplete: false });
 
     const at = Date.now();
     const targetRpe = activeTarget?.rpe ?? activeSlot?.targetRpe ?? 7;
-    const rpe = s.entryRpe ?? targetRpe;
+    // Train asks for RPE on the rest screen, after the set, so every set is
+    // logged with its aim standing in until the lifter says otherwise.
+    const rpe = targetRpe;
 
     // Sets, not pieces: the set after a double drop is the next set, not the one
     // three higher. The highest number so far guards against reusing one freed
@@ -1615,7 +1896,7 @@ function useBompaState() {
       weightKg: toKg(s.entryWeight, s.unit),
       reps: s.entryReps,
       rpe,
-      rpeEstimated: s.entryRpe === null,
+      rpeEstimated: true,
       at,
     };
     // How the set was prescribed, copied onto it now so history keeps its
@@ -1670,7 +1951,7 @@ function useBompaState() {
     else if (activeTarget && row.weightKg > (activeSetTarget?.weightKg ?? activeTarget.weightKg))
       toast = 'Above programmed weight — logged as an overload set.';
 
-    settleSet({ after, exerciseId: activeExerciseId, type: s.entryType, setIndex, at, toast });
+    settleSet({ after, exerciseId: activeExerciseId, setNo, sessionId: openSession.id, type: s.entryType, setIndex, at, toast });
   }, [
     segment,
     logSegment,
@@ -1681,7 +1962,6 @@ function useBompaState() {
     activeSlot,
     activeMethod,
     sessionSets,
-    s.entryRpe,
     s.entryType,
     s.entryWeight,
     s.entryReps,
@@ -1691,7 +1971,74 @@ function useBompaState() {
     advanceSegment,
     settleSet,
     say,
+    patch,
   ]);
+
+  /**
+   * Put deleted rows back, with the ids they had, so anything that pointed at
+   * them points at them again. A row deleted before its id arrived is added
+   * afresh and stamped when the write lands, as a new set would be.
+   */
+  const restoreSets = useCallback(
+    (removed: LoggedSet[]) => {
+      const at = Date.now();
+      // A set number freed by the delete may have been taken since, by a set
+      // logged in the meantime. Two sets sharing a number would share their
+      // pieces too, since a piece finds its set by that number. So a restored
+      // set whose number is taken comes back above the lift's highest, and its
+      // pieces move with it; the ids stay, so nothing pointing at them breaks.
+      const live = sets.filter((x) => !removed.some((row) => row.id !== undefined && row.id === x.id));
+      const sameLift = (a: LoggedSet, b: LoggedSet) => a.sessionId === b.sessionId && a.exerciseId === b.exerciseId;
+      const keyOf = (row: LoggedSet) => `${row.sessionId}|${row.exerciseId}|${row.setNo}`;
+      const renumber = new Map<string, number>();
+      for (const row of removed) {
+        if (!isSet(row) || !live.some((x) => sameLift(x, row) && x.setNo === row.setNo)) continue;
+        const top = Math.max(0, ...live.filter((x) => sameLift(x, row)).map((x) => x.setNo));
+        renumber.set(keyOf(row), top + 1);
+      }
+      const rows = removed.map((row) => {
+        const setNo = renumber.get(keyOf(row));
+        return setNo === undefined ? row : { ...row, setNo };
+      });
+
+      setSets((prev) => {
+        const missing = rows.filter((row) => !prev.some((x) => x.id !== undefined && x.id === row.id));
+        // Chronological, like the rows were when they were logged: "the last set"
+        // is read off this order in more than one place.
+        return [...prev, ...missing].sort((a, b) => a.at - b.at);
+      });
+      const stored = rows.filter((row) => row.id !== undefined);
+      if (stored.length > 0) {
+        void db.sets.bulkPut(stored).catch(warn);
+        for (const row of stored) queue('sets', 'put', row, at);
+      }
+      for (const row of rows.filter((x) => x.id === undefined)) {
+        void db.sets
+          .add(row)
+          .then((id) =>
+            setSets((prev) =>
+              prev.map((x) =>
+                x.id === undefined && x.at === row.at && x.exerciseId === row.exerciseId && x.sessionId === row.sessionId
+                  ? { ...x, id: id as number }
+                  : x,
+              ),
+            ),
+          )
+          .catch(warn);
+        queue('sets', 'put', row, at);
+      }
+    },
+    [sets],
+  );
+
+  /**
+   * The current `restoreSets`, for a toast's Undo. The toast outlives the
+   * render that raised it; the copy from that render would be stale.
+   */
+  const restoreSetsRef = useRef(restoreSets);
+  useEffect(() => {
+    restoreSetsRef.current = restoreSets;
+  }, [restoreSets]);
 
   const deleteSet = useCallback(
     (row: LoggedSet) => {
@@ -1703,18 +2050,17 @@ function useBompaState() {
         x.sessionId === row.sessionId &&
         x.exerciseId === row.exerciseId &&
         x.setNo === row.setNo;
-      const pieces = sets.filter(isPieceOf);
-
       // Match on the database id, never on object identity. The optimistic
       // insert and the write-back that stamps the id both produce fresh
       // objects, so the reference the caller holds may already be stale.
-      setSets((prev) =>
-        prev.filter(
-          (x) =>
-            !isPieceOf(x) &&
-            (row.id !== undefined ? x.id !== row.id : !(x.at === row.at && x.exerciseId === row.exerciseId)),
-        ),
-      );
+      const isRow = (x: LoggedSet) =>
+        row.id !== undefined ? x.id === row.id : x.at === row.at && x.exerciseId === row.exerciseId;
+      const pieces = sets.filter(isPieceOf);
+      // Held for Undo as they are now, not as the caller last saw them: an edit
+      // since then would otherwise come back undone.
+      const removed = [...sets.filter(isRow), ...pieces];
+
+      setSets((prev) => prev.filter((x) => !isPieceOf(x) && !isRow(x)));
       if (row.id !== undefined) {
         void db.sets.delete(row.id).catch(warn);
         queue('sets', 'delete', { id: row.id }, Date.now());
@@ -1735,9 +2081,12 @@ function useBompaState() {
       ) {
         setSegment(null);
       }
-      say(pieces.length > 0 ? 'Set and its pieces removed.' : 'Set removed.');
+      const name = allExerciseById.get(row.exerciseId)?.short ?? allExerciseById.get(row.exerciseId)?.name ?? 'that';
+      const text = pieces.length > 0 ? `Deleted ${name} set ${row.setNo} and its pieces` : `Deleted ${name} set ${row.setNo}`;
+      if (removed.length === 0) say(text);
+      else say(text, { label: 'Undo', run: () => restoreSetsRef.current(removed) });
     },
-    [sets, segment, say],
+    [sets, segment, allExerciseById, say],
   );
 
   /**
@@ -1812,6 +2161,61 @@ function useBompaState() {
     [sets, s.unit, say],
   );
 
+  /**
+   * Give sets their RPE, by id: from the rest screen, the catch-up line's
+   * sheet or the summary. A rating is the lifter's own word, so it clears the
+   * estimate flag.
+   *
+   * The later pieces of a cluster or a mechanical drop took the set's RPE as a
+   * stand-in when they were logged, so they take the rating too: the set is
+   * rated once, as one set. A drop or rest-pause piece is left alone, because
+   * those are logged at failure on purpose and the rating is not about them.
+   *
+   * A summary on screen for this session is rebuilt, so its verdict reads the
+   * new numbers.
+   */
+  const rateSets = useCallback(
+    (ratings: Record<number, number>) => {
+      const ids = Object.keys(ratings).map(Number);
+      const rated = sets.filter((row) => row.id !== undefined && ids.includes(row.id));
+      if (rated.length === 0) return;
+
+      const changed = new Map<number, LoggedSet>();
+      for (const row of rated) {
+        const rpe = ratings[row.id!]!;
+        changed.set(row.id!, { ...row, rpe, rpeEstimated: false });
+        for (const piece of sets) {
+          const follows =
+            piece.id !== undefined &&
+            !isSet(piece) &&
+            piece.rpeEstimated &&
+            (piece.segmentStyle === 'cluster' || piece.segmentStyle === 'mechanical-drop') &&
+            piece.sessionId === row.sessionId &&
+            piece.exerciseId === row.exerciseId &&
+            piece.setNo === row.setNo;
+          if (follows) changed.set(piece.id!, { ...piece, rpe, rpeEstimated: false });
+        }
+      }
+
+      // Built before touching state, as updateSet does, so the write and the
+      // rebuilt summary see the same rows.
+      const next = sets.map((row) => (row.id !== undefined ? (changed.get(row.id) ?? row) : row));
+      setSets(next);
+      const rows = [...changed.values()];
+      void db.sets.bulkPut(rows).catch(warn);
+      const at = Date.now();
+      for (const row of rows) queue('sets', 'put', row, at);
+
+      const shown = s.summary;
+      if (shown && shown.session.id !== undefined && rated.some((row) => row.sessionId === shown.session.id)) {
+        patch({ summary: summariseSessions([shown.session], next)[0] ?? shown });
+      }
+    },
+    [sets, s.summary, patch],
+  );
+
+  const rateSet = useCallback((setId: number, rpe: number) => rateSets({ [setId]: rpe }), [rateSets]);
+
   const finishSession = useCallback(() => {
     if (!openSession) return;
     const at = Date.now();
@@ -1825,17 +2229,26 @@ function useBompaState() {
     setRestKind(null);
     setSegment(null);
 
+    let plannedBefore: PlannedSession | null = null;
     if (closed.plannedSessionId !== undefined) {
       const done: PlannedSession | undefined = planned.find((p) => p.id === closed.plannedSessionId);
       if (done) {
+        plannedBefore = done;
         // The slot gets its date now, and only now. A date on a planned session
         // means "this is when it actually happened", never "this is when it was
         // meant to happen".
         const next: PlannedSession = { ...done, status: 'done', sessionId: closed.id, date: closed.date };
         setPlanned((prev) => prev.map((p) => (p.id === next.id ? next : p)));
         void db.plannedSessions.put(next).catch(warn);
+        queue('plannedSessions', 'put', next, at);
       }
     }
+    // Kept so the finish can be taken back, exactly as it was, for a short while.
+    setLastFinished({ session: openSession, plannedBefore, at, hintsBefore: s.trainHintsSeen });
+
+    // Counted only while the hint is still showing; past that nothing reads it.
+    const hints = s.trainHintsSeen < TRAIN_HINTS_SESSIONS ? s.trainHintsSeen + 1 : s.trainHintsSeen;
+    if (hints !== s.trainHintsSeen) writeSetting(TRAIN_HINTS_KEY, hints, at);
 
     // The summary replaces the old "session saved" toast: a finished session
     // deserves more than three seconds of small print. Built from the same
@@ -1843,8 +2256,83 @@ function useBompaState() {
     // Tab goes to Today underneath it, so dismissing the summary lands there
     // and nothing has to remember where the user came from.
     const summary = summariseSessions([closed], sets)[0] ?? null;
-    patch({ tab: 'home', restFull: false, summary });
-  }, [openSession, planned, sets, patch]);
+    patch({
+      tab: 'home',
+      restFull: false,
+      summary,
+      trainHintsSeen: hints,
+      sessionMenuOpen: false,
+      finishGuardOpen: false,
+      sessionComplete: false,
+      justLogged: [],
+      catchUpLift: null,
+      rateSheet: null,
+    });
+  }, [openSession, planned, sets, s.trainHintsSeen, patch]);
+
+  /**
+   * Finish from the session menu. With every planned lift trained it simply
+   * finishes; with any lift not started it asks first, because finishing
+   * counts the workout as done for the week.
+   */
+  const requestFinish = useCallback(() => {
+    if (!openSession) return;
+    if (untrainedLifts(sessionPlan, sessionSets).length === 0) {
+      finishSession();
+      return;
+    }
+    patch({ finishGuardOpen: true, sessionMenuOpen: false, sessionComplete: false });
+  }, [openSession, sessionPlan, sessionSets, finishSession, patch]);
+
+  /**
+   * Take a finish back, within its window: the session is open again, its slot
+   * is exactly the row it was (pending, no date, no session), and the summary
+   * gives way to Train. Nothing else happened at finish time to undo: finishing
+   * changes no prescription and writes no adjustment.
+   */
+  const undoFinish = useCallback(() => {
+    const last = lastFinished;
+    if (!last || openSession) return;
+    // The button can still be on screen for a moment after the window closes,
+    // since it counts down on the app's once-a-second clock. A tap that lands
+    // then is answered, not ignored.
+    if (Date.now() - last.at > UNDO_FINISH_MS) {
+      setLastFinished(null);
+      say('Too late to undo. The session is saved.');
+      return;
+    }
+    const at = Date.now();
+    const reopened: Session = { ...last.session };
+    delete reopened.finishedAt;
+
+    setOpenSession(reopened);
+    setSessions((prev) => prev.map((x) => (x.id === reopened.id ? reopened : x)));
+    void db.sessions.put(reopened).catch(warn);
+    queue('sessions', 'put', reopened, at);
+
+    const before = last.plannedBefore;
+    if (before) {
+      setPlanned((prev) => prev.map((p) => (p.id === before.id ? before : p)));
+      // A put replaces the whole row, so the date and session id written at
+      // finish are gone again rather than left behind on a pending slot.
+      void db.plannedSessions.put(before).catch(warn);
+      queue('plannedSessions', 'put', before, at);
+    }
+
+    // Finishing may have counted this session towards the hint; taking it back
+    // restores the count it had, which past the cap is the count it still has.
+    const hints = last.hintsBefore;
+    if (hints !== s.trainHintsSeen) writeSetting(TRAIN_HINTS_KEY, hints, at);
+
+    setLastFinished(null);
+    patch({ summary: null, tab: 'log', pushed: null, settingsOpen: false, trainHintsSeen: hints });
+    say('Session reopened. Carry on where you left off.');
+  }, [lastFinished, openSession, s.trainHintsSeen, patch, say]);
+
+  // The window closes on the wall clock, like every timer here.
+  useEffect(() => {
+    if (lastFinished && now - lastFinished.at >= UNDO_FINISH_MS) setLastFinished(null);
+  }, [lastFinished, now]);
 
   // ───────────────────────────────────────────────────────────
   // Rest timer
@@ -1869,8 +2357,14 @@ function useBompaState() {
 
   const skipRest = useCallback(() => clearRest(), [clearRest]);
 
-  /** Shrink the full-screen countdown back to the inline card. The rest keeps running. */
-  const minimiseRest = useCallback(() => patch({ restFull: false }), [patch]);
+  /**
+   * Shrink the full-screen countdown to the pill in Train's header. The rest
+   * keeps running, and later rests this session start minimised too.
+   */
+  const minimiseRest = useCallback(() => patch({ restFull: false, restPrefersMinimised: true }), [patch]);
+
+  /** Close the plan-done screen and carry on logging; any rest keeps running in the header. */
+  const keepTraining = useCallback(() => patch({ sessionComplete: false, restFull: false }), [patch]);
 
   /**
    * Bring the full-screen countdown back. Does nothing with no rest running,
@@ -1887,7 +2381,12 @@ function useBompaState() {
   const closeMethodGuide = useCallback(() => patch({ methodGuide: null }), [patch]);
 
   /** Dismiss the finished-session summary and land on Today. */
-  const closeSummary = useCallback(() => patch({ summary: null, tab: 'home' }), [patch]);
+  // Done also ends the chance to undo: the pill that offered it goes with the
+  // summary, and an undo with nothing on screen to say so would be a surprise.
+  const closeSummary = useCallback(() => {
+    setLastFinished(null);
+    patch({ summary: null, tab: 'home' });
+  }, [patch]);
 
   // ───────────────────────────────────────────────────────────
   // Plan
@@ -1950,7 +2449,7 @@ function useBompaState() {
       setPlanned((prev) => prev.map((p) => reordered.find((r) => r.id === p.id) ?? p));
       await db.plannedSessions.bulkPut(changed).catch(warn);
 
-      await persistAdjustments([
+      const [stored] = await persistAdjustments([
         {
           at: Date.now(),
           planId: plan.id,
@@ -1961,6 +2460,14 @@ function useBompaState() {
           narrative: `You moved ${routineById(slot.routineId)?.name ?? 'a session'} to position ${target + 1} this week.`,
         },
       ]);
+      const name = routineById(slot.routineId)?.name ?? 'That session';
+      // Undo only once the record has an id: without one, reverting it could
+      // not be told apart from any other unsaved record.
+      if (stored?.id !== undefined) {
+        say(`${name} moved to position ${target + 1} this week.`, { label: 'Undo', run: () => undoAdjustmentRef.current(stored) });
+      } else {
+        say(`${name} moved to position ${target + 1} this week.`);
+      }
     },
     [planned, plan, persistAdjustments, routineById, say],
   );
@@ -2128,10 +2635,35 @@ function useBompaState() {
         return before && (before.slotIndex !== p.slotIndex || before.userModified !== true);
       });
       if (changed.length) await db.plannedSessions.bulkPut(changed).catch(warn);
-      say('Dropped. This week expects less of you now.');
+      // Still no adjustment record, but no longer final: the row is held here
+      // so Undo can put it back with the same id. The Undo reads the latest
+      // restore through a ref because the toast outlives this render, and the
+      // copy of `planned` it closed over would be stale by the time it's tapped.
+      const before = weekSlots(planned, slot.weekStart);
+      say('Dropped. This week expects less of you now.', {
+        label: 'Undo',
+        run: () => undoDropRef.current(slot, before, reordered),
+      });
     },
     [planned, say],
   );
+
+  /** Put a dropped slot back where it was, with its own id. See `restoreDropped`. */
+  const undoDrop = useCallback(
+    (dropped: PlannedSession, before: PlannedSession[], after: PlannedSession[]) => {
+      const week = weekSlots(planned, dropped.weekStart);
+      const restored = restoreDropped(week, dropped, before, after);
+      if (restored === week) return;
+      setPlanned((prev) => [...prev.filter((p) => p.weekStart !== dropped.weekStart), ...restored]);
+      void db.plannedSessions.bulkPut(restored).catch(warn);
+      say('Back in the week.');
+    },
+    [planned, say],
+  );
+
+  useEffect(() => {
+    undoDropRef.current = undoDrop;
+  }, [undoDrop]);
 
   /**
    * Put one of your workouts into the plan — this week only, or this week and
@@ -2154,7 +2686,7 @@ function useBompaState() {
           ? [addToWeek({ ...args, weekStart: currentWeek })].filter((p): p is PlannedSession => p !== null)
           : addToEveryWeek({ ...args, fromWeek: currentWeek });
       if (rows.length === 0) {
-        say('There is no block covering this week to add it to. Add a block on the Mesocycle tab first.');
+        say('There is no block covering this week to add it to. Add a block on the Plan tab first.');
         return;
       }
 
@@ -2381,6 +2913,10 @@ function useBompaState() {
     [prescriptions, planned, blocks, savePrescriptions, say],
   );
 
+  useEffect(() => {
+    undoAdjustmentRef.current = undoAdjustment;
+  }, [undoAdjustment]);
+
   const addBlock = useCallback(() => {
     if (!plan?.id) return;
     const chosen = s.builderRotation;
@@ -2425,7 +2961,7 @@ function useBompaState() {
       })
       .catch(warn);
 
-    patch({ planTab: 'cal', builderRotation: null });
+    patch({ builderRotation: null });
     say(`${s.builderWeeks}-week ${s.builderPhase} block added after this one.`);
   }, [plan, blocks, todayKey, s.builderPhase, s.builderWeeks, s.builderRotation, patch, say]);
 
@@ -2749,6 +3285,7 @@ function useBompaState() {
   return {
     s,
     patch,
+    dismissToast,
     say,
     now,
     todayKey,
@@ -2806,6 +3343,10 @@ function useBompaState() {
     chips,
     supersetLabel,
     supersetRounds,
+    /** The session's lifts with their planned set counts, in session order. */
+    sessionPlan,
+    restNext,
+    justLoggedRows,
 
     // the week
     currentWeek,
@@ -2828,6 +3369,11 @@ function useBompaState() {
 
     // actions
     go,
+    openSettings,
+    closeSettings,
+    openView,
+    closeView,
+    recordExport,
     pickExercise,
     addExerciseToSession,
     setStartingMax,
@@ -2848,6 +3394,7 @@ function useBompaState() {
     setUnit,
     setWeekStart,
     setStep,
+    setStepByLongPress,
     setRestPreset,
     setStatsLift,
     startSession,
@@ -2859,7 +3406,15 @@ function useBompaState() {
     closeMethodGuide,
     deleteSet,
     updateSet,
+    rateSet,
+    rateSets,
     finishSession,
+    requestFinish,
+    undoFinish,
+    /** When the last finish happened, while it can still be undone; null otherwise. */
+    lastFinishedAt: lastFinished?.at ?? null,
+    keepTraining,
+    moveSessionLift,
     startRest,
     addRest,
     subRest,
@@ -2938,4 +3493,14 @@ function tidyWarmup(routine: Routine): Routine {
 /** Browsers say when they are definitely offline; anything else is worth trying. */
 function isOnline(): boolean {
   return typeof navigator === 'undefined' || navigator.onLine !== false;
+}
+
+/** A stored moment, read defensively: anything that is not a positive finite number reads as never. */
+function readTime(raw: unknown): number | null {
+  return typeof raw === 'number' && Number.isFinite(raw) && raw > 0 ? raw : null;
+}
+
+/** A stored count, read defensively: anything that is not a whole number of zero or more reads as zero. */
+function readCount(raw: unknown): number {
+  return typeof raw === 'number' && Number.isInteger(raw) && raw >= 0 ? raw : 0;
 }

@@ -12,7 +12,7 @@ test.beforeEach(async ({ page }) => {
 test.describe('reload survives', () => {
   test('an open session and its logged sets', async ({ page }) => {
     await goToTab(page, 'Today');
-    await page.getByRole('button', { name: /^(Start workout|Train anyway)$/ }).click();
+    await page.getByRole('button', { name: /^(Start .+|Train anyway)$/ }).click();
     await goToTab(page, 'Train');
     await page.getByRole('button', { name: 'Log set' }).click();
     await skipRest(page);
@@ -31,14 +31,13 @@ test.describe('reload survives', () => {
   test('the workouts you built', async ({ page }) => {
     await page.reload();
     await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible({ timeout: 15_000 });
-    await goToTab(page, 'Today');
-    await page.getByRole('button', { name: 'Open workout library' }).click();
+    await goToTab(page, 'Workouts');
     await expect(page.getByText('Push A')).toBeVisible();
   });
 
   test('a deleted set stays deleted', async ({ page }) => {
     await goToTab(page, 'Today');
-    await page.getByRole('button', { name: /^(Start workout|Train anyway)$/ }).click();
+    await page.getByRole('button', { name: /^(Start .+|Train anyway)$/ }).click();
     await goToTab(page, 'Train');
     await page.getByRole('button', { name: 'Log set' }).click();
     await skipRest(page);
@@ -57,7 +56,7 @@ test.describe('reload survives', () => {
 
   test('a finished session reaches History under its own name', async ({ page }) => {
     await goToTab(page, 'Today');
-    await page.getByRole('button', { name: /^(Start workout|Train anyway)$/ }).click();
+    await page.getByRole('button', { name: /^(Start .+|Train anyway)$/ }).click();
     await goToTab(page, 'Train');
     await page.getByRole('button', { name: 'Log set' }).click();
     await finishSession(page);
@@ -78,7 +77,7 @@ test.describe('reload survives', () => {
 
   test('the by-lift view is still there behind the toggle', async ({ page }) => {
     await goToTab(page, 'Today');
-    await page.getByRole('button', { name: /^(Start workout|Train anyway)$/ }).click();
+    await page.getByRole('button', { name: /^(Start .+|Train anyway)$/ }).click();
     await goToTab(page, 'Train');
     await page.getByRole('button', { name: 'Log set' }).click();
     await finishSession(page);

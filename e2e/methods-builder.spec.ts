@@ -19,8 +19,7 @@ type StoredSlot = {
 type StoredRoutine = { name: string; slots: StoredSlot[] };
 
 async function openBuilder(page: Page) {
-  await goToTab(page, 'Today');
-  await page.getByRole('button', { name: 'Open workout library' }).click();
+  await goToTab(page, 'Workouts');
   await page.getByRole('button', { name: /^Edit/ }).first().click();
   await expect(builder(page)).toBeVisible();
 }

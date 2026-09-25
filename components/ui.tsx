@@ -3,9 +3,18 @@
 // Shared primitives. Everything visual comes from lib/tokens — no hex values
 // and no dimensions live in a component.
 
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from 'react';
 import { parseEntry } from '@/lib/numberEntry';
-import { C, FONT, R, SCRIM, SHADOW, TOUCH, Z, num, onInk } from '@/lib/tokens';
+import { C, FONT, R, ROW_COMPACT, SCRIM, SHADOW, T, TOUCH, Z, num, onInk } from '@/lib/tokens';
+import { Icon } from './icons';
 
 export function Card({
   children,
@@ -37,10 +46,10 @@ export function Card({
   );
 }
 
-/** The 9px all-caps label used above every metric in the design. */
+/** The small all-caps label that heads a section or a metric. */
 export function Eyebrow({ children, color = C.muted, style }: { children: ReactNode; color?: string; style?: CSSProperties }) {
   return (
-    <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: '.16em', color, textTransform: 'uppercase', ...style }}>
+    <span style={{ fontSize: T.xs, fontWeight: 800, letterSpacing: '.16em', color, textTransform: 'uppercase', ...style }}>
       {children}
     </span>
   );
@@ -49,7 +58,7 @@ export function Eyebrow({ children, color = C.muted, style }: { children: ReactN
 export function ScreenTitle({ children, right }: { children: ReactNode; right?: ReactNode }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-      <h1 style={{ fontSize: 22, fontWeight: 800, margin: 0, letterSpacing: '-0.02em' }}>{children}</h1>
+      <h1 style={{ fontSize: T.xl, fontWeight: 800, margin: 0, letterSpacing: '-0.02em' }}>{children}</h1>
       {right}
     </div>
   );
@@ -59,7 +68,7 @@ export function Tag({ children, bg, fg }: { children: ReactNode; bg: string; fg:
   return (
     <span
       style={{
-        fontSize: 9,
+        fontSize: T.xs,
         fontWeight: 800,
         letterSpacing: '.08em',
         padding: '4px 7px',
@@ -87,16 +96,19 @@ type ButtonProps = {
    * without changing the button's role, so it is still found as a button.
    */
   pressed?: boolean;
+  /** For a row that opens to show more under it. */
+  expanded?: boolean;
 };
 
 /** Base button. Resets the browser's styling and inherits the app font. */
-export function Btn({ onClick, children, style, label, disabled, type = 'button', pressed }: ButtonProps) {
+export function Btn({ onClick, children, style, label, disabled, type = 'button', pressed, expanded }: ButtonProps) {
   return (
     <button
       type={type}
       onClick={onClick}
       aria-label={label}
       aria-pressed={pressed}
+      aria-expanded={expanded}
       disabled={disabled}
       style={{
         fontFamily: FONT,
@@ -137,7 +149,7 @@ export function Pill({
         height: 38,
         padding: '0 14px',
         borderRadius: R.chip,
-        fontSize: 12.5,
+        fontSize: T.sm,
         fontWeight: 800,
         background: on ? C.ink : C.card,
         border: `1px solid ${on ? C.ink : C.lineStrong}`,
@@ -158,16 +170,16 @@ export function Pill({
  * promise a screen reader something that never happens. Same shape as the dark
  * InkSegmented.
  */
-export function Segmented<T extends string>({
+export function Segmented<V extends string>({
   value,
   options,
   onChange,
   label,
   itemWidth,
 }: {
-  value: T;
-  options: { value: T; label: string }[];
-  onChange: (value: T) => void;
+  value: V;
+  options: { value: V; label: string }[];
+  onChange: (value: V) => void;
   /** Names the group for a screen reader, e.g. "Units". */
   label: string;
   itemWidth?: number;
@@ -190,7 +202,7 @@ export function Segmented<T extends string>({
               flex: itemWidth ? 'none' : 1,
               height: TOUCH,
               borderRadius: 8,
-              fontSize: 12.5,
+              fontSize: T.sm,
               fontWeight: 800,
               background: on ? C.card : 'transparent',
               // ink60, not muted or tertiary: those read at 2.9:1 and 4.3:1 on
@@ -207,7 +219,7 @@ export function Segmented<T extends string>({
   );
 }
 
-/** A big number with its unit, used across Today, History and Tools. */
+/** A big number with its unit, used across Today and History. */
 export function Metric({
   label,
   value,
@@ -239,9 +251,9 @@ export function Metric({
       <Eyebrow style={{ letterSpacing: '.12em' }}>{label}</Eyebrow>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 2 }}>
         <span style={{ fontSize: 25, fontWeight: 800, lineHeight: 1.05, color, ...num }}>{value}</span>
-        {unit && <span style={{ fontSize: 11, fontWeight: 700, color: C.tertiary }}>{unit}</span>}
+        {unit && <span style={{ fontSize: T.xs, fontWeight: 700, color: C.tertiary }}>{unit}</span>}
       </div>
-      <span style={{ fontSize: 10, fontWeight: 600, color: subColor }}>{sub ?? ' '}</span>
+      <span style={{ fontSize: T.xs, fontWeight: 600, color: subColor }}>{sub ?? ' '}</span>
     </div>
   );
 }
@@ -255,7 +267,7 @@ export function Empty({ children }: { children: ReactNode }) {
         borderRadius: R.chip,
         padding: 18,
         textAlign: 'center',
-        fontSize: 12.5,
+        fontSize: T.sm,
         color: C.tertiary,
         fontWeight: 700,
         lineHeight: 1.5,
@@ -382,7 +394,7 @@ export function HeroEyebrow({
 }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
-      <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '.16em', textTransform: 'uppercase', color }}>{children}</span>
+      <span style={{ fontSize: T.xs, fontWeight: 800, letterSpacing: '.16em', textTransform: 'uppercase', color }}>{children}</span>
       {right !== undefined && (
         <span style={{ fontSize: 11.5, fontWeight: 700, color: onInk.muted, whiteSpace: 'nowrap', ...num }}>{right}</span>
       )}
@@ -403,6 +415,7 @@ export function HeroNumeral({
   color = C.amber,
   label,
   labelColor = onInk.text,
+  labelSize = 17,
   sub,
   subColor = onInk.muted,
   ariaLabel,
@@ -414,6 +427,8 @@ export function HeroNumeral({
   /** Line one beside the number: 17px, white unless `labelColor` says otherwise. */
   label?: ReactNode;
   labelColor?: string;
+  /** Larger where the label is a state word that has to be read at a glance, such as Today's readiness band. */
+  labelSize?: number;
   /** Line two, smaller: context such as "fatigue 41" or "↑ 9% on last week". */
   sub?: ReactNode;
   subColor?: string;
@@ -430,8 +445,8 @@ export function HeroNumeral({
           // The bottom padding lines the label up with the numeral's baseline
           // rather than the bottom of its box, which the tight line-height leaves lower.
           <div style={{ display: 'flex', flexDirection: 'column', gap: 3, paddingBottom: big ? 8 : 6, whiteSpace: 'nowrap' }}>
-            {label !== undefined && <span style={{ fontSize: 17, fontWeight: 800, color: labelColor, ...num }}>{label}</span>}
-            {sub !== undefined && <span style={{ fontSize: 12.5, fontWeight: 700, color: subColor, ...num }}>{sub}</span>}
+            {label !== undefined && <span style={{ fontSize: labelSize, fontWeight: 800, color: labelColor, ...num }}>{label}</span>}
+            {sub !== undefined && <span style={{ fontSize: T.sm, fontWeight: 700, color: subColor, ...num }}>{sub}</span>}
           </div>
         )}
       </div>
@@ -441,7 +456,7 @@ export function HeroNumeral({
 
 /** A sentence of body copy inside a hero. */
 export function HeroText({ children, maxWidth }: { children: ReactNode; maxWidth?: number }) {
-  return <p style={{ margin: 0, paddingTop: 8, fontSize: 14, lineHeight: 1.45, color: onInk.body, maxWidth }}>{children}</p>;
+  return <p style={{ margin: 0, paddingTop: 8, fontSize: T.md, lineHeight: 1.45, color: onInk.body, maxWidth }}>{children}</p>;
 }
 
 /**
@@ -451,15 +466,15 @@ export function HeroText({ children, maxWidth }: { children: ReactNode; maxWidth
  * other pickers behave: each one is still found and announced as a button,
  * and says whether it is the one showing.
  */
-export function HeroTabs<T extends string>({
+export function HeroTabs<V extends string>({
   value,
   options,
   onChange,
   label,
 }: {
-  value: T;
-  options: { value: T; label: string }[];
-  onChange: (value: T) => void;
+  value: V;
+  options: { value: V; label: string }[];
+  onChange: (value: V) => void;
   /** Names the group for a screen reader, e.g. "Plan view". */
   label: string;
 }) {
@@ -538,10 +553,10 @@ export function Section({
   return (
     <section style={{ display: 'flex', flexDirection: 'column' }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, paddingBottom: 8 }}>
-        <h2 style={{ margin: 0, fontSize: 10.5, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase', color: titleColor, ...num }}>
+        <h2 style={{ margin: 0, fontSize: T.xs, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase', color: titleColor, ...num }}>
           {title}
         </h2>
-        {right !== undefined && <span style={{ fontSize: 11.5, fontWeight: 700, color: C.tertiary }}>{right}</span>}
+        {right !== undefined && <span style={{ fontSize: T.hint, fontWeight: 700, color: C.tertiary, ...num }}>{right}</span>}
       </div>
       {children}
     </section>
@@ -568,6 +583,7 @@ export function Row({
   label,
   dark = false,
   titleSize = 15,
+  compact = false,
   children,
   style,
 }: {
@@ -580,6 +596,12 @@ export function Row({
   label?: string;
   dark?: boolean;
   titleSize?: number;
+  /**
+   * For a row whose `right` holds a 44px control. The control already makes
+   * the row tall enough to hit, so the padding shrinks and the row sits at
+   * `ROW_COMPACT` instead of growing to 44 plus 24 of padding.
+   */
+  compact?: boolean;
   /** Rendered under the main line, e.g. the inline actions a row expands into. */
   children?: ReactNode;
   style?: CSSProperties;
@@ -589,8 +611,8 @@ export function Row({
     alignItems: 'center',
     gap: 10,
     width: '100%',
-    minHeight: TOUCH,
-    padding: '12px 0',
+    minHeight: compact ? ROW_COMPACT : TOUCH,
+    padding: compact ? `${(ROW_COMPACT - TOUCH) / 2}px 0` : '12px 0',
     textAlign: 'left',
     color: dark ? onInk.text : C.ink,
   };
@@ -753,7 +775,7 @@ export function InkChip({
         minWidth: TOUCH,
         padding: '0 13px',
         borderRadius: R.chip,
-        fontSize: 12.5,
+        fontSize: T.sm,
         fontWeight: 800,
         display: 'inline-flex',
         alignItems: 'center',
@@ -768,21 +790,21 @@ export function InkChip({
       }}
     >
       {children}
-      {meta !== undefined && <span style={{ fontSize: 10.5, opacity: 0.7, ...num }}>{meta}</span>}
+      {meta !== undefined && <span style={{ fontSize: T.xs, ...num }}>{meta}</span>}
     </Btn>
   );
 }
 
 /** The segmented control on ink: set type, and anywhere else one of a few options is picked. */
-export function InkSegmented<T extends string>({
+export function InkSegmented<V extends string>({
   value,
   options,
   onChange,
   label,
 }: {
-  value: T;
-  options: { value: T; label: string }[];
-  onChange: (value: T) => void;
+  value: V;
+  options: { value: V; label: string }[];
+  onChange: (value: V) => void;
   /** Names the group for a screen reader, e.g. "Set type". */
   label: string;
 }) {
@@ -799,7 +821,7 @@ export function InkSegmented<T extends string>({
               flex: 1,
               height: TOUCH,
               borderRadius: 9,
-              fontSize: 12.5,
+              fontSize: T.sm,
               fontWeight: 800,
               background: on ? C.white : 'transparent',
               color: on ? C.ink : onInk.body,
@@ -828,7 +850,7 @@ export function StepperTile({
   onClick: () => void;
   /** e.g. "Decrease weight". */
   label: string;
-  /** Usually "−" or "+". */
+  /** Usually a minus or plus icon. */
   children: ReactNode;
   /** A number of pixels, or 'flex' to share a row equally with its neighbours. */
   width?: number | 'flex';
@@ -848,7 +870,7 @@ export function StepperTile({
         border: `1px solid ${onInk.control}`,
         background: 'transparent',
         color: onInk.text,
-        fontSize: 26,
+        fontSize: T.xxl,
         fontWeight: 600,
         display: 'flex',
         alignItems: 'center',
@@ -1024,6 +1046,84 @@ export function EditableNumber({
 }
 
 // ─────────────────────────────────────────────────────────────
+// Long press
+// ─────────────────────────────────────────────────────────────
+
+/** How long a press has to be held to count as a long press. */
+export const LONG_PRESS_MS = 500;
+
+/**
+ * A long press on a control that also has an ordinary tap: hold − or + to
+ * change the step, hold the rest ring to change the default rest.
+ *
+ * Spread `handlers` onto the element, and start its click handler with
+ * `if (wasLong()) return;` so the tap that ends a long press does not also
+ * count as a tap.
+ *
+ * The browser's context-menu event is the keyboard route: Shift+F10 or the
+ * menu key on a focused control fires it, as does a phone's own long press.
+ * Whichever of it and the timer comes first wins, so a touch never fires twice.
+ */
+export function useLongPress(onLongPress: () => void) {
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pressing = useRef(false);
+  const fired = useRef(false);
+  const latest = useRef(onLongPress);
+  useEffect(() => {
+    latest.current = onLongPress;
+  });
+
+  const cancel = () => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+  };
+  useEffect(() => cancel, []);
+
+  const end = () => {
+    pressing.current = false;
+    cancel();
+  };
+
+  const handlers = {
+    onPointerDown: (event: ReactPointerEvent) => {
+      if (event.pointerType === 'mouse' && event.button !== 0) return;
+      pressing.current = true;
+      fired.current = false;
+      cancel();
+      timer.current = setTimeout(() => {
+        timer.current = null;
+        fired.current = true;
+        latest.current();
+      }, LONG_PRESS_MS);
+    },
+    onPointerUp: end,
+    onPointerLeave: end,
+    onPointerCancel: end,
+    onContextMenu: (event: ReactMouseEvent) => {
+      event.preventDefault();
+      if (!pressing.current) {
+        // From the keyboard: no click follows, so nothing to swallow.
+        latest.current();
+        return;
+      }
+      if (fired.current) return;
+      cancel();
+      fired.current = true;
+      latest.current();
+    },
+  };
+
+  /** True once per long press, for the click that ends it to ignore. */
+  const wasLong = () => {
+    const was = fired.current;
+    fired.current = false;
+    return was;
+  };
+
+  return { handlers, wasLong };
+}
+
+// ─────────────────────────────────────────────────────────────
 // Dark bottom sheet
 // ─────────────────────────────────────────────────────────────
 
@@ -1072,6 +1172,7 @@ export function DarkSheet({
   titleSize = 26,
   closeText,
   gap = 18,
+  top,
   children,
 }: {
   open: boolean;
@@ -1085,6 +1186,12 @@ export function DarkSheet({
   titleSize?: number;
   closeText?: string;
   gap?: number;
+  /**
+   * Pin the panel's top edge this far below the top of the screen, for a sheet
+   * that is a place (Settings) rather than a question. Without it the panel is
+   * as tall as its content.
+   */
+  top?: number;
   children: ReactNode;
 }) {
   useEscapeKey(open, onClose);
@@ -1114,7 +1221,7 @@ export function DarkSheet({
         onClick={(event) => event.stopPropagation()}
         style={{
           width: '100%',
-          maxHeight: 'calc(100% - 44px)',
+          ...(top === undefined ? { maxHeight: 'calc(100% - 44px)' } : { height: `calc(100% - ${top}px)` }),
           overflowY: 'auto',
           background: C.ink,
           color: onInk.text,
@@ -1134,20 +1241,20 @@ export function DarkSheet({
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
             {eyebrow !== undefined && (
-              <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '.16em', textTransform: 'uppercase', color: onInk.muted, ...num }}>
+              <span style={{ fontSize: T.xs, fontWeight: 800, letterSpacing: '.16em', textTransform: 'uppercase', color: onInk.muted, ...num }}>
                 {eyebrow}
               </span>
             )}
             <h2 style={{ margin: 0, fontSize: titleSize, fontWeight: 800, letterSpacing: '-0.02em' }}>{title}</h2>
-            {sub !== undefined && <span style={{ fontSize: 12.5, fontWeight: 600, color: onInk.muted }}>{sub}</span>}
+            {sub !== undefined && <span style={{ fontSize: T.sm, fontWeight: 600, color: onInk.muted }}>{sub}</span>}
           </div>
           {closeText ? (
-            <InkButton variant="ghost" height={TOUCH} color={onInk.muted} fontSize={14} onClick={onClose}>
+            <InkButton variant="ghost" height={TOUCH} color={onInk.muted} fontSize={T.md} onClick={onClose}>
               {closeText}
             </InkButton>
           ) : (
-            <InkButton shape="circle" height={TOUCH} fontSize={15} label="Close" onClick={onClose}>
-              ✕
+            <InkButton shape="circle" height={TOUCH} label="Close" onClick={onClose}>
+              <Icon name="close" size={16} />
             </InkButton>
           )}
         </div>
@@ -1155,5 +1262,56 @@ export function DarkSheet({
         {children}
       </div>
     </div>
+  );
+}
+
+/**
+ * Asks before something that cannot be taken back: erasing the device,
+ * deleting a workout.
+ *
+ * Only for the irreversible. Anything that can be undone happens straight away
+ * and offers Undo in a toast instead, because a question before every small
+ * change teaches people to tap through questions, and then this one gets
+ * tapped through too.
+ *
+ * Built on the dark sheet rather than the browser's own confirm box, which
+ * looks like a different app, cannot be styled to say which button destroys
+ * things, and some browsers suppress altogether. The destructive button is
+ * the one in red, and it is second: the thumb lands on Cancel first.
+ */
+export function ConfirmSheet({
+  open,
+  title,
+  eyebrow,
+  body,
+  confirmLabel,
+  cancelLabel = 'Cancel',
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean;
+  /** The question, e.g. "Delete Push A?". Also the dialog's accessible name. */
+  title: string;
+  eyebrow?: ReactNode;
+  /** What will be lost, and what will not. */
+  body: ReactNode;
+  /** Says what happens, e.g. "Delete workout" — never just "OK". */
+  confirmLabel: string;
+  cancelLabel?: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <DarkSheet open={open} onClose={onCancel} title={title} eyebrow={eyebrow}>
+      <p style={{ margin: 0, fontSize: T.md, lineHeight: 1.45, color: onInk.body }}>{body}</p>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <InkButton onClick={onCancel} style={{ flex: 1 }}>
+          {cancelLabel}
+        </InkButton>
+        <InkButton onClick={onConfirm} color={C.redLight} style={{ flex: 1 }}>
+          {confirmLabel}
+        </InkButton>
+      </div>
+    </DarkSheet>
   );
 }

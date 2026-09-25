@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { completeSetup, finishSession, goToTab, gotoApp, skipRest } from './helpers';
+import { completeSetup, finishSession, goToTab, gotoApp, openSettings, settingsSheet, skipRest } from './helpers';
 
 // A set of pull-ups is stored as zero kilograms. Once the lifter enters their
 // bodyweight, the fatigue model counts the share of it each movement moves,
@@ -9,7 +9,7 @@ import { completeSetup, finishSession, goToTab, gotoApp, skipRest } from './help
 
 async function startTraining(page: Page) {
   await goToTab(page, 'Today');
-  await page.getByRole('button', { name: /^(Start workout|Train anyway)$/ }).click();
+  await page.getByRole('button', { name: /^(Start .+|Train anyway)$/ }).click();
   await goToTab(page, 'Train');
 }
 
@@ -25,10 +25,16 @@ async function typeInto(page: Page, figure: ReturnType<Page['getByRole']>, text:
   await page.keyboard.press('Enter');
 }
 
+/** Type a bodyweight in Settings, and leave the sheet open on it. */
 async function setBodyweight(page: Page, kg: string) {
-  await goToTab(page, 'Tools');
+  await openSettings(page);
   await typeInto(page, page.getByRole('button', { name: /^Your bodyweight .*, tap to type$/ }), kg);
   await expect(page.getByRole('button', { name: `Your bodyweight ${kg} kg, tap to type` })).toBeVisible();
+}
+
+async function closeSettings(page: Page) {
+  await page.keyboard.press('Escape');
+  await expect(settingsSheet(page)).toBeHidden();
 }
 
 /** Three sets of the first lift at bodyweight, then finish. */
@@ -65,15 +71,15 @@ test.describe('pull-ups', () => {
   test('move readiness once a bodyweight is entered, and the number is kept', async ({ page }) => {
     await trainThreeAtBodyweight(page);
     await setBodyweight(page, '80');
+    await closeSettings(page);
 
-    await goToTab(page, 'Today');
     await expect(readiness(page)).toHaveCount(1);
     await expect(page.getByText('Nothing to read yet')).toHaveCount(0);
 
     await page.reload();
-    await goToTab(page, 'Tools');
+    await openSettings(page);
     await expect(page.getByRole('button', { name: 'Your bodyweight 80 kg, tap to type' })).toBeVisible();
-    await goToTab(page, 'Today');
+    await closeSettings(page);
     await expect(readiness(page)).toHaveCount(1);
   });
 
@@ -90,7 +96,7 @@ test.describe('pull-ups', () => {
     await setBodyweight(page, '80');
     await typeInto(page, page.getByRole('button', { name: 'Your bodyweight 80 kg, tap to type' }), '0');
     await expect(page.getByRole('button', { name: 'Your bodyweight not set, tap to type' })).toBeVisible();
-    await goToTab(page, 'Today');
+    await closeSettings(page);
     await expect(page.getByText('Nothing to read yet')).toBeVisible();
   });
 });
@@ -104,6 +110,8 @@ test.describe('a lift marked as bodyweight', () => {
 
   test('still reads "BW + 10 kg" after a reload, until the mark is taken off', async ({ page }) => {
     await startTraining(page);
+    // Not a bodyweight lift yet, so the chip waits until the weight is at zero.
+    await typeInto(page, weightFigure(page), '0');
     await page.getByRole('button', { name: 'Bodyweight', exact: true }).click();
     await expect(weightFigure(page)).toHaveText('Bodyweight');
     await typeInto(page, weightFigure(page), '10');

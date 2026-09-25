@@ -6,10 +6,10 @@
 // gets generated or says where a decision lives; nothing here is a tour.
 
 import { useState } from 'react';
-import { C, HERO_SIZE, PH, R, num, onInk } from '@/lib/tokens';
+import { C, PH, R, T, TOUCH, num, onInk } from '@/lib/tokens';
 import type { Phase, Unit } from '@/lib/types';
 import { useBompa } from '@/state/BompaContext';
-import { Btn, Hero, HeroEyebrow, HeroNumeral, InkButton, Row, Section, Sheet } from '@/components/ui';
+import { Btn, Row, Section } from '@/components/ui';
 import { StartingMaxes } from '@/components/StartingMaxes';
 
 const BLOCK_TYPES: { id: Phase; label: string; sub: string }[] = [
@@ -65,45 +65,40 @@ export function Setup() {
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', background: C.screen, overflow: 'hidden' }}>
-      {/* The hero scrolls away with the sheet; only the footer stays put, so
+      {/* The header scrolls away with the step; only the footer stays put, so
           Back and Next never move under your thumb. */}
       <div className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
-        <Hero gap={12} style={{ paddingTop: 12 }}>
-          <HeroEyebrow
-            right={
-              <InkButton variant="ghost" height={40} fontSize={13} color={onInk.muted} onClick={b.skipSetup}>
-                Skip
-              </InkButton>
-            }
-          >
-            Setting up · {current.name}
-          </HeroEyebrow>
-
-          {/* Progress, so the flow states its own length rather than feeling endless. */}
-          <div aria-hidden style={{ display: 'flex', gap: 4 }}>
-            {STEPS.map((s, i) => (
-              <span key={s.name} style={{ flex: 1, height: 4, borderRadius: 2, background: i <= step ? C.amber : onInk.line }} />
-            ))}
+        {/* A light header rather than a dark hero with a giant step number:
+            the number was the loudest thing on screen and the least useful.
+            What matters is the question, so the title leads. */}
+        <header style={{ padding: '10px 18px 6px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+            <p style={{ margin: 0, fontSize: T.sm, fontWeight: 700, color: C.tertiary, ...num }}>
+              <span>
+                Step {step + 1} of {STEPS.length}
+              </span>{' '}
+              · {current.name}
+            </p>
+            <Btn onClick={b.skipSetup} style={{ height: TOUCH, minWidth: TOUCH, padding: '0 4px', marginRight: -4, fontSize: T.md, fontWeight: 800, color: C.ink60 }}>
+              Skip
+            </Btn>
           </div>
-
-          <div style={{ paddingTop: 8 }}>
-            <HeroNumeral
-              value={String(step + 1).padStart(2, '0')}
-              size={HERO_SIZE.step}
-              ariaLabel={`Step ${step + 1} of ${STEPS.length}`}
-            />
+          <h1 style={{ margin: 0, fontSize: T.xxl, fontWeight: 800, lineHeight: 1.1, letterSpacing: '-0.02em' }}>{current.title}</h1>
+          <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.5, color: C.ink60 }}>{current.sub}</p>
+          {/* Progress, so the flow states its own length rather than feeling
+              endless. Hidden from screen readers: "Step 1 of 5" above says it. */}
+          <div aria-hidden style={{ height: 4, borderRadius: R.bar, background: C.line, overflow: 'hidden', marginTop: 4 }}>
+            <span style={{ display: 'block', height: '100%', width: `${((step + 1) / STEPS.length) * 100}%`, borderRadius: R.bar, background: C.ink }} />
           </div>
-          <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, lineHeight: 1.1, letterSpacing: '-0.02em', color: onInk.text }}>{current.title}</h1>
-          <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.5, color: onInk.body }}>{current.sub}</p>
-        </Hero>
+        </header>
 
-        <Sheet>
+        <div style={{ flex: 1, padding: '16px 18px 24px', display: 'flex', flexDirection: 'column', gap: 22 }}>
           {step === 0 && <UnitsStep />}
           {step === 1 && <StartingMaxes />}
           {step === 2 && <WorkoutsStep />}
           {step === 3 && <BlockStep perWeek={perWeek} setPerWeek={setPerWeek} rotation={rotation} />}
           {step === 4 && <DoneStep />}
-        </Sheet>
+        </div>
       </div>
 
       <div
@@ -119,7 +114,7 @@ export function Setup() {
         {step > 0 && (
           <Btn
             onClick={() => setStep(step - 1)}
-            style={{ width: 96, height: 54, flex: 'none', borderRadius: R.block, border: `1px solid ${C.lineStrong}`, color: C.ink80, fontSize: 14, fontWeight: 800 }}
+            style={{ width: 96, height: 54, flex: 'none', borderRadius: R.block, border: `1px solid ${C.lineStrong}`, color: C.ink80, fontSize: T.md, fontWeight: 800 }}
           >
             Back
           </Btn>
@@ -127,7 +122,7 @@ export function Setup() {
         <Btn
           onClick={() => (step === LAST ? void finish() : setStep(step + 1))}
           disabled={busy || (step >= 2 && !hasWorkouts)}
-          style={{ flex: 1, height: 54, borderRadius: R.block, background: C.amber, color: C.ink, fontSize: 16, fontWeight: 800 }}
+          style={{ flex: 1, height: 54, borderRadius: R.block, background: C.amber, color: C.ink, fontSize: T.lg, fontWeight: 800 }}
         >
           {step === LAST ? 'Build my plan' : 'Next'}
         </Btn>
@@ -167,7 +162,7 @@ function UnitsStep() {
             }}
           >
             <span style={{ fontSize: 44, fontWeight: 800, letterSpacing: '-0.03em' }}>{opt.label}</span>
-            <span style={{ fontSize: 12.5, fontWeight: 700, color: on ? onInk.muted : C.tertiary }}>{opt.word}</span>
+            <span style={{ fontSize: T.sm, fontWeight: 700, color: on ? onInk.muted : C.tertiary }}>{opt.word}</span>
           </Btn>
         );
       })}
@@ -217,7 +212,7 @@ function WorkoutsStep() {
         <Btn
           onClick={create}
           disabled={busy}
-          style={{ height: 50, marginTop: 6, borderRadius: R.control, background: C.ink, color: C.white, fontSize: 14, fontWeight: 800 }}
+          style={{ height: 50, marginTop: 6, borderRadius: R.control, background: C.ink, color: C.white, fontSize: T.md, fontWeight: 800 }}
         >
           + New workout
         </Btn>
@@ -225,7 +220,7 @@ function WorkoutsStep() {
 
       {b.templates.length > 0 && (
         <Section title="Or start from a template">
-          <p style={{ margin: 0, padding: '0 0 8px', fontSize: 12.5, lineHeight: 1.5, color: C.tertiary }}>
+          <p style={{ margin: 0, padding: '0 0 8px', fontSize: T.sm, lineHeight: 1.5, color: C.tertiary }}>
             Copies it into a workout of your own. The template itself stays as it is.
           </p>
           {b.templates.map((template) => (
@@ -234,7 +229,7 @@ function WorkoutsStep() {
               title={template.name}
               titleSize={14}
               lead={<PhaseSquare phase={template.phase} />}
-              right={<span style={{ fontSize: 12.5, fontWeight: 800, color: C.amberDark }}>Copy</span>}
+              right={<span style={{ fontSize: T.sm, fontWeight: 800, color: C.amberDark }}>Copy</span>}
               label={`Copy ${template.name} into your workouts`}
               onClick={() => void b.copyTemplate(template.id)}
             />
@@ -262,7 +257,7 @@ function BlockStep({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <NumberPicker values={[2, 3, 4, 5, 6]} value={perWeek} onChange={setPerWeek} label="Sessions a week" />
           {rotation.length > 0 && (
-            <span style={{ fontSize: 12.5, lineHeight: 1.5, color: C.tertiary }}>
+            <span style={{ fontSize: T.sm, lineHeight: 1.5, color: C.tertiary }}>
               Week one:{' '}
               {Array.from({ length: perWeek }, (_, i) => b.routineById(rotation[i % rotation.length]!)?.name ?? '—').join(' · ')}
             </span>
@@ -325,9 +320,8 @@ function DoneStep() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       <div style={{ display: 'flex', flexDirection: 'column' }}>
-        <Signpost where="Plan → Mesocycle" what="Change the block style or add another one. This is where periodization lives." />
+        <Signpost where="Plan" what="This week's sessions, what I've changed and why, your meet, and adding another block. This is where periodization lives." />
         <Signpost where="Today" what="Your readiness, with the fitness and fatigue curve behind it." />
-        <Signpost where="Plan → Calendar" what="This week's sessions, and what I've changed in your plan and why." />
         <Signpost where="Anywhere" what="Planned days are a guide. Train when you want — I keep the week's arithmetic honest either way." />
       </div>
 
@@ -348,8 +342,9 @@ function DoneStep() {
 function Signpost({ where, what }: { where: string; what: string }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 3, padding: '13px 0', borderTop: `1px solid ${C.line}` }}>
-      <span style={{ fontSize: 13, fontWeight: 800, color: C.amberDark }}>{where}</span>
-      <span style={{ fontSize: 14, lineHeight: 1.5, color: C.ink80 }}>{what}</span>
+      {/* Ink, not amber: a signpost names a place, it is not something to tap. */}
+      <span style={{ fontSize: 13, fontWeight: 800, color: C.ink }}>{where}</span>
+      <span style={{ fontSize: T.md, lineHeight: 1.5, color: C.ink80 }}>{what}</span>
     </div>
   );
 }

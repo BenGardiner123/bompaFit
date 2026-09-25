@@ -15,12 +15,13 @@ import {
   recentLiftDays,
   volumeUnit,
 } from '@/lib/history';
-import { C, HERO_SIZE, num, onInk } from '@/lib/tokens';
+import { C, HERO_SIZE, T, num, onInk } from '@/lib/tokens';
 import type { Unit } from '@/lib/types';
 import { weightShort } from '@/lib/bodyweight';
 import { useBompa } from '@/state/BompaContext';
 import { Empty, Hero, HeroEyebrow, HeroNumeral, HeroTabs, InkChip, Row, Scroller, Section, Sheet } from '@/components/ui';
 import { SessionHistory } from '@/components/screens/SessionHistory';
+import { StartingMaxes } from '@/components/StartingMaxes';
 
 type View = 'session' | 'lift';
 
@@ -76,7 +77,7 @@ function LiftHistory({ tabs }: { tabs: ReactNode }) {
   const recent = recentLiftDays(rows);
   const nothingLogged = records.length === 0;
 
-  const figure = e1rm > 0 ? String(toDisplay(e1rm, s.unit)) : '—';
+  const figure = String(toDisplay(e1rm, s.unit));
   let sub = 'no trend yet';
   let subColor: string = onInk.muted;
   if (nothingLogged) sub = e1rm > 0 ? 'your starting max' : 'nothing logged yet';
@@ -106,20 +107,30 @@ function LiftHistory({ tabs }: { tabs: ReactNode }) {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingTop: 4 }}>
             <HeroEyebrow>Estimated 1RM</HeroEyebrow>
-            <HeroNumeral
-              value={figure}
-              size={HERO_SIZE.detail}
-              label={s.unit}
-              sub={sub}
-              subColor={subColor}
-              ariaLabel={e1rm > 0 ? `${name}: estimated one-rep max ${figure} ${s.unit}, ${sub}` : `${name}: no estimated max yet`}
-            />
+            {e1rm > 0 ? (
+              <HeroNumeral
+                value={figure}
+                size={HERO_SIZE.detail}
+                color={onInk.text}
+                label={s.unit}
+                sub={sub}
+                subColor={subColor}
+                ariaLabel={`${name}: estimated one-rep max ${figure} ${s.unit}, ${sub}`}
+              />
+            ) : (
+              // Words, not a placeholder figure: a dash at hero size draws as a
+              // solid white bar and reads as something broken.
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingTop: 4 }}>
+                <span style={{ fontSize: T.xxl, fontWeight: 800, letterSpacing: '-0.02em', color: onInk.text }}>No estimate yet</span>
+                <span style={{ fontSize: T.sm, fontWeight: 700, color: subColor }}>{sub}</span>
+              </div>
+            )}
           </div>
 
           {spark.length > 1 ? (
             <div>
               <svg viewBox="0 0 300 82" preserveAspectRatio="none" style={{ width: '100%', height: 72, display: 'block' }} aria-hidden>
-                <polyline points={spark.join(' ')} fill="none" stroke={C.amber} strokeWidth={2.5} strokeLinejoin="round" />
+                <polyline points={spark.join(' ')} fill="none" stroke={onInk.text} strokeWidth={2.5} strokeLinejoin="round" />
               </svg>
               {/* Each label sits where its month begins, nudged left by its own
                   width in proportion, so the first hugs the left edge and none
@@ -132,7 +143,7 @@ function LiftHistory({ tabs }: { tabs: ReactNode }) {
                       position: 'absolute',
                       left: `${t.x * 100}%`,
                       transform: `translateX(-${t.x * 100}%)`,
-                      fontSize: 11,
+                      fontSize: T.xs,
                       fontWeight: 700,
                       color: onInk.muted,
                     }}
@@ -144,13 +155,16 @@ function LiftHistory({ tabs }: { tabs: ReactNode }) {
             </div>
           ) : (
             spark.length === 1 && (
-              <span style={{ fontSize: 12, fontWeight: 600, color: onInk.muted }}>One session logged — the curve starts at two.</span>
+              <span style={{ fontSize: T.caption, fontWeight: 600, color: onInk.muted }}>One session logged — the curve starts at two.</span>
             )
           )}
         </div>
       </Hero>
 
       <Sheet>
+        {/* The maxes you declared sit with the maxes your sets earn, so the
+            number a percentage workout reads from is found where maxes are. */}
+        <StartingMaxes />
         {nothingLogged ? (
           <Empty>
             Nothing logged for {name} yet.

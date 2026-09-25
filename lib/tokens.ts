@@ -57,6 +57,12 @@ export const C = {
   greenDark: '#047857',
   greenBg: '#ECFDF5',
   greenLight: '#34D399',
+  /**
+   * The border of a done chip on a light surface. `greenBg` alone is too close
+   * to the white card to read as a shape, and `green` as a border shouts; this
+   * sits between them.
+   */
+  greenBd: '#A7E3CC',
 
   red: '#EF4444',
   /**
@@ -79,10 +85,7 @@ export const C = {
   blue: '#3B82F6',
   blueDark: '#2563EB',
   blueBg: '#EFF6FF',
-  /**
-   * The hypertrophy colour for a number sitting on `ink`, matching how
-   * `greenLight` and `amberLight` stand in for their phases there. 7.3:1 on ink.
-   */
+  /** Blue for text and marks on `ink`. 7.3:1 there. */
   blueLight: '#60A5FA',
 
   grey: '#9CA3AF',
@@ -113,18 +116,40 @@ export const onInk = {
   line: C.ink80,
   /** Outline borders of controls, and the unselected dot. */
   control: C.ink60,
+  /**
+   * A card one step up from ink that is not a control: the just-logged set on
+   * the rest screen. Darker than `line`, so a hairline drawn in `line` still
+   * shows round its edge.
+   */
+  raised: '#1F1F1A',
 } as const;
+
+/**
+ * Marks drawn on an amber fill. The selected lift chip on Train is amber, and
+ * its progress bar sits inside it: ink at 22% for the track, so the bar reads
+ * as part of the chip rather than a stripe across it.
+ */
+export const onAmber = { track: 'rgba(20,20,16,.22)' } as const;
 
 /** Background dimming behind every bottom sheet. Deeper than a light scrim so the ink sheet still stands off the dark Train screen. */
 export const SCRIM = 'rgba(0,0,0,.55)';
 
-/** Training-phase colours, used consistently across calendar, library and charts. */
+/**
+ * Training-phase colours: the macrocycle strip, block rows, the library's
+ * phase squares.
+ *
+ * Muted, light, and deliberately none of the status colours. Phases used to be
+ * blue, green, amber and red, which made a strength block the same green as a
+ * finished set and a peak block look like an error. Status colours now mean
+ * state only (done, danger, needs you), so a phase has to be told apart from
+ * them at a glance. A test pins that none of these equals one.
+ */
 export const PH: Record<Phase, string> = {
-  hypertrophy: C.blue,
-  strength: C.green,
-  power: C.amber,
-  peak: C.red,
-  deload: C.grey,
+  hypertrophy: '#C9BCE6', // muted lilac
+  strength: '#9ED3CB', // muted teal
+  power: '#E6BFA8', // clay
+  peak: '#A9BDE8', // slate blue
+  deload: '#D6D2C8', // warm grey
 };
 
 export const PHASE_LABEL: Record<Phase, string> = {
@@ -136,35 +161,72 @@ export const PHASE_LABEL: Record<Phase, string> = {
 };
 
 /**
- * Text colour for a label sitting *on* a phase-coloured fill.
- *
- * The design puts white on these bars, which measures 2.1:1 on the amber and
- * 2.6:1 on the green — unreadable at the 9.5px the strip uses. Dark ink clears
- * 4.9:1 on every one of them. A deliberate departure from the design.
+ * Text colour for a label sitting *on* a phase-coloured fill. Every phase fill
+ * is light, so ink clears 9:1 on all of them and white fails on all of them.
  */
 export const ON_PHASE = C.ink;
 
 /**
- * A phase's colour for a number printed on `ink`. The base phase colours are
- * mid-tones picked for fills; as text on dark, blue and red fall short, so each
- * phase gets its lighter sibling here.
+ * A phase's colour for a number printed on `ink`. The phase fills are all light
+ * enough to read as text on ink, so these are the same values. The name stays
+ * so a component says which job the colour is doing.
  */
-export const PH_ON_INK: Record<Phase, string> = {
-  hypertrophy: C.blueLight,
-  strength: C.greenLight,
-  power: C.amberLight,
-  peak: C.redLight,
-  deload: C.lineStrong,
-};
+export const PH_ON_INK: Record<Phase, string> = { ...PH };
 
-/** Short labels for the macrocycle strip, where space is 3 characters. */
+/** Short labels for the macrocycle strip, where space is 3 characters at most. */
 export const PHASE_ABBR: Record<Phase, string> = {
   hypertrophy: 'HYP',
   strength: 'STR',
   power: 'PWR',
-  peak: 'PEAK',
+  peak: 'PK',
   deload: 'D',
 };
+
+/**
+ * The type scale. Every step the app uses more than once lives here, and new
+ * code reaches for one of these rather than a number. The hero numerals have
+ * their own scale in `HERO_SIZE`.
+ *
+ * Some older screens still write these same values as literals. Moving them
+ * over changes nothing on screen; it just has not been done everywhere yet.
+ *
+ * `xs` is a floor, not just the smallest step: nothing is set smaller than
+ * 11px. Labels at 9 and 10px could not be read at arm's length on a bench,
+ * which is where this app gets read. A test scans the components for anything
+ * under it.
+ */
+export const T = {
+  /** Eyebrows, tags, tab labels, units. The floor. */
+  xs: 11,
+  /** Small labels a touch above the floor, such as a tile's caption. */
+  hint: 11.5,
+  /** The line under a row title: a block's dates, a phase's detail, a footnote. */
+  caption: 12,
+  /** Captions, sub-lines, meta. */
+  sm: 12.5,
+  /** Explanatory sentences in a card, and small bold labels such as a unit. */
+  note: 13,
+  /** Sheet buttons and the body copy of an empty state. */
+  copy: 13.5,
+  /** Body text and most buttons. */
+  md: 14,
+  /** Row titles in lists and sheets: a block, a workout, a settings row. */
+  title: 15,
+  /** Row titles and emphasised values. */
+  lg: 16,
+  /** Section figures, such as a metric's value. */
+  xl: 22,
+  /** A count in a summary grid, such as the import preview's table totals. */
+  count: 24,
+  /** Screen and sheet titles. */
+  xxl: 26,
+  /** A number typed straight into a tool, such as the plate calculator's fields. */
+  entry: 34,
+  /** A result that is the point of its card but not the screen's hero, such as the one-rep-max estimate. */
+  stat: 44,
+  /** The large in-card figure, such as reps on Train. */
+  figure: 48,
+} as const;
 
 export const FONT = 'var(--font-geist-sans), Geist, system-ui, sans-serif';
 
@@ -185,6 +247,12 @@ export const R = {
   chip: 12,
   small: 10,
   tiny: 7,
+  /** A small text tag, such as a workout's phase tag or a status tag. */
+  tag: 6,
+  /** A phase swatch, and the top corners of a bar in a chart. */
+  swatch: 3,
+  /** A thin progress bar, or a marker drawn on one. */
+  bar: 2,
   pill: 999,
 } as const;
 
@@ -195,15 +263,22 @@ export const R = {
  */
 export const HERO_SIZE = {
   /** Today's readiness. */
-  today: 132,
-  /** The finished-session tonnage. */
-  summary: 120,
-  /** Plan, History by session, the workout library. */
+  today: 120,
+  /** Tomorrow's readiness on the finish summary. Smaller than Today's: it is a forecast, and the verdict above it leads. */
+  summary: 96,
+  /** Plan and History by session. */
   screen: 112,
-  /** History by lift, the Tools interval clock. */
+  /** History by lift, the interval timer. */
   detail: 104,
-  /** Setup's step number and the Train weight. */
+  /** The Train weight. */
   step: 96,
+  /** The rest screen's clock inside its ring. */
+  restClock: 72,
+  /**
+   * The rest screen's last ten seconds, when the count fills the screen. The
+   * loudest number in the app on purpose: it is read from across the room.
+   */
+  restFinal: 240,
 } as const;
 
 /**
@@ -217,6 +292,11 @@ export const Z = {
   rest: 25,
   summary: 28,
   sheet: 30,
+  /**
+   * A toast raised while the Settings sheet is open, so what export and restore
+   * say is not drawn underneath the sheet that caused it.
+   */
+  toastOverSheet: 31,
 } as const;
 
 /**
@@ -224,6 +304,13 @@ export const Z = {
  * at least this tall and wide, even where the design drew it smaller.
  */
 export const TOUCH = 44;
+
+/**
+ * The drawn height of a compact list row, such as a week's slots on Plan. The
+ * trailing 44px control already sets the height, so the row only adds 4px of
+ * air above and below it rather than a full 12px of padding on top.
+ */
+export const ROW_COMPACT = 52;
 
 /** The device viewport the design was drawn against. */
 export const DEVICE = { width: 412, height: 892 } as const;

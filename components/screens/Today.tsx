@@ -1,25 +1,32 @@
 'use client';
 
-import { useState } from 'react';
-import { daysBetween, fmtDayMonth, series, toDisplay } from '@/lib/calc';
-import { volumeUnit } from '@/lib/history';
+import { useState, type CSSProperties } from 'react';
+import { daysBetween, series, toDisplay } from '@/lib/calc';
 import { chipLayout } from '@/lib/supersets';
 import {
+  READY_AT,
   READY_LABEL,
   READY_WORD,
   curveGeometry,
+  daysToMeet,
   historyPhrase,
+  loadWord,
   readinessBand,
+  readinessMarker,
+  readinessScale,
   readinessTrend,
   readySentence,
   trendColour,
   trendPhrase,
   trendWords,
+  type LoadWord,
   type ReadinessBand,
 } from '@/lib/today';
-import { C, HERO_SIZE, PHASE_LABEL, R, SHADOW, TOUCH, num, onInk } from '@/lib/tokens';
+import { C, HERO_SIZE, PHASE_LABEL, R, SHADOW, T, TOUCH, num, onInk } from '@/lib/tokens';
+import type { PlannedSession } from '@/lib/types';
 import { useBompa } from '@/state/BompaContext';
 import { Btn, Hero, HeroEyebrow, HeroNumeral, HeroText, Sheet } from '@/components/ui';
+import { Icon } from '@/components/icons';
 
 /** The readiness word on ink. The light-surface greens and reds are too dark to read there. */
 const READY_ON_INK: Record<ReadinessBand, string> = {
@@ -27,6 +34,34 @@ const READY_ON_INK: Record<ReadinessBand, string> = {
   steady: C.amberLight,
   buried: C.redLight,
 };
+
+/**
+ * The way into Settings. It sits in the eyebrow row, and pulls itself out by
+ * the same amount it adds so the hero stays the height it was: the 44px target
+ * is for the thumb, not for the layout.
+ */
+function SettingsGear({ onOpen }: { onOpen: () => void }) {
+  return (
+    <Btn
+      onClick={onOpen}
+      label="Settings"
+      style={{
+        width: TOUCH,
+        height: TOUCH,
+        margin: '-14px -10px -14px 0',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: onInk.body,
+      }}
+    >
+      <Icon name="gear" size={20} />
+    </Btn>
+  );
+}
+
+/** How many days the curve looks back. A month shows the last block's shape without flattening this week into it. */
+const CURVE_DAYS = 28;
 
 export function Today() {
   const b = useBompa();
@@ -65,13 +100,14 @@ export function Today() {
   // same thing said twice on one screen.
   const insights = b.insights.filter((insight) => insight.text !== sentence);
 
-  const volumeTonnes = metrics.volume7d >= 1000;
+  const load = loadWord(metrics.acwr);
+  const toMeet = daysToMeet(b.todayKey, b.competition?.date);
 
   return (
     <div className="rise" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
-      <Hero>
-        <HeroEyebrow right={block && weekInBlock && totalWeeks ? `${PHASE_LABEL[block.phase]} · wk ${weekInBlock} of ${totalWeeks}` : undefined}>
-          Readiness
+      <Hero style={{ paddingTop: 4 }}>
+        <HeroEyebrow right={<SettingsGear onOpen={b.openSettings} />}>
+          {block && weekInBlock && totalWeeks ? `Readiness · ${PHASE_LABEL[block.phase]} wk ${weekInBlock} of ${totalWeeks}` : 'Readiness'}
         </HeroEyebrow>
 
         {/* Nothing logged at all, not "under a day of history": a first session
@@ -80,8 +116,8 @@ export function Today() {
           <>
             {/* No number rather than a placeholder one: a dash the size of the
                 readiness figure reads as a broken bar, not as "nothing yet". */}
-            <p style={{ margin: 0, paddingTop: 6, fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em', color: onInk.text }}>Nothing to read yet</p>
-            <HeroText maxWidth={320}>
+            <p style={{ margin: 0, paddingTop: 6, fontSize: T.xxl, fontWeight: 800, letterSpacing: '-0.02em', color: onInk.text }}>Nothing to read yet</p>
+            <HeroText maxWidth={340}>
               Log your first session and I’ll start reading your readiness. It takes about two weeks of data before the number means much.
             </HeroText>
           </>
@@ -90,36 +126,44 @@ export function Today() {
             <HeroNumeral
               value={scores.readiness}
               size={HERO_SIZE.today}
+              color={onInk.text}
               label="Still learning"
-              labelColor={C.amberLight}
+              labelColor={onInk.muted}
+              labelSize={T.xl}
               sub={<TrendSub first={historyPhrase(scores.historyDays)} trend={trend} />}
               ariaLabel={`Readiness ${scores.readiness} out of 100, still learning from ${historyPhrase(scores.historyDays)}.${trendSpoken}`}
             />
-            <HeroText maxWidth={320}>Treat this number as a rough guide until there are two weeks behind it.</HeroText>
+            <ScaleTrack readiness={scores.readiness} />
+            <HeroText maxWidth={340}>Treat this number as a rough guide until there are two weeks behind it.</HeroText>
           </>
         ) : (
           <>
             <HeroNumeral
               value={scores.readiness}
               size={HERO_SIZE.today}
+              // White, not amber: amber is kept for things you can tap. The
+              // band word beside it carries the colour.
+              color={onInk.text}
               label={READY_LABEL[band]}
               labelColor={READY_ON_INK[band]}
-              sub={<TrendSub first={`fatigue ${scores.fatigueScore}`} trend={trend} />}
+              labelSize={T.xl}
+              sub={<TrendSub first={`out of 100 · primed at ${READY_AT.primed}+`} trend={trend} />}
               ariaLabel={`Readiness ${scores.readiness} out of 100, ${READY_WORD[band]}. Fatigue ${scores.fatigueScore}.${trendSpoken}`}
             />
-            <HeroText maxWidth={320}>{sentence}</HeroText>
+            <ScaleTrack readiness={scores.readiness} />
+            <HeroText maxWidth={340}>{sentence}</HeroText>
           </>
         )}
 
         <FormCurve />
       </Hero>
 
-      <Sheet gap={14} style={{ padding: '20px 18px 22px' }}>
-        <WeekSegments shownId={shownSlot?.id} onPick={setPreviewSlotId} />
+      <Sheet gap={10} style={{ padding: '16px 18px 14px' }}>
+        <WeekChips shownId={shownSlot?.id} onPick={setPreviewSlotId} />
 
-        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 10, paddingTop: 2 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
-            <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase', color: C.greenDark, ...num }}>
+            <span style={{ fontSize: T.xs, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase', color: C.tertiary, ...num }}>
               {/* "Next up", never "today" — the plan does not claim a day.
                   When you have picked a different slot to look at, this names
                   it, so the card never looks like it is offering something it
@@ -132,19 +176,19 @@ export function Today() {
                   ? PHASE_LABEL[block.phase]
                   : 'Unplanned'}
             </span>
-            <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1.15 }}>
+            <h1 style={{ margin: 0, fontSize: T.xxl, fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1.1 }}>
               {routine?.name ?? (b.progress.total > 0 ? 'Week complete' : 'Nothing planned')}
             </h1>
           </div>
           {routine && (
-            <span style={{ fontSize: 12, fontWeight: 700, color: C.tertiary, flex: 'none', ...num }}>
+            <span style={{ fontSize: T.sm, fontWeight: 700, color: C.tertiary, flex: 'none', whiteSpace: 'nowrap', ...num }}>
               {routine.slots.length} lifts · ~{routine.estMinutes} min
             </span>
           )}
         </div>
 
         {routine ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             {chipLayout(
               [...routine.slots].sort((a, x) => a.order - x.order).map((slot) => slot.exerciseId),
               routine,
@@ -156,21 +200,21 @@ export function Today() {
               return (
                 <div
                   key={slot.exerciseId}
-                  style={{ display: 'grid', gridTemplateColumns: '22px 1fr auto', gap: 8, alignItems: 'baseline', fontSize: 14 }}
+                  style={{ display: 'grid', gridTemplateColumns: '22px 1fr auto', gap: 8, alignItems: 'baseline', fontSize: T.md }}
                 >
-                  <span style={{ fontSize: 11, fontWeight: 800, color: C.amberDark, ...num }}>{String(index + 1).padStart(2, '0')}</span>
+                  <span style={{ fontSize: T.xs, fontWeight: 800, color: C.tertiary, ...num }}>{String(index + 1).padStart(2, '0')}</span>
                   <span
                     style={{
                       fontWeight: 700,
                       minWidth: 0,
-                      // Superset members hang off an amber rule so the list
-                      // shows the shape of the session, not a flat run of lifts.
+                      // Superset members hang off an ink rule so the list shows
+                      // the shape of the session, not a flat run of lifts.
                       paddingLeft: chip.letter ? 8 : 0,
-                      borderLeft: chip.letter ? `2px solid ${C.amber}` : 'none',
+                      borderLeft: chip.letter ? `2px solid ${C.ink}` : 'none',
                     }}
                   >
                     {exercise?.name ?? slot.exerciseId}
-                    {chip.startsGroup && <span style={{ color: C.amberDark, fontWeight: 800 }}> · superset {chip.letter}</span>}
+                    {chip.startsGroup && <span style={{ color: C.tertiary, fontWeight: 700 }}> · superset {chip.letter}</span>}
                   </span>
                   <span style={{ color: C.tertiary, fontWeight: 600, ...num }}>
                     {Math.max(1, Math.round(slot.sets * (target?.volumeFactor ?? 1)))} × {slot.reps}
@@ -190,42 +234,39 @@ export function Today() {
           </p>
         )}
 
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, paddingTop: 2 }}>
           <Btn
-            onClick={() => (routine ? b.startSession(routine.id, shownSlot?.id) : b.patch({ library: true }))}
+            onClick={() => (routine ? b.startSession(routine.id, shownSlot?.id) : b.go('workouts'))}
             style={{
-              flex: 1,
-              height: 58,
+              // In a column now, where flex: 1 would size its height from zero.
+              flex: 'none',
+              minWidth: 0,
+              height: 56,
+              padding: '0 14px',
               borderRadius: R.block,
               background: C.amber,
               color: C.ink,
-              fontSize: 16,
+              fontSize: T.lg,
               fontWeight: 800,
               boxShadow: SHADOW.cta,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
             }}
           >
-            {/* "Train anyway" is nonsense when there is nothing to train —
-                it sent people looking for a workout they had not built yet. */}
-            {b.openSession ? 'Resume workout' : routine ? 'Start workout' : b.routines.length === 0 ? 'Build a workout' : 'Train anyway'}
+            {/* Names the workout, so the button says exactly what a tap
+                starts. "Train anyway" is nonsense when there is nothing to
+                train — it sent people looking for a workout they had not
+                built yet. */}
+            {b.openSession ? 'Resume workout' : routine ? `Start ${routine.name}` : b.routines.length === 0 ? 'Build a workout' : 'Train anyway'}
           </Btn>
+          {/* Words, not a hamburger: "Other workouts" says where it goes,
+              and a bare three-line icon read as a menu of the whole app. */}
           <Btn
-            onClick={() => b.patch({ library: true })}
-            label="Open workout library"
-            style={{
-              width: 58,
-              height: 58,
-              flex: 'none',
-              borderRadius: R.block,
-              border: `1px solid ${C.lineStrong}`,
-              color: C.ink,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
+            onClick={() => b.go('workouts')}
+            style={{ height: TOUCH, marginBottom: -6, fontSize: T.md, fontWeight: 800, color: C.ink }}
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" style={{ width: 18, height: 18 }} aria-hidden>
-              <path d="M4 6h16M4 12h16M4 18h10" />
-            </svg>
+            Other workouts
           </Btn>
         </div>
 
@@ -237,13 +278,14 @@ export function Today() {
           const canTrim = insight.id === 'week-over-budget' && b.budget.remaining.length > 0;
           return (
             <div key={insight.id} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '0 2px' }}>
-              {/* Amber and pulsing when Bompa did or wants something; a still
-                  blue dot when it is only remarking on the numbers. */}
+              {/* Always ink: amber is kept for things you can tap, and the
+                  Undo beside the sentence already says there is an action.
+                  It pulses on arrival when Bompa did or wants something. */}
               <span
                 className={action ? 'pulse' : undefined}
-                style={{ width: 7, height: 7, borderRadius: '50%', background: action ? C.amber : C.blue, flex: 'none', alignSelf: 'flex-start', marginTop: 6 }}
+                style={{ width: 7, height: 7, borderRadius: '50%', background: C.ink, flex: 'none', alignSelf: 'flex-start', marginTop: 6 }}
               />
-              <span style={{ flex: 1, minWidth: 0, fontSize: 13, lineHeight: 1.45, color: C.ink80 }}>{insight.text}</span>
+              <span style={{ flex: 1, minWidth: 0, fontSize: T.sm, lineHeight: 1.45, color: C.ink80 }}>{insight.text}</span>
               {/* The actions sit beside the sentence rather than inside it so
                   they can be a full thumb's height without stretching the line. */}
               {adjustment && (
@@ -256,88 +298,118 @@ export function Today() {
           );
         })}
 
+        {/* Three figures that fit the width, rather than five that scrolled
+            sideways where the last two were never seen. Volume and intensity
+            are a look back, so they live on History. */}
         <dl
-          className="no-scrollbar"
-          style={{ margin: 0, display: 'flex', gap: 22, overflowX: 'auto', padding: '10px 0 2px', borderTop: `1px solid ${C.line}` }}
+          style={{
+            margin: 0,
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+            gap: 10,
+            paddingTop: 8,
+            borderTop: `1px solid ${C.line}`,
+          }}
         >
-          <StripMetric
-            label="7-day volume"
-            value={volumeTonnes ? (toDisplay(metrics.volume7d, s.unit) / 1000).toFixed(1) : Math.round(toDisplay(metrics.volume7d, s.unit))}
-            unit={volumeTonnes ? volumeUnit(s.unit, true) : s.unit}
-          />
-          <StripMetric
-            label="since rest"
-            value={metrics.daysSinceRest}
-            unit="d"
-            // Five straight days is when a rest day stops being optional.
-            color={metrics.daysSinceRest >= 5 ? C.redDark : C.ink}
-          />
-          <StripMetric
-            label="to peak"
-            value={metrics.peakInDays ?? '—'}
-            unit={metrics.peakInDays === null ? undefined : 'd'}
-            color={C.amberDark}
-          />
-          <StripMetric
-            label="intensity"
-            value={metrics.intensity === null ? '—' : Math.round(metrics.intensity * 100)}
-            unit={metrics.intensity === null ? undefined : '%'}
-          />
           <StripMetric
             label="load vs usual"
             value={metrics.acwr === null ? '—' : metrics.acwr.toFixed(2)}
             unit={metrics.acwr === null ? undefined : '×'}
-            // Half again the load you have a base for is where injuries start.
-            color={metrics.acwr !== null && metrics.acwr > 1.5 ? C.redDark : C.greenDark}
+            word={load ?? undefined}
+            wordColor={load ? LOAD_COLOUR[load] : undefined}
           />
+          <StripMetric
+            label="since rest"
+            // With nothing logged there is no run of training to count, and
+            // "0 days" would read as "you rested today".
+            value={scores.sessions === 0 ? '—' : metrics.daysSinceRest}
+            unit={scores.sessions === 0 ? undefined : metrics.daysSinceRest === 1 ? 'day' : 'days'}
+            // Five straight days is when a rest day stops being optional.
+            color={metrics.daysSinceRest >= 5 ? C.redDark : C.ink}
+          />
+          <StripMetric label="to meet" value={toMeet ?? '—'} unit={toMeet === null ? undefined : toMeet === 1 ? 'day' : 'days'} />
         </dl>
       </Sheet>
     </div>
   );
 }
 
+/** Green for fine, amber-dark for a look, red for half again the load you have a base for, which is where injuries start. */
+const LOAD_COLOUR: Record<LoadWord, string> = {
+  ok: C.greenDark,
+  high: C.amberDark,
+  'too high': C.redDark,
+};
+
 /**
- * This week's slots as a row of bars. Position, not weekday — the plan commits
- * to a week's work and leaves the timing to you.
- *
- * Each pending bar is a button that loads that workout into the card below.
- * The bar is drawn 5px tall but the button around it is a full thumb's height;
- * the negative margin gives that extra height back so the row still sits as
- * tight as the drawing.
+ * Where the number sits on the 0–100 scale, cut where the band word changes.
+ * Hidden from screen readers: the numeral's own sentence already says the
+ * number and its band, and a picture of the same thing would say it twice.
  */
-function WeekSegments({ shownId, onPick }: { shownId: number | undefined; onPick: (id: number) => void }) {
+function ScaleTrack({ readiness }: { readiness: number }) {
+  const scale = readinessScale();
+  return (
+    <div aria-hidden style={{ position: 'relative', display: 'flex', gap: 2, height: 6, marginTop: 8 }}>
+      {scale.map((stretch, index) => (
+        <span
+          key={stretch.band}
+          style={{
+            flex: stretch.share,
+            background: onInk.control,
+            borderRadius: index === 0 ? '3px 0 0 3px' : index === scale.length - 1 ? '0 3px 3px 0' : 0,
+          }}
+        />
+      ))}
+      <span
+        style={{
+          position: 'absolute',
+          left: `${readinessMarker(readiness)}%`,
+          top: -4,
+          width: 4,
+          height: 14,
+          marginLeft: -2,
+          borderRadius: R.bar,
+          background: onInk.text,
+        }}
+      />
+    </div>
+  );
+}
+
+/**
+ * This week's slots as a row of chips, one per slot. Position, not weekday —
+ * the plan commits to a week's work and leaves the timing to you.
+ *
+ * Each pending chip is a button that loads that workout into the card below.
+ * A done or skipped chip is not: a done one is history and a skipped one is a
+ * decision already taken, so neither is something to weigh up doing today.
+ */
+function WeekChips({ shownId, onPick }: { shownId: number | undefined; onPick: (id: number) => void }) {
   const b = useBompa();
   if (b.thisWeekSlots.length === 0) return null;
 
-  const bleed = (TOUCH - 5) / 2;
   return (
-    <div role="group" aria-label="This week" style={{ display: 'flex', gap: 4, margin: `-${bleed}px 0` }}>
+    <div role="group" aria-label="This week" style={{ display: 'flex', gap: 6 }}>
       {b.thisWeekSlots.map((slot) => {
         const name = b.routineById(slot.routineId)?.name ?? 'workout';
-        const done = slot.status === 'done';
-        const skipped = slot.status === 'skip';
+        const key = slot.id ?? `${slot.weekStart}-${slot.slotIndex}`;
         const shown = shownId !== undefined && slot.id === shownId;
         const isNext = slot.id !== undefined && slot.id === b.nextSlot?.id;
-        const colour = done
-          ? C.green
-          : skipped
-            ? C.grey
-            : shown && !isNext
-              ? C.ink // a slot you picked to look at, so the row agrees with the card
-              : isNext
-                ? C.amber
-                : C.lineStrong;
-        const bar = <span style={{ display: 'block', width: '100%', height: 5, borderRadius: 3, background: colour }} />;
-        const key = slot.id ?? `${slot.weekStart}-${slot.slotIndex}`;
-        const cell = { flex: 1, minWidth: 0, height: TOUCH, display: 'flex', alignItems: 'center' } as const;
+        const style = { ...CHIP, ...chipLook(slot, shown, isNext) };
+        const text = (
+          // Ellipsis inside a flex chip needs its own box: the chip itself
+          // centres its children, and a flex container cannot clip its text.
+          <span aria-hidden style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {name}
+          </span>
+        );
 
-        // Only a pending slot is worth loading. A done one is history and a
-        // skipped one is a decision already taken; neither is something to
-        // weigh up doing today, so neither is a control.
         if (slot.status !== 'plan' || slot.id === undefined) {
+          const done = slot.status === 'done';
           return (
-            <span key={key} style={cell}>
-              {bar}
+            <span key={key} style={style}>
+              {done && <Icon name="check" size={13} style={{ flex: 'none' }} />}
+              {text}
               <span className="sr-only">
                 {name}, slot {slot.slotIndex + 1}, {done ? 'done' : 'skipped'}
               </span>
@@ -346,8 +418,8 @@ function WeekSegments({ shownId, onPick }: { shownId: number | undefined; onPick
         }
         const id = slot.id;
         return (
-          <Btn key={key} onClick={() => onPick(id)} label={`Show ${name}, slot ${slot.slotIndex + 1}`} pressed={shown} style={cell}>
-            {bar}
+          <Btn key={key} onClick={() => onPick(id)} label={`Show ${name}, slot ${slot.slotIndex + 1}`} pressed={shown} style={style}>
+            {text}
           </Btn>
         );
       })}
@@ -355,48 +427,78 @@ function WeekSegments({ shownId, onPick }: { shownId: number | undefined; onPick
   );
 }
 
-/** The fitness-and-fatigue curve under the readiness number: the history the number comes from. */
+const CHIP: CSSProperties = {
+  flex: 1,
+  // Lets a long workout name shrink to its share instead of widening the row.
+  minWidth: 0,
+  height: TOUCH,
+  padding: '0 6px',
+  borderRadius: R.chip,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 5,
+  fontSize: T.sm,
+  fontWeight: 800,
+};
+
+function chipLook(slot: PlannedSession, shown: boolean, isNext: boolean): CSSProperties {
+  if (slot.status === 'done') return { background: C.greenBg, border: `1px solid ${C.greenBd}`, color: C.greenDark };
+  if (slot.status === 'skip') return { border: `1px solid ${C.lineStrong}`, color: C.tertiary, textDecoration: 'line-through' };
+  // The one the card is showing is filled, so the row agrees with the card.
+  if (shown) return { background: C.ink, border: `1px solid ${C.ink}`, color: C.white };
+  // What is next keeps an ink outline while you look at another, so the
+  // suggestion is still findable.
+  if (isNext) return { border: `1px solid ${C.ink}`, color: C.ink };
+  return { border: `1px solid ${C.lineStrong}`, color: C.ink60 };
+}
+
+/**
+ * The fitness-and-fatigue curve under the readiness number: the history the
+ * number comes from. Four weeks rather than a season, and history only: a
+ * peak line weeks ahead would squash the month into a corner, and the days to
+ * the meet are in the figures below.
+ */
 function FormCurve() {
   const b = useBompa();
   // Two sessions is the least that draws a line rather than a dot.
   if (b.loads.length < 2) return null;
 
   const width = 300;
-  const height = 70;
-  const geometry = curveGeometry(series(b.loads, b.now, 90), b.peakWindow?.daysAway ?? null, width, height);
+  const height = 60;
+  const geometry = curveGeometry(series(b.loads, b.now, CURVE_DAYS), null, width, height);
 
   return (
     <>
-      <svg
-        viewBox={`0 0 ${width} ${height}`}
-        preserveAspectRatio="none"
-        style={{ width: '100%', height: 62, display: 'block', marginTop: 10 }}
-        aria-hidden
-      >
-        {/* Non-scaling strokes, because the box stretches to the screen width
-            and would otherwise smear the dashes and fatten the lines. */}
-        <polyline points={geometry.fitness} fill="none" stroke={C.greenLight} strokeWidth={2.5} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
-        <polyline
-          points={geometry.fatigue}
-          fill="none"
-          stroke={C.redLight}
-          strokeWidth={2.5}
-          strokeDasharray="5 4"
-          strokeLinejoin="round"
-          vectorEffect="non-scaling-stroke"
-        />
-        {geometry.peakX !== null && (
-          <line x1={geometry.peakX} y1={0} x2={geometry.peakX} y2={height} stroke={C.amber} strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
-        )}
-      </svg>
-      <div aria-hidden style={{ display: 'flex', gap: 14, fontSize: 11, fontWeight: 700, ...num }}>
-        <span style={{ color: C.greenLight }}>— Fitness</span>
-        <span style={{ color: C.redLight }}>- - Fatigue</span>
-        {b.peakWindow && <span style={{ color: C.amberLight }}>| Peak {fmtDayMonth(b.peakWindow.startDate)}</span>}
+      <div style={{ display: 'flex', alignItems: 'stretch', gap: 8, marginTop: 6 }}>
+        <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" style={{ flex: 1, minWidth: 0, height: 40, display: 'block' }} aria-hidden>
+          {/* Non-scaling strokes, because the box stretches to the screen width
+              and would otherwise smear the dashes and fatten the lines. */}
+          <line x1={0} y1={height - 1} x2={width} y2={height - 1} stroke={onInk.line} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+          <polyline points={geometry.fitness} fill="none" stroke={C.greenLight} strokeWidth={2.5} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+          <polyline
+            points={geometry.fatigue}
+            fill="none"
+            stroke={C.redLight}
+            strokeWidth={2.5}
+            strokeDasharray="5 4"
+            strokeLinejoin="round"
+            vectorEffect="non-scaling-stroke"
+          />
+        </svg>
+        {/* The labels double as the legend. Fitness has no 0–100 score of its
+            own, so it is named rather than given a number that means nothing. */}
+        <div
+          aria-hidden
+          style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', fontSize: T.xs, fontWeight: 800, whiteSpace: 'nowrap', ...num }}
+        >
+          <span style={{ color: C.greenLight }}>fitness</span>
+          <span style={{ color: C.redLight }}>fatigue {b.scores.fatigueScore}</span>
+          <span style={{ color: onInk.muted, fontWeight: 700 }}>{CURVE_DAYS} days</span>
+        </div>
       </div>
       <p className="sr-only">
-        Over the last 90 days: fitness is now {Math.round(b.scores.fitness)} and fatigue {Math.round(b.scores.fatigue)}.
-        {b.peakWindow ? ` Your predicted peak starts ${fmtDayMonth(b.peakWindow.startDate)}, ${b.peakWindow.daysAway} days away.` : ''}
+        Over the last {CURVE_DAYS} days: fitness is now {Math.round(b.scores.fitness)} and fatigue {Math.round(b.scores.fatigue)}.
       </p>
     </>
   );
@@ -424,23 +526,39 @@ function InsightAction({ onClick, children, label }: { onClick: () => void; chil
     <Btn
       onClick={onClick}
       label={label}
-      style={{ flex: 'none', minHeight: TOUCH, minWidth: TOUCH, padding: '0 4px', fontSize: 12.5, fontWeight: 800, color: C.amberDark, whiteSpace: 'nowrap' }}
+      style={{ flex: 'none', minHeight: TOUCH, minWidth: TOUCH, padding: '0 4px', fontSize: T.sm, fontWeight: 800, color: C.amberDark, whiteSpace: 'nowrap' }}
     >
       {children}
     </Btn>
   );
 }
 
-/** One figure in the unboxed strip at the foot of Today. A description list, so each value is read with its name. */
-function StripMetric({ label, value, unit, color = C.ink }: { label: string; value: string | number; unit?: string; color?: string }) {
+/** One figure in the grid at the foot of Today. A description list, so each value is read with its name. */
+function StripMetric({
+  label,
+  value,
+  unit,
+  word,
+  color = C.ink,
+  wordColor,
+}: {
+  label: string;
+  value: string | number;
+  unit?: string;
+  /** A verdict after the figure, such as "ok", in its own colour. */
+  word?: string;
+  color?: string;
+  wordColor?: string;
+}) {
   return (
-    <div style={{ flex: 'none', display: 'flex', flexDirection: 'column-reverse', gap: 2 }}>
+    <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column-reverse', gap: 1 }}>
       {/* The label comes first in the markup so a screen reader hears the name
           before the number; column-reverse puts it back under the figure. */}
-      <dt style={{ fontSize: 11, fontWeight: 700, color: C.tertiary }}>{label}</dt>
-      <dd style={{ margin: 0, display: 'flex', alignItems: 'baseline', gap: 2 }}>
-        <span style={{ fontSize: 24, fontWeight: 800, color, ...num }}>{value}</span>
-        {unit && <span style={{ fontSize: 12, fontWeight: 700, color: C.tertiary }}>{unit}</span>}
+      <dt style={{ fontSize: T.xs, fontWeight: 700, color: C.tertiary }}>{label}</dt>
+      <dd style={{ margin: 0, display: 'flex', alignItems: 'baseline', gap: 2, whiteSpace: 'nowrap' }}>
+        <span style={{ fontSize: T.xl, fontWeight: 800, color, ...num }}>{value}</span>
+        {unit && <span style={{ fontSize: T.sm, fontWeight: 700, color: C.tertiary }}>{unit}</span>}
+        {word && <span style={{ fontSize: T.xs, fontWeight: 800, color: wordColor, paddingLeft: 4 }}>{word}</span>}
       </dd>
     </div>
   );

@@ -8,14 +8,14 @@
 // read one knows where to look on the next. The words live in
 // lib/methodGuides.ts and are bundled, so a guide opens with no signal.
 
-import { C, num, onInk } from '@/lib/tokens';
+import { C, T, num, onInk } from '@/lib/tokens';
 import { methodGuide } from '@/lib/methodGuides';
 import { useBompa } from '@/state/BompaContext';
 import { DarkSheet } from '@/components/ui';
 import { SheetDot, SheetHeading, sheetHairline } from '@/components/SheetParts';
 
 // Guides quote figures (2110, 13 of 50), and those read steadier in tabular numerals.
-const body = { margin: 0, fontSize: 14, lineHeight: 1.5, color: onInk.body, ...num } as const;
+const body = { margin: 0, fontSize: T.md, lineHeight: 1.5, color: onInk.body, ...num } as const;
 
 export function MethodGuideSheet() {
   const b = useBompa();

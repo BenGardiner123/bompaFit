@@ -9,11 +9,12 @@
 // Pure, like the rest of lib/: plain rows in, a sentence out.
 
 import { ADAPT, liftCall, progressionBase, summariseWeek } from './adapt';
-import { countsAsWork, scores, type SessionLoad } from './calc';
+import { countsAsWork, isSet, scores, type SessionLoad } from './calc';
 import type { LoggedSet } from './types';
 
 export const VERDICT_EMPTY = "Nothing logged, and that's fine — it still counts as a session.";
 export const VERDICT_ON_TARGET = 'On target across the board. Nothing to change.';
+export const VERDICT_UNRATED = "Nothing was rated, so I can't tell how hard that was yet. Rate your sets and I'll read them.";
 
 /**
  * One sentence on how a session went against its target RPE.
@@ -24,11 +25,19 @@ export const VERDICT_ON_TARGET = 'On target across the board. Nothing to change.
  *   mid-session — has nothing to be measured against and is left out.
  * - `nameOf`: how to show a lift's name. Passed in so this stays free of the
  *   exercise library and works for movements the user made up.
+ * - `untrained`: planned lifts with no work logged, in session order.
+ *
+ * A lift that ran hard or easy leads, because that is what the week will act
+ * on. Past that, "on target" is only said of sets the lifter rated: an
+ * unrated set carries the aim written in on their behalf, which sits on
+ * target by construction and proves nothing. And a planned lift that was
+ * never started is said out loud, not folded into "across the board".
  */
 export function sessionVerdict(
   sets: LoggedSet[],
   targetRpe: Record<string, number>,
   nameOf: (exerciseId: string) => string,
+  untrained: string[] = [],
 ): string {
   if (!sets.some((row) => countsAsWork(row.type))) return VERDICT_EMPTY;
 
@@ -39,7 +48,7 @@ export function sessionVerdict(
   // Sorted hardest first, so the first hard one is the worst one.
   const hard = lifts.find((lift) => liftCall(lift) === 'hard');
   if (hard) {
-    return `${nameOf(hard.exerciseId)} ran ${signed(hard.meanDeviation)} RPE over target. If the week stays like this, Bompa will trim its volume.`;
+    return `${nameOf(hard.exerciseId)} ran ${signed(hard.meanDeviation)} RPE over target. If the week stays like this, I'll trim its volume.`;
   }
 
   // And the easiest one is therefore the last.
@@ -49,7 +58,7 @@ export function sessionVerdict(
     .reverse()
     .find((lift) => liftCall(lift) === 'easy' && progressionBase(sets, lift.exerciseId) !== null);
   if (easy) {
-    return `${nameOf(easy.exerciseId)} came in under target. Keep that up this week and Bompa will add weight.`;
+    return `${nameOf(easy.exerciseId)} came in under target. Keep that up this week and I'll add weight.`;
   }
 
   // Over the line on average, but carried by a few sets rather than most of
@@ -59,7 +68,27 @@ export function sessionVerdict(
     return `${nameOf(spiky.exerciseId)} had a few sets well over target, but not enough to change the plan.`;
   }
 
+  // Sets, not pieces: a drop piece is estimated at failure by design and is
+  // never asked about, so it says nothing about whether the set was rated.
+  const work = sets.filter((row) => countsAsWork(row.type) && isSet(row));
+  const rated = work.filter((row) => !row.rpeEstimated).length;
+  const allRated = rated === work.length;
+
+  if (untrained.length > 0) {
+    const skipped = `You didn't get to ${listOr(untrained.map(nameOf))}`;
+    if (rated === 0) return `${skipped}, and with nothing rated I can't judge the rest yet.`;
+    if (allRated) return `${skipped}. The rest was on target, so I'll plan the week around what you did.`;
+    return `${skipped}. What you rated was on target; rate the rest and I'll read those too.`;
+  }
+  if (rated === 0) return VERDICT_UNRATED;
+  if (!allRated) return "What you rated was on target. Rate the rest and I'll read those too.";
   return VERDICT_ON_TARGET;
+}
+
+/** "A", "A or B", "A, B or C". */
+function listOr(names: string[]): string {
+  if (names.length <= 1) return names[0] ?? '';
+  return `${names.slice(0, -1).join(', ')} or ${names[names.length - 1]}`;
 }
 
 /**

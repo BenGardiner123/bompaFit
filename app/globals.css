@@ -60,13 +60,15 @@ button {
   border: 0;
 }
 
+/* Starts and ends fully lit, so when the pulsing stops the dot rests at full
+   strength rather than snapping up from half. */
 @keyframes bompaPulse {
   0%,
   100% {
-    opacity: 0.35;
+    opacity: 1;
   }
   50% {
-    opacity: 1;
+    opacity: 0.35;
   }
 }
 
@@ -100,8 +102,10 @@ button {
   animation: bompaSheet 0.24s ease;
 }
 
+/* Three pulses to catch the eye on arrival, then still. A dot that never stops
+   moving keeps pulling the eye back to something already read. */
 .pulse {
-  animation: bompaPulse 2.4s ease-in-out infinite;
+  animation: bompaPulse 2.4s ease-in-out 3;
 }
 
 /* Respect the system setting for people who get motion sick from animation. */

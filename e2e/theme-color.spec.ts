@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { C } from '../lib/tokens';
-import { completeSetup, dismissSummary, gotoApp, goToTab, restScreen, skipRest } from './helpers';
+import { completeSetup, dismissSummary, finishToSummary, gotoApp, goToTab, restScreen, skipRest } from './helpers';
 
 // An installed app paints the phone's status bar from the theme-color tag, so
 // the tag has to follow the screen: a light bar over the ink Train screen reads
@@ -25,7 +25,7 @@ test.describe('status bar colour', () => {
   test('is light on Today and ink on Train, and goes back when you leave', async ({ page }) => {
     await expectThemeColor(page, C.screen);
 
-    await page.getByRole('button', { name: /^(Start workout|Train anyway)$/ }).click();
+    await page.getByRole('button', { name: /^(Start .+|Train anyway)$/ }).click();
     await goToTab(page, 'Train');
     await expectThemeColor(page, C.ink);
 
@@ -36,8 +36,16 @@ test.describe('status bar colour', () => {
     await expectThemeColor(page, C.ink);
   });
 
+  test('is light on Workouts and its tools, whose headers are light', async ({ page }) => {
+    await page.getByRole('button', { name: /^(Start .+|Train anyway)$/ }).click();
+    await goToTab(page, 'Workouts');
+    await expectThemeColor(page, C.screen);
+    await page.getByRole('button', { name: /^Interval timer/ }).click();
+    await expectThemeColor(page, C.screen);
+  });
+
   test('stays ink under the full-screen rest and the finish summary', async ({ page }) => {
-    await page.getByRole('button', { name: /^(Start workout|Train anyway)$/ }).click();
+    await page.getByRole('button', { name: /^(Start .+|Train anyway)$/ }).click();
     await goToTab(page, 'Train');
     await page.getByRole('button', { name: /^Log set/ }).click();
 
@@ -47,8 +55,7 @@ test.describe('status bar colour', () => {
 
     // The summary opens over Today, but its top is an ink header, so the bar
     // has to stay dark until it is dismissed.
-    await page.getByRole('button', { name: 'Finish', exact: true }).click();
-    await expect(page.getByRole('dialog', { name: 'Session summary' })).toBeVisible();
+    await finishToSummary(page);
     await expectThemeColor(page, C.ink);
 
     await dismissSummary(page);

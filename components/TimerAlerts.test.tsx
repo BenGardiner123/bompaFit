@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-// The one-time notification question and the alert switches in Tools. The app
+// The one-time notification question and the alert switches in Settings. The app
 // context is replaced with just the rest-timer fields these read, so each test
 // can put a rest on screen without logging a set.
 

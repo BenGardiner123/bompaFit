@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { builder, completeSetup, goToTab, gotoApp, readRoutines, saveBuilder, skipRest } from './helpers';
+import { builder, completeSetup, goToTab, gotoApp, openSettings, openTool, readRoutines, saveBuilder, settingsSheet, skipRest } from './helpers';
 
 // Every weight and rep count can be typed as well as stepped. Going from 40 kg
 // to 120 kg mid-set is three keys, not thirty-two taps on +. What these check
@@ -32,7 +32,7 @@ async function lastSet(page: Page): Promise<StoredSet | undefined> {
 
 async function startTraining(page: Page) {
   await goToTab(page, 'Today');
-  await page.getByRole('button', { name: /^(Start workout|Train anyway)$/ }).click();
+  await page.getByRole('button', { name: /^(Start .+|Train anyway)$/ }).click();
   await goToTab(page, 'Train');
 }
 
@@ -64,8 +64,9 @@ test.describe('on Train', () => {
   });
 
   test('a weight typed in pounds is converted to kilograms once, when logged', async ({ page }) => {
-    await goToTab(page, 'Tools');
-    await page.getByRole('button', { name: 'LB', exact: true }).click();
+    await openSettings(page);
+    await settingsSheet(page).getByRole('button', { name: 'lb', exact: true }).click();
+    await page.keyboard.press('Escape');
     await startTraining(page);
 
     await typeInto(page, weightFigure(page), '120');
@@ -103,10 +104,14 @@ test.describe('on Train', () => {
     await expect(weightFigure(page)).toHaveAttribute('aria-label', before ?? '');
   });
 
-  test('Bodyweight is one tap, and + adds a plate on top of it', async ({ page }) => {
+  test('Bodyweight shows at zero on a weighted lift, and + adds a plate on top of it', async ({ page }) => {
     await startTraining(page);
-    await page.getByRole('button', { name: 'Bodyweight', exact: true }).click();
+    // A barbell lift with a plate on: the chip would only be clutter here.
+    await expect(page.getByRole('button', { name: 'Bodyweight', exact: true })).toHaveCount(0);
+    await typeInto(page, weightFigure(page), '0');
     await expect(weightFigure(page)).toHaveText('Bodyweight');
+    // One tap marks the lift as bodyweight, so a plate on top reads as one.
+    await page.getByRole('button', { name: 'Bodyweight', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Bodyweight, tap to type' })).toBeVisible();
 
     await page.getByRole('button', { name: /^Log set/ }).click();
@@ -155,23 +160,28 @@ test('Escape inside Edit set cancels the number, not the sheet', async ({ page }
   await expect(sheet.getByRole('textbox')).toBeHidden();
 });
 
+/** Starting maxes sit at the top of History's By lift view. */
+async function startingMaxes(page: Page) {
+  await goToTab(page, 'History');
+  await page.getByRole('button', { name: 'By lift' }).click();
+}
+
 test('a typed starting max reads back unchanged after a reload', async ({ page }) => {
-  await goToTab(page, 'Tools');
+  await startingMaxes(page);
   const max = page.getByRole('button', { name: /^Starting max for Bench Press (not set|[\d.]+ kg), tap to type$/ });
   await max.scrollIntoViewIfNeeded();
   await typeInto(page, max, '140');
   await expect(max).toHaveText('140');
 
   await page.reload();
-  await goToTab(page, 'Tools');
+  await startingMaxes(page);
   await expect(max).toHaveText('140');
 });
 
 type StoredSlot = { sets: number; reps: number; targetPct1RM: number | null; targetWeightKg: number | null };
 
 async function openBuilder(page: Page) {
-  await goToTab(page, 'Today');
-  await page.getByRole('button', { name: 'Open workout library' }).click();
+  await goToTab(page, 'Workouts');
   await page.getByRole('button', { name: /^Edit/ }).first().click();
   await expect(builder(page)).toBeVisible();
 }
@@ -211,7 +221,7 @@ test('the builder can set a lift to bodyweight', async ({ page }) => {
 });
 
 test('the 1RM calculator takes a typed weight and reps', async ({ page }) => {
-  await goToTab(page, 'Tools');
+  await openTool(page, '1RM calculator');
   // Neither is the calculator's starting value, so both have to be written.
   await typeInto(page, page.getByRole('button', { name: /^Weight [\d.]+ kg, tap to type$/ }), '120');
   await typeInto(page, page.getByRole('button', { name: /^Reps \d+, tap to type$/ }), '3');

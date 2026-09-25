@@ -94,7 +94,7 @@ export function nextBoundary(anchor: number, intervalMs: number, now: number): n
   return anchor + (done + 1) * intervalMs;
 }
 
-/** What the Tools interval timer needs to say when it is due. */
+/** What the interval timer needs to say when it is due. */
 export type IntervalClock = {
   mode: 'stopwatch' | 'amrap' | 'emom';
   /** Wall-clock start of the current running stretch; null while paused. */

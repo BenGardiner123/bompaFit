@@ -1,8 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { db } from './db';
-import { ENVELOPE_VERSION, applyEnvelope, buildEnvelope, parseEnvelope } from './exchange';
+import { ENVELOPE_VERSION, applyEnvelope, buildEnvelope, parseEnvelope, saveEnvelope, type SaveHost } from './exchange';
 import { normaliseSlot, resolveSlotMethod } from './methods';
 import { PROVIDER_ENTRIES } from './content/providers';
 import type { ContentProvider } from './content/provider';
@@ -113,6 +113,35 @@ describe('export and import', () => {
     expect(await db.sessions.get(1)).toEqual(SESSION);
     expect(await db.sets.get(1)).toEqual(SET);
     expect(await db.settings.get('unit')).toEqual({ key: 'unit', value: 'kg' });
+  });
+
+  it("restoring an older backup keeps this phone's newer last-backup time", async () => {
+    const localLast = NOW + 5 * 86_400_000;
+    await db.settings.put({ key: 'lastExportAt', value: NOW - 86_400_000 });
+    const envelope = await buildEnvelope(new Date(NOW).toISOString());
+
+    await db.settings.put({ key: 'lastExportAt', value: localLast });
+    await applyEnvelope(envelope);
+
+    expect((await db.settings.get('lastExportAt'))?.value).toBe(localLast);
+  });
+
+  it('restoring onto a phone with no backup record takes the time the file was made', async () => {
+    // The file's own record is from the export before it, so it is older than the file.
+    await db.settings.put({ key: 'lastExportAt', value: NOW - 86_400_000 });
+    const envelope = await buildEnvelope(new Date(NOW).toISOString());
+
+    await clearAll();
+    await applyEnvelope(envelope);
+
+    expect((await db.settings.get('lastExportAt'))?.value).toBe(NOW);
+  });
+
+  it('a file with no readable export time leaves the local record alone', async () => {
+    await db.settings.put({ key: 'lastExportAt', value: NOW });
+    const envelope = { ...(await buildEnvelope('not a date')), settings: [] };
+    await applyEnvelope(envelope);
+    expect((await db.settings.get('lastExportAt'))?.value).toBe(NOW);
   });
 
   it('does not carry the sync queue across', async () => {
@@ -396,5 +425,65 @@ describe('links to a content provider in a backup', () => {
   it('refuses a links section that is not a list, and changes nothing', () => {
     const result = parseEnvelope(JSON.stringify({ version: ENVELOPE_VERSION, exportedAt: '', contentLinks: {} }));
     expect(result.ok).toBe(false);
+  });
+});
+
+describe('saving a backup file', () => {
+  const abort = () => Object.assign(new Error('closed'), { name: 'AbortError' });
+  const envelope = () => buildEnvelope(new Date(NOW).toISOString());
+  const host = (overrides: Partial<SaveHost>) => {
+    const download = vi.fn();
+    return { download, ...overrides };
+  };
+
+  it('reports saved only once a save dialog has written the file', async () => {
+    const written: Blob[] = [];
+    const picker = vi.fn(async () => ({
+      createWritable: async () => ({
+        write: async (data: Blob) => {
+          written.push(data);
+        },
+        close: async () => undefined,
+      }),
+    }));
+    const h = host({ showSaveFilePicker: picker });
+    expect(await saveEnvelope(await envelope(), 'bompa.json', h)).toBe('saved');
+    expect(written).toHaveLength(1);
+    expect(JSON.parse((await written[0]?.text()) ?? '{}').version).toBe(ENVELOPE_VERSION);
+    expect(h.download).not.toHaveBeenCalled();
+  });
+
+  it('closing the save dialog is a cancel, with no download behind it', async () => {
+    const h = host({ showSaveFilePicker: vi.fn(async () => Promise.reject(abort())) });
+    expect(await saveEnvelope(await envelope(), 'bompa.json', h)).toBe('cancelled');
+    expect(h.download).not.toHaveBeenCalled();
+  });
+
+  it('a save dialog that fails for another reason still leaves a download', async () => {
+    const quiet = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const h = host({ showSaveFilePicker: vi.fn(async () => Promise.reject(new Error('blocked'))) });
+    expect(await saveEnvelope(await envelope(), 'bompa.json', h)).toBe('downloaded');
+    expect(h.download).toHaveBeenCalledOnce();
+    quiet.mockRestore();
+  });
+
+  it('uses the share sheet where files can be shared, and reports saved once it finishes', async () => {
+    const share = vi.fn(async () => undefined);
+    const h = host({ navigator: { canShare: () => true, share } });
+    expect(await saveEnvelope(await envelope(), 'bompa.json', h)).toBe('saved');
+    expect(share).toHaveBeenCalledOnce();
+    expect(h.download).not.toHaveBeenCalled();
+  });
+
+  it('dismissing the share sheet is a cancel', async () => {
+    const h = host({ navigator: { canShare: () => true, share: vi.fn(async () => Promise.reject(abort())) } });
+    expect(await saveEnvelope(await envelope(), 'bompa.json', h)).toBe('cancelled');
+    expect(h.download).not.toHaveBeenCalled();
+  });
+
+  it('falls back to a plain download, which cannot confirm anything, when neither exists', async () => {
+    const h = host({ navigator: { canShare: () => false, share: vi.fn() } });
+    expect(await saveEnvelope(await envelope(), 'bompa.json', h)).toBe('downloaded');
+    expect(h.download).toHaveBeenCalledWith(expect.any(Blob), 'bompa.json');
   });
 });

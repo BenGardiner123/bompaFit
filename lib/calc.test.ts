@@ -10,12 +10,18 @@ import {
   epley,
   fatigue,
   fmtClock,
+  fmtVolume,
   increments,
   intensityAvg,
+  nextStep,
+  repEquivalent,
+  rpeChoices,
   scores,
   sessionLoad,
+  sessionTonnage,
   toDisplay,
   toKg,
+  tomorrowReadiness,
   volumeLoad,
 } from './calc';
 import type { LoggedSet, Session, SetType } from './types';
@@ -530,5 +536,121 @@ describe('bodyweight lifts in the model', () => {
   it('displayed tonnage stays what was loaded', () => {
     // The plates on the belt, not an estimate of the lifter.
     expect(volumeLoad(threeOf('dips-triceps-version', { reps: 8, weightKg: 10 }), NOW)).toBe(240);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────
+// Tomorrow's readiness, for the finish summary
+// ─────────────────────────────────────────────────────────────
+
+describe("tomorrow's readiness", () => {
+  const base = history([20, 18, 16, 14, 12, 10, 8, 6, 4, 2]);
+  // Today's session, stamped at its last set, well above the usual load.
+  const today = { at: NOW, dateKey: '2026-08-19', load: 4000 };
+  const loads = [...base.loads, today];
+  const before = NOW - 60 * 60 * 1000;
+
+  it('reads the model a day after the session ends, with the session counted', () => {
+    const projected = tomorrowReadiness(loads, before, NOW);
+    expect(projected.readiness).toBe(scores(loads, NOW + DAY_MS).readiness);
+  });
+
+  it('gives the change against readiness just before the session began', () => {
+    const projected = tomorrowReadiness(loads, before, NOW);
+    expect(projected.change).toBe(projected.readiness - scores(loads, before).readiness);
+  });
+
+  it('a heavy session lowers tomorrow against today', () => {
+    expect(tomorrowReadiness(loads, before, NOW).change).toBeLessThan(0);
+  });
+
+  it('with nothing logged it reads the neutral middle and no change', () => {
+    expect(tomorrowReadiness([], before, NOW)).toEqual({ readiness: 50, change: 0 });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────
+// The rest screen's RPE chips
+// ─────────────────────────────────────────────────────────────
+
+describe('RPE choices', () => {
+  it('offers seven readings when the aim is already one of them', () => {
+    expect(rpeChoices(7)).toEqual([6, 7, 7.5, 8, 8.5, 9, 10]);
+    expect(rpeChoices(8.5)).toEqual([6, 7, 7.5, 8, 8.5, 9, 10]);
+  });
+
+  it('swaps an aim that is missing in for its nearest neighbour, keeping seven in order', () => {
+    expect(rpeChoices(6.5)).toEqual([6.5, 7, 7.5, 8, 8.5, 9, 10]);
+    expect(rpeChoices(9.5)).toEqual([6, 7, 7.5, 8, 8.5, 9.5, 10]);
+  });
+
+  it('on a tie gives up the lower neighbour, so 7 and 10 are never the ones lost', () => {
+    // 6.5 is as close to 6 as to 7; 9.5 as close to 9 as to 10.
+    expect(rpeChoices(6.5)).toContain(7);
+    expect(rpeChoices(9.5)).toContain(10);
+  });
+
+  it('pulls an aim outside the scale onto its end', () => {
+    expect(rpeChoices(5)).toEqual([6, 7, 7.5, 8, 8.5, 9, 10]);
+    expect(rpeChoices(11)).toEqual([6, 7, 7.5, 8, 8.5, 9, 10]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────
+// The weight step, cycled by a long press
+// ─────────────────────────────────────────────────────────────
+
+describe('the weight step', () => {
+  it('cycles 1.25, 2.5, 5 in kilograms and back round', () => {
+    expect(nextStep(1.25, 'kg')).toBe(2.5);
+    expect(nextStep(2.5, 'kg')).toBe(5);
+    expect(nextStep(5, 'kg')).toBe(1.25);
+  });
+
+  it('cycles 2.5, 5, 10 in pounds', () => {
+    expect(nextStep(5, 'lb')).toBe(10);
+    expect(nextStep(10, 'lb')).toBe(2.5);
+  });
+
+  it('starts from the first step when the stored one is not on the list', () => {
+    // A step saved in kilograms, read after a switch to pounds.
+    expect(nextStep(1.25, 'lb')).toBe(2.5);
+  });
+});
+
+describe('the running volume on Train', () => {
+  const row = (over: Partial<LoggedSet>): LoggedSet => ({
+    sessionId: 1,
+    exerciseId: 'bench',
+    setNo: 1,
+    type: 'working',
+    weightKg: 100,
+    reps: 5,
+    rpe: 8,
+    rpeEstimated: false,
+    at: 0,
+    ...over,
+  });
+
+  it('counts work the way every other tonnage does: pieces in, warm-ups out, rep styles scaled', () => {
+    const rows = [
+      row({}),
+      row({ segment: 1, segmentStyle: 'drop', weightKg: 80 }),
+      row({ type: 'warmup', weightKg: 60 }),
+      row({ repStyle: 'one-and-half' }),
+    ];
+    const expected = [rows[0]!, rows[1]!, rows[3]!].reduce((total, r) => total + r.weightKg * r.reps * repEquivalent(r), 0);
+    expect(sessionTonnage(rows)).toBe(expected);
+    // A 1½ rep is worth more than one plain rep, so the plain product undercounts.
+    expect(expected).not.toBe(100 * 5 + 80 * 5 + 100 * 5);
+  });
+
+  it('switches to tonnes at a tonne of kilograms, whatever the display unit', () => {
+    expect(fmtVolume(640, 'kg')).toBe('640 kg');
+    expect(fmtVolume(1340, 'kg')).toBe('1.3 t');
+    // 600 kg is 1323 lb: still under a tonne, so it stays in plain pounds.
+    expect(fmtVolume(600, 'lb')).toBe('1323 lb');
+    // Pounds have no tonne, so past one they read in thousands, as the summary does.
+    expect(fmtVolume(1340, 'lb')).toBe('3.0k lb');
   });
 });

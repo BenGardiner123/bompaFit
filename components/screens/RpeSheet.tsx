@@ -7,12 +7,12 @@
 // guess at the thing the model is most sensitive to.
 
 import { RPE_SCALE } from '@/lib/data';
-import { C, num, onInk } from '@/lib/tokens';
+import { C, T, num, onInk } from '@/lib/tokens';
 import { useBompa } from '@/state/BompaContext';
 import { DarkSheet } from '@/components/ui';
 import { SheetHeading, sheetHairline } from '@/components/SheetParts';
 
-// Whole numbers only, hardest first. The logger's grid shows every step
+// Whole numbers only, hardest first. The RPE picker shows every step
 // including the halves; a list of nine rows here would be a wall rather than an
 // explanation. Same source either way, so the two cannot disagree.
 const SCALE = [...RPE_SCALE].filter((entry) => Number.isInteger(entry.rpe)).reverse();
@@ -51,14 +51,14 @@ export function RpeSheet() {
               <span className="sr-only">RPE </span>
               {row.rpe}
             </span>
-            <span style={{ fontSize: 14, lineHeight: 1.45, color: onInk.body }}>{row.left}</span>
+            <span style={{ fontSize: T.md, lineHeight: 1.45, color: onInk.body }}>{row.left}</span>
           </li>
         ))}
       </ul>
 
       <section style={{ display: 'flex', flexDirection: 'column', gap: 5, paddingTop: 12, ...sheetHairline }}>
         <SheetHeading color={C.amberLight}>Why I ask</SheetHeading>
-        <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: onInk.text }}>
+        <p style={{ margin: 0, fontSize: T.md, lineHeight: 1.5, color: onInk.text }}>
           RPE is how I weigh what a session cost you. The same tonnage at 9 costs noticeably more than at 6, and a week that runs consistently
           over target changes what I plan for the next one. It is the one number that makes this more than a ledger.
         </p>
@@ -66,7 +66,7 @@ export function RpeSheet() {
 
       <section style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
         <SheetHeading>When you are not sure</SheetHeading>
-        <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: onInk.body }}>
+        <p style={{ margin: 0, fontSize: T.md, lineHeight: 1.5, color: onInk.body }}>
           Leave it unset. I record the weight that was programmed for that set and mark it as an estimate rather than something you told me.
           A blank is honest; a guess is noise I would then act on.
         </p>

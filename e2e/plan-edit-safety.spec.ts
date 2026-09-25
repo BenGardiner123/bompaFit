@@ -7,7 +7,7 @@ import { builder, completeSetup, goToTab, gotoApp, readRoutines, saveBuilder } f
 
 type StoredRoutine = { id: string; name: string; versionOf?: { routineId: string; blockId: number } };
 
-const views = (page: Page) => page.getByRole('group', { name: 'Plan view' });
+const openBuilder = (page: Page) => page.getByRole('button', { name: 'Add a block', exact: true }).click();
 const routines = async (page: Page) => (await readRoutines(page)) as StoredRoutine[];
 const named = async (page: Page, name: string) => (await routines(page)).filter((r) => r.name === name);
 
@@ -32,10 +32,10 @@ test('a workout only this block uses has a single Edit', async ({ page }) => {
 test.describe('a workout two blocks share', () => {
   test.beforeEach(async ({ page }) => {
     // The added block runs the plan's own list, so it shares all three workouts.
-    await views(page).getByRole('button', { name: 'Mesocycle' }).click();
+    await openBuilder(page);
     await page.getByRole('group', { name: 'Block type' }).getByRole('button', { name: /^Hypertrophy/ }).click();
     await page.getByRole('button', { name: 'Add block to calendar' }).click();
-    await expect(views(page).getByRole('button', { name: 'Calendar' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('dialog', { name: 'Add a block' })).toHaveCount(0);
     await page.getByRole('button', { name: 'Options for Push A' }).first().click();
   });
 

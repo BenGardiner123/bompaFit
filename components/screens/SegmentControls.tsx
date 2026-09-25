@@ -12,7 +12,7 @@
 import { useEffect } from 'react';
 import { countsAsWork, fmtClock } from '@/lib/calc';
 import { weightShort } from '@/lib/bodyweight';
-import { C, R, TOUCH, num, onInk } from '@/lib/tokens';
+import { C, R, T, TOUCH, num, onInk } from '@/lib/tokens';
 import type { LoggedSet, SegmentStyle } from '@/lib/types';
 import { useBompa, type SegmentState } from '@/state/BompaContext';
 import { InkButton } from '@/components/ui';
@@ -55,8 +55,10 @@ export function SegmentControls() {
     pickExercise(s.exIdx);
   }, [strayed, endSegments, pickExercise, s.exIdx]);
 
+  // Between sets, the unplanned drop is offered beside the minimised rest
+  // pill in Train's header, and on the full-screen rest.
   if (segment) return <InProgress segment={segment} />;
-  return <DropOffer />;
+  return null;
 }
 
 /** The card while a set is between pieces. */
@@ -86,24 +88,24 @@ function InProgress({ segment }: { segment: SegmentState }) {
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
-          <span style={{ fontSize: 17, fontWeight: 800, color: onInk.text, ...num }}>{heading}</span>
-          <span style={{ fontSize: 13, fontWeight: 700, color: C.amberLight, ...num }}>
+          <span style={{ fontSize: T.lg, fontWeight: 800, color: onInk.text, ...num }}>{heading}</span>
+          <span style={{ fontSize: T.note, fontWeight: 700, color: C.amberLight, ...num }}>
             {weightShort(s.entryWeight, s.unit)} · {reps}
           </span>
           {/* onInk.body rather than muted: this card is the lighter ink, where
               the muted grey is too faint for small text. */}
           {segment.label && (
-            <span style={{ fontSize: 12.5, fontWeight: 700, color: onInk.body }}>now: {segment.label}</span>
+            <span style={{ fontSize: T.sm, fontWeight: 700, color: onInk.body }}>now: {segment.label}</span>
           )}
           {segment.totalReps !== null && (
-            <span style={{ fontSize: 12.5, fontWeight: 700, color: onInk.body, ...num }}>
+            <span style={{ fontSize: T.sm, fontWeight: 700, color: onInk.body, ...num }}>
               {segment.repsSoFar} of {segment.totalReps} reps
             </span>
           )}
         </div>
         {/* Finishing early is a real option — the lifter feels the set, the
             plan does not — so it sits right beside what the set is asking for. */}
-        <InkButton onClick={b.endSegments} height={TOUCH} fontSize={13.5} style={{ flex: 'none', padding: '0 16px' }}>
+        <InkButton onClick={b.endSegments} height={TOUCH} fontSize={T.copy} style={{ flex: 'none', padding: '0 16px' }}>
           End set
         </InkButton>
       </div>
@@ -114,10 +116,10 @@ function InProgress({ segment }: { segment: SegmentState }) {
           aria-label={`${pauseNoun(segment)} in ${fmtClock(pauseLeft)}`}
           style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 8, paddingTop: 2 }}
         >
-          <span aria-hidden style={{ fontSize: 13, fontWeight: 800, color: onInk.body }}>
+          <span aria-hidden style={{ fontSize: T.note, fontWeight: 800, color: onInk.body }}>
             {pauseNoun(segment)} in
           </span>
-          <span aria-hidden style={{ fontSize: 44, fontWeight: 800, lineHeight: 1, letterSpacing: '-0.04em', color: C.amberLight, ...num }}>
+          <span aria-hidden style={{ fontSize: T.stat, fontWeight: 800, lineHeight: 1, letterSpacing: '-0.04em', color: C.amberLight, ...num }}>
             {fmtClock(pauseLeft)}
           </span>
         </div>
@@ -144,30 +146,4 @@ function pauseNoun(segment: SegmentState): string {
 
 function allSingles(segment: SegmentState): boolean {
   return segment.style === 'cluster' && segment.plan.segmentReps.length > 0 && segment.plan.segmentReps.every((reps) => reps === 1);
-}
-
-/**
- * An unplanned drop, offered while the rest after a working set runs. People
- * decide to drop on the day, and the app should not make them pre-programme it.
- * The full-screen rest carries the same button; this is the one under the
- * minimised card.
- */
-function DropOffer() {
-  const b = useBompa();
-  if (!b.restActive || b.restKind !== 'full' || b.s.restFull || !offersDrop(b.sessionSets)) return null;
-
-  return (
-    <div style={{ margin: '10px 18px 0', display: 'flex' }}>
-      <InkButton
-        onClick={() => b.startSegments('drop')}
-        label="Drop the weight and carry on this set"
-        height={TOUCH}
-        fontSize={14}
-        color={C.amberLight}
-        style={{ flex: 1 }}
-      >
-        + Drop
-      </InkButton>
-    </div>
-  );
 }

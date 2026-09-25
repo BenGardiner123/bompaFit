@@ -1,7 +1,7 @@
 'use client';
 
 // Editing a warm-up checklist: a workout's own list in the builder, and the
-// default list in Tools.
+// default list in Settings.
 //
 // Loaded on demand, and deliberately imports nothing from the app's shared
 // components or state — only tokens and a leaf of editing helpers. Whatever a
@@ -13,8 +13,9 @@
 import { useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import { WARMUP_LIMITS, moveKey, moveWarmupItem, newWarmupItem } from '@/lib/warmupList';
 import { WARMUP_MOVES } from '@/lib/warmupMoves';
-import { C, FONT, R, TOUCH, num } from '@/lib/tokens';
+import { C, FONT, R, T, TOUCH, num } from '@/lib/tokens';
 import type { Routine, WarmupItem } from '@/lib/types';
+import { Icon } from '@/components/icons';
 
 /**
  * The builder's warm-up section: use the default list, or give this workout
@@ -67,16 +68,16 @@ export function RoutineWarmup({
             justifyContent: 'center',
           }}
         >
-          {usesDefault ? '✓' : ''}
+          {usesDefault && <Icon name="check" size={14} />}
         </span>
         <span style={{ fontSize: 13, fontWeight: 800 }}>Use my default warm-up</span>
       </button>
 
       {usesDefault ? (
-        <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.5, color: C.ink60 }}>
+        <p style={{ margin: 0, fontSize: T.sm, lineHeight: 1.5, color: C.ink60 }}>
           {defaults.length === 0
-            ? 'Your default warm-up is empty. Set it up in Tools, under Default warm-up.'
-            : `${defaults.map((item) => item.name).join(', ')}. Change the list in Tools.`}
+            ? 'Your default warm-up is empty. Set it up in Settings, under Default warm-up.'
+            : `${defaults.map((item) => item.name).join(', ')}. Change the list in Settings.`}
         </p>
       ) : (
         <WarmupListEditor
@@ -116,7 +117,7 @@ export function WarmupListEditor({ items, onChange, empty }: { items: WarmupItem
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {items.length === 0 ? (
-        <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.5, color: C.tertiary }}>{empty}</p>
+        <p style={{ margin: 0, fontSize: T.sm, lineHeight: 1.5, color: C.tertiary }}>{empty}</p>
       ) : (
         <ol aria-label="Warm-up moves" style={{ listStyle: 'none', margin: 0, padding: 0 }}>
           {items.map((item, index) => (
@@ -127,13 +128,13 @@ export function WarmupListEditor({ items, onChange, empty }: { items: WarmupItem
                 {item.dose && <span style={{ fontSize: 12, fontWeight: 700, color: C.tertiary, ...num }}>{item.dose}</span>}
               </span>
               <Square label={`Move ${item.name} up`} disabled={index === 0} onClick={() => onChange(moveWarmupItem(items, index, -1))}>
-                ↑
+                <Icon name="arrow-up" size={15} />
               </Square>
               <Square label={`Move ${item.name} down`} disabled={index === items.length - 1} onClick={() => onChange(moveWarmupItem(items, index, 1))}>
-                ↓
+                <Icon name="arrow-down" size={15} />
               </Square>
               <Square label={`Remove ${item.name}`} danger onClick={() => onChange(items.filter((_, i) => i !== index))}>
-                ✕
+                <Icon name="close" size={15} />
               </Square>
             </li>
           ))}
@@ -155,7 +156,7 @@ export function WarmupListEditor({ items, onChange, empty }: { items: WarmupItem
               setDose('');
             }}
           >
-            +
+            <Icon name="plus" size={18} />
           </Square>
         </div>
       )}
@@ -164,7 +165,7 @@ export function WarmupListEditor({ items, onChange, empty }: { items: WarmupItem
         type="button"
         aria-expanded={picking}
         onClick={() => setPicking(!picking)}
-        style={{ ...plain, height: TOUCH, borderRadius: R.chip, border: `1px dashed ${C.lineStrong}`, color: C.ink60, fontSize: 12.5, fontWeight: 800 }}
+        style={{ ...plain, height: TOUCH, borderRadius: R.chip, border: `1px dashed ${C.lineStrong}`, color: C.ink60, fontSize: T.sm, fontWeight: 800 }}
       >
         {picking ? 'Done adding common moves' : '+ Add from common moves'}
       </button>
@@ -190,13 +191,14 @@ export function WarmupListEditor({ items, onChange, empty }: { items: WarmupItem
                   border: `1px solid ${added ? C.ink : C.lineStrong}`,
                   background: added ? C.ink : C.card,
                   color: added ? C.white : C.ink80,
-                  fontSize: 12.5,
+                  fontSize: T.sm,
                   fontWeight: 800,
                   // Added reads as done rather than unavailable, so no fade.
                   cursor: added ? 'default' : 'pointer',
                 }}
               >
-                {added ? `✓ ${move.name}` : move.name}
+                {added && <Icon name="check" size={13} style={{ marginRight: 4, marginTop: -2 }} />}
+                {move.name}
               </button>
             );
           })}
@@ -238,7 +240,7 @@ function Square({ children, onClick, label, disabled, danger }: { children: Reac
         border: `1px solid ${danger ? C.redBd : C.lineStrong}`,
         background: danger ? C.redBg : C.card,
         color: danger ? C.redDark : C.ink60,
-        fontSize: 14,
+        fontSize: T.md,
         fontWeight: 800,
         opacity: disabled ? 0.45 : 1,
         cursor: disabled ? 'not-allowed' : 'pointer',

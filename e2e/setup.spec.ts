@@ -137,10 +137,11 @@ test.describe('finding your way to a new workout', () => {
     await expect(page.getByRole('button', { name: 'Build a workout' })).toBeVisible();
   });
 
-  test('that button reaches the library, which can create one', async ({ page }) => {
+  test('that button reaches the Workouts tab, which can create one', async ({ page }) => {
     await skipSetup(page);
     await page.getByRole('button', { name: 'Build a workout' }).click();
-    await expect(page.getByRole('button', { name: '+ New workout' })).toBeVisible();
+    await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Workouts' })).toHaveAttribute('aria-current', 'page');
+    await expect(page.getByRole('button', { name: 'New workout', exact: true })).toBeVisible();
   });
 });
 
@@ -169,6 +170,13 @@ test.describe('the steps themselves', () => {
     await lb.click();
     await expect(lb).toHaveAttribute('aria-pressed', 'true');
     await expect(kg).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  test('each step leads with its question on a light header, not a giant step number', async ({ page }) => {
+    await expect(page.getByRole('heading', { level: 1, name: 'Kilograms or pounds?' })).toBeVisible();
+    await expect(page.getByText('01', { exact: true })).toHaveCount(0);
+    const header = page.locator('header');
+    await expect(header).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
   });
 
   test('the step number is read as a position, and Back only exists from step two', async ({ page }) => {

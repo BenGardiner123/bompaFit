@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
-import { completeSetup, goToTab, gotoApp } from './helpers';
+import { completeSetup, gotoApp, goToTab, startFromWorkouts } from './helpers';
 
 // The method explainers, opened the way a lifter opens them: from the tempo
 // line and the method badge on Train. They are bundled with the app, so they
@@ -19,8 +19,7 @@ test.describe('method explainers', () => {
     await gotoApp(page);
     await completeSetup(page);
 
-    await goToTab(page, 'Today');
-    await page.getByRole('button', { name: 'Open workout library' }).click();
+    await goToTab(page, 'Workouts');
     await page.getByLabel('Bompa export file').setInputFiles({
       name: 'methods.json',
       mimeType: 'application/json',
@@ -32,10 +31,8 @@ test.describe('method explainers', () => {
     // An import is read back on the next load, as the app itself says.
     await gotoApp(page);
     await page.evaluate(() => navigator.serviceWorker.ready);
-    await page.getByRole('button', { name: 'Open workout library' }).click();
-    const edit = page.getByRole('button', { name: 'Edit Methods · schemes' });
-    await edit.locator('..').getByRole('button', { name: 'Start this workout' }).click();
-    await expect(page.getByRole('button', { name: 'Finish', exact: true })).toBeVisible();
+    await startFromWorkouts(page, 'Methods · schemes');
+    await expect(page.getByRole('button', { name: 'Session menu', exact: true })).toBeVisible();
 
     // From here on the network is gone: the guides ship with the app.
     await context.setOffline(true);

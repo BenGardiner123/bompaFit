@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
-import { completeSetup, goToTab, gotoApp, restScreen, skipRest } from './helpers';
+import { completeSetup, gotoApp, goToTab, openWorkoutRow, restScreen, skipRest, startFromWorkouts } from './helpers';
 
 // Per-set targets on Train: a wave or a pyramid asks for something different
 // every set, so the target line, the steppers and the rest have to follow the
@@ -12,22 +12,21 @@ const FIXTURE = path.join(__dirname, 'fixtures', 'methods.json');
 test.beforeEach(async ({ page }) => {
   await gotoApp(page);
   await completeSetup(page);
-  await goToTab(page, 'Today');
-  await page.getByRole('button', { name: 'Open workout library' }).click();
+  await goToTab(page, 'Workouts');
   await page.getByLabel('Bompa export file').setInputFiles(FIXTURE);
   await page.getByRole('button', { name: 'Import it' }).click();
   await expect(page.getByText(/^Imported \d+ records/)).toBeVisible();
   // An import is read back on the next load, as the app itself says.
   await gotoApp(page);
-  await page.getByRole('button', { name: 'Open workout library' }).click();
+  await goToTab(page, 'Workouts');
+  await openWorkoutRow(page, 'Methods · schemes');
   await expect(page.getByRole('button', { name: 'Edit Methods · schemes' })).toBeVisible();
 });
 
-/** Start one of the fixture's workouts from the library; starting lands on Train. */
+/** Start one of the fixture's workouts from the Workouts tab; starting lands on Train. */
 async function startWorkout(page: Page, name: string) {
-  const edit = page.getByRole('button', { name: `Edit ${name}` });
-  await edit.locator('..').getByRole('button', { name: 'Start this workout' }).click();
-  await expect(page.getByRole('button', { name: 'Finish', exact: true })).toBeVisible();
+  await startFromWorkouts(page, name);
+  await expect(page.getByRole('button', { name: 'Session menu', exact: true })).toBeVisible();
 }
 
 /** The lift chip at this position in the row, the keyboard way to change lift. */
@@ -57,22 +56,22 @@ function currentStep(page: Page) {
 test('a 7/5/3 wave loads each set’s reps and weight in turn, and the strip follows', async ({ page }) => {
   await startWorkout(page, 'Methods · schemes');
 
-  await expect(targetLine(page)).toHaveText('Set 1 of 6 · 7 @ 85 kg · RPE 8');
+  await expect(targetLine(page)).toHaveText('Set 1 of 6 · 7 reps @ 85 kg · aim RPE 8');
   await expect(currentStep(page)).toContainText('7');
   await expect(logButton(page)).toContainText('85 × 7');
 
   await logAndSkip(page);
-  await expect(targetLine(page)).toHaveText('Set 2 of 6 · 5 @ 90 kg · RPE 8');
+  await expect(targetLine(page)).toHaveText('Set 2 of 6 · 5 reps @ 90 kg · aim RPE 8');
   await expect(currentStep(page)).toContainText('Set 2');
   await expect(logButton(page)).toContainText('90 × 5');
 
   await logAndSkip(page);
-  await expect(targetLine(page)).toHaveText('Set 3 of 6 · 3 @ 95 kg · RPE 8');
+  await expect(targetLine(page)).toHaveText('Set 3 of 6 · 3 reps @ 95 kg · aim RPE 8');
   await expect(logButton(page)).toContainText('95 × 3');
 
   // The second wave starts a little heavier than the first.
   await logAndSkip(page);
-  await expect(targetLine(page)).toHaveText('Set 4 of 6 · 7 @ 87.5 kg · RPE 8');
+  await expect(targetLine(page)).toHaveText('Set 4 of 6 · 7 reps @ 87.5 kg · aim RPE 8');
   await expect(currentStep(page)).toContainText('Set 4');
   await expect(page.getByRole('group', { name: '3 of 6 sets logged' })).toBeVisible();
 });
@@ -91,7 +90,7 @@ test('the tempo shows spaced on the target line and opens its guide', async ({ p
 test('a scheme with descending rests runs 90, 60, 45 and 30 seconds after sets one to four', async ({ page }) => {
   await startWorkout(page, 'Methods · schemes');
   await pickLift(page, 1);
-  await expect(targetLine(page)).toHaveText(/^Set 1 of 5 · 5 @ /);
+  await expect(targetLine(page)).toHaveText(/^Set 1 of 5 · 5 reps @ /);
 
   for (const clock of [/1:(30|29|28)/, /(1:00|0:59|0:58)/, /0:4[345]/, /0:(30|29|28)/]) {
     await logButton(page).click();
@@ -107,7 +106,7 @@ test('an AMRAP set shows its minimum as N+, needs no RPE target, and logs what w
   await logAndSkip(page);
   await logAndSkip(page);
 
-  await expect(targetLine(page)).toHaveText(/^Set 3 of 3 · 5\+ @ \d+(\.\d+)? kg$/);
+  await expect(targetLine(page)).toHaveText(/^Set 3 of 3 · 5\+ reps @ \d+(\.\d+)? kg$/);
   await expect(page.getByText('5+ · as many as you can')).toBeVisible();
   await expect(page.getByRole('button', { name: /^AMRAP/ })).toBeVisible();
 
@@ -126,7 +125,7 @@ test('a scheme entry typed back-off pre-selects back-off when the logger reaches
   await expect(types.getByRole('button', { name: 'Working', exact: true })).toHaveAttribute('aria-pressed', 'true');
   for (let i = 0; i < 4; i++) await logAndSkip(page);
 
-  await expect(targetLine(page)).toHaveText(/^Set 5 of 6 · 10 @ /);
+  await expect(targetLine(page)).toHaveText(/^Set 5 of 6 · 10 reps @ /);
   await expect(types.getByRole('button', { name: 'Back-off', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByRole('button', { name: /^Back-off\. Opens its guide/ })).toBeVisible();
 });
@@ -163,8 +162,8 @@ test('the pieces of a drop set never add sets or dots', async ({ page }) => {
   await expect(restScreen(page)).toBeVisible();
   await skipRest(page);
 
-  await expect(page.getByText(/^\d+:\d+ · 1 sets · /)).toBeVisible();
+  await expect(page.getByText(/^\d+:\d+ · 1 of \d+ sets · /)).toBeVisible();
   await expect(page.getByRole('group', { name: '1 of 3 sets logged' })).toBeVisible();
   await expect(page.getByRole('group', { name: '1 of 3 sets logged' }).getByRole('button')).toHaveCount(1);
-  await expect(page.locator('[data-chip]').first()).toContainText('1/3');
+  await expect(page.getByRole('button', { name: /^Bench, 1 of 3 sets$/ })).toBeVisible();
 });

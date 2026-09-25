@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DAY_MS, type SessionLoad } from './calc';
-import { VERDICT_EMPTY, VERDICT_ON_TARGET, fatigueDelta, sessionVerdict } from './verdict';
+import { VERDICT_EMPTY, VERDICT_ON_TARGET, VERDICT_UNRATED, fatigueDelta, sessionVerdict } from './verdict';
 import type { LoggedSet } from './types';
 
 // Hand-worked fixtures. Every expected sentence below was worked out on paper
@@ -38,7 +38,7 @@ describe('sessionVerdict', () => {
     // Target 7. Deviations +2, +1.5, +1.5 → mean 5 / 3 = 1.67, shown as +1.7.
     const sets = [set('bench', 9), set('bench', 8.5), set('bench', 8.5)];
     expect(sessionVerdict(sets, { bench: 7 }, nameOf)).toBe(
-      'Bench Press ran +1.7 RPE over target. If the week stays like this, Bompa will trim its volume.',
+      "Bench Press ran +1.7 RPE over target. If the week stays like this, I'll trim its volume.",
     );
   });
 
@@ -53,7 +53,7 @@ describe('sessionVerdict', () => {
       set('ohp', 9),
     ];
     expect(sessionVerdict(sets, { bench: 7, ohp: 7 }, nameOf)).toBe(
-      'Overhead Press ran +2 RPE over target. If the week stays like this, Bompa will trim its volume.',
+      "Overhead Press ran +2 RPE over target. If the week stays like this, I'll trim its volume.",
     );
   });
 
@@ -98,7 +98,7 @@ describe('sessionVerdict', () => {
     // Target 8. 7, 7, 7 → −1.0 exactly, which is the easy threshold.
     const sets = [set('bench', 7), set('bench', 7), set('bench', 7)];
     expect(sessionVerdict(sets, { bench: 8 }, nameOf)).toBe(
-      'Bench Press came in under target. Keep that up this week and Bompa will add weight.',
+      "Bench Press came in under target. Keep that up this week and I'll add weight.",
     );
   });
 
@@ -167,6 +167,64 @@ describe('sessionVerdict', () => {
   it('treats a session of warm-ups only as nothing logged', () => {
     const sets = [set('bench', 6, { type: 'warmup' }), set('bench', 6, { type: 'warmup' })];
     expect(sessionVerdict(sets, { bench: 7 }, nameOf)).toBe(VERDICT_EMPTY);
+  });
+});
+
+describe('sessionVerdict, when the evidence is thin', () => {
+  const unrated = (exerciseId: string, rpe = 7) => set(exerciseId, rpe, { rpeEstimated: true });
+
+  it('does not call sets on target when none of them were rated', () => {
+    // Estimated sets are the aim written in on the lifter's behalf, so they
+    // sit on target by construction. That is not evidence of anything.
+    const sets = [unrated('bench'), unrated('bench'), unrated('bench')];
+    expect(sessionVerdict(sets, { bench: 7 }, nameOf)).toBe(VERDICT_UNRATED);
+  });
+
+  it('with some sets rated, speaks only for those', () => {
+    const sets = [set('bench', 7), unrated('bench'), unrated('bench')];
+    expect(sessionVerdict(sets, { bench: 7 }, nameOf)).toBe(
+      "What you rated was on target. Rate the rest and I'll read those too.",
+    );
+  });
+
+  it('ignores the pieces of a drop, which are estimated at failure by design', () => {
+    const sets = [set('bench', 7), set('bench', 10, { segment: 1, segmentStyle: 'drop', rpeEstimated: true })];
+    expect(sessionVerdict(sets, { bench: 7 }, nameOf)).toBe(VERDICT_ON_TARGET);
+  });
+
+  it('says which planned lifts were not trained, and that nothing was rated', () => {
+    // The case that used to read "On target across the board": two unrated
+    // bench sets, press and fly never started.
+    const sets = [unrated('bench'), unrated('bench')];
+    expect(sessionVerdict(sets, { bench: 7, ohp: 7, fly: 8 }, nameOf, ['ohp', 'fly'])).toBe(
+      "You didn't get to Overhead Press or Cable Fly, and with nothing rated I can't judge the rest yet.",
+    );
+  });
+
+  it('with a lift untrained and the rest rated on target, says both', () => {
+    const sets = [set('bench', 7), set('bench', 7)];
+    expect(sessionVerdict(sets, { bench: 7, ohp: 7 }, nameOf, ['ohp'])).toBe(
+      "You didn't get to Overhead Press. The rest was on target, so I'll plan the week around what you did.",
+    );
+  });
+
+  it('with a lift untrained and only some sets rated, says both', () => {
+    const sets = [set('bench', 7), unrated('bench')];
+    expect(sessionVerdict(sets, { bench: 7, ohp: 7 }, nameOf, ['ohp'])).toBe(
+      "You didn't get to Overhead Press. What you rated was on target; rate the rest and I'll read those too.",
+    );
+  });
+
+  it('lists three untrained lifts the way a person would', () => {
+    const sets = [set('bench', 7)];
+    expect(sessionVerdict(sets, { bench: 7 }, nameOf, ['ohp', 'fly', 'curl'])).toMatch(
+      /^You didn't get to Overhead Press, Cable Fly or curl\./,
+    );
+  });
+
+  it('a lift that ran hard still leads, since that is what the week will act on', () => {
+    const sets = [set('bench', 9), set('bench', 9), set('bench', 9)];
+    expect(sessionVerdict(sets, { bench: 7, ohp: 7 }, nameOf, ['ohp'])).toMatch(/^Bench Press ran \+2 RPE over target/);
   });
 });
 

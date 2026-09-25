@@ -1,14 +1,13 @@
 import { expect, test } from '@playwright/test';
 import { addLift, builder, completeSetup, goToTab, gotoApp, readRoutines, saveBuilder } from './helpers';
 
-// The workout library and builder, after setup is behind you.
+// The Workouts tab: the workout library and builder, after setup is behind you.
 
 test.beforeEach(async ({ page }) => {
   await gotoApp(page);
   await completeSetup(page, { workouts: [['Bench Press', 'Overhead Press']], names: ['Push A'] });
-  await goToTab(page, 'Today');
-  await page.getByRole('button', { name: 'Open workout library' }).click();
-  await expect(page.getByText('Workouts', { exact: true })).toBeVisible();
+  await goToTab(page, 'Workouts');
+  await expect(page.getByRole('heading', { name: 'Workouts', level: 1 })).toBeVisible();
 });
 
 test.describe('the library', () => {
@@ -19,7 +18,7 @@ test.describe('the library', () => {
   test('offers a way to build one from nothing', async ({ page }) => {
     // The path that was missing: after setup, the only route to a new workout
     // was copying a template and stripping it back, which is not creating one.
-    await page.getByRole('button', { name: '+ New workout' }).click();
+    await page.getByRole('button', { name: 'New workout' }).click();
     await expect(builder(page)).toBeVisible();
 
     await builder(page).getByRole('textbox').first().fill('Arms');
@@ -32,7 +31,7 @@ test.describe('the library', () => {
   test('does not offer to create while browsing templates', async ({ page }) => {
     // Templates are not yours to add to — copy one instead.
     await page.getByRole('button', { name: 'Templates', exact: true }).click();
-    await expect(page.getByRole('button', { name: '+ New workout' })).toBeHidden();
+    await expect(page.getByRole('button', { name: 'New workout' })).toBeHidden();
   });
 
   test('keeps templates behind their own filter', async ({ page }) => {
@@ -76,13 +75,25 @@ test.describe('the library', () => {
   });
 
   test('deleting a workout asks first and then removes it', async ({ page }) => {
-    page.on('dialog', (dialog) => void dialog.accept());
-
     await page.getByRole('button', { name: /^Edit/ }).first().click();
     await builder(page).getByRole('button', { name: 'Delete', exact: true }).click();
 
+    const ask = page.getByRole('dialog', { name: 'Delete Push A?' });
+    await ask.getByRole('button', { name: 'Delete workout' }).click();
+
     await expect(builder(page)).toBeHidden();
     await expect(page.getByText('Push A')).toBeHidden();
+  });
+
+  test('backing out of a delete keeps the workout and the builder open', async ({ page }) => {
+    await page.getByRole('button', { name: /^Edit/ }).first().click();
+    await builder(page).getByRole('button', { name: 'Delete', exact: true }).click();
+
+    const ask = page.getByRole('dialog', { name: 'Delete Push A?' });
+    await ask.getByRole('button', { name: 'Cancel' }).click();
+
+    await expect(ask).toBeHidden();
+    await expect(builder(page)).toBeVisible();
   });
 
   test('a workout with no lifts cannot be saved', async ({ page }) => {
@@ -103,18 +114,56 @@ test.describe('the library', () => {
   });
 });
 
-test.describe('the library hero', () => {
-  test('leads with what the week still owes', async ({ page }) => {
-    // The figure itself is hidden from assistive technology; the sentence
-    // beside it is what a screen reader hears, so that is what is checked.
-    await expect(page.getByText(/^\d+ sessions? left this week, 0 of \d+ done$/)).toBeAttached();
-    // The workout the week is waiting on says so on its row.
-    await expect(page.getByText('THIS WEEK', { exact: true })).toBeVisible();
+test.describe('the list', () => {
+  test('opens the workout the week is waiting on, with Start and Edit', async ({ page }) => {
+    const row = page.getByRole('button', { name: /^Push A( |$)/ });
+    await expect(row).toHaveAttribute('aria-expanded', 'true');
+    await expect(row).toContainText('NEXT');
+    await expect(page.getByRole('button', { name: 'Start Push A', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Edit Push A', exact: true })).toBeVisible();
   });
 
-  test('Close returns to where you were', async ({ page }) => {
-    await page.getByRole('button', { name: 'Close', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Open workout library' })).toBeVisible();
+  test("an open workout's lifts sit on one line, cut short with an ellipsis rather than wrapping", async ({ page }) => {
+    // Templates hold five or six lifts, which is more than one line at phone width.
+    await page.getByRole('button', { name: 'Templates', exact: true }).click();
+    const line = page.locator('p', { hasText: /~\d+ min/ }).first();
+    await expect(line).toBeVisible();
+    await expect(line).toHaveCSS('white-space', 'nowrap');
+    await expect(line).toHaveCSS('text-overflow', 'ellipsis');
+    const box = (await line.boundingBox())!;
+    const lineHeight = parseFloat(await line.evaluate((el) => getComputedStyle(el).lineHeight));
+    expect(box.height).toBeLessThanOrEqual(lineHeight + 1);
+  });
+
+  test('counts your own workouts on the Mine filter', async ({ page }) => {
+    await expect(page.getByRole('group', { name: 'Which workouts to show' }).getByRole('button', { name: 'Mine · 1' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  });
+
+  test('one row is open at a time, and a tap opens another or closes this one', async ({ page }) => {
+    await page.getByRole('button', { name: 'Templates', exact: true }).click();
+    const rows = page.getByRole('button', { expanded: true });
+    await expect(rows).toHaveCount(1);
+    await page.getByRole('button', { expanded: false }).first().click();
+    await expect(rows).toHaveCount(1);
+    await rows.first().click();
+    await expect(page.getByRole('button', { expanded: true })).toHaveCount(0);
+  });
+
+  test('Start begins the workout on Train', async ({ page }) => {
+    await page.getByRole('button', { name: 'Start Push A', exact: true }).click();
+    const nav = page.getByRole('navigation', { name: 'Main' });
+    await expect(nav.getByRole('button', { name: 'Train' })).toHaveAttribute('aria-current', 'page');
+    await expect(page.getByRole('button', { name: /^Log set/ })).toBeVisible();
+  });
+
+  test('Other workouts on Today comes here', async ({ page }) => {
+    await goToTab(page, 'Today');
+    await page.getByRole('button', { name: 'Other workouts', exact: true }).click();
+    await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Workouts' })).toHaveAttribute('aria-current', 'page');
+    await expect(page.getByRole('heading', { name: 'Workouts', level: 1 })).toBeVisible();
   });
 });
 
@@ -123,7 +172,7 @@ test.describe('templates are copied, never trained', () => {
     await page.getByRole('button', { name: 'Templates', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Templates', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByRole('button', { name: 'Copy to my workouts' }).first()).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Start this workout' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /^Start / })).toHaveCount(0);
     await expect(page.getByRole('button', { name: /^Edit / })).toHaveCount(0);
   });
 });
@@ -134,15 +183,16 @@ test.describe('one session at a time', () => {
     await page.getByRole('button', { name: 'Templates', exact: true }).click();
     await page.getByRole('button', { name: 'Copy to my workouts' }).first().click();
     await saveBuilder(page);
-    await page.getByRole('button', { name: 'Close', exact: true }).click();
-
-    await page.getByRole('button', { name: /^(Start workout|Train anyway)$/ }).click();
     await goToTab(page, 'Today');
-    await page.getByRole('button', { name: 'Open workout library' }).click();
 
-    await expect(page.getByRole('button', { name: 'Back to session', exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Continue session' })).toHaveCount(1);
-    await expect(page.getByRole('button', { name: 'Finish current session first' })).toBeDisabled();
+    await page.getByRole('button', { name: /^(Start .+|Train anyway)$/ }).click();
+    await goToTab(page, 'Workouts');
+
+    // The running one is open and continues; any other says when it can start.
+    await expect(page.getByRole('button', { name: 'Continue Push A', exact: true })).toHaveCount(1);
+    await page.getByRole('button', { expanded: false }).first().click();
+    await expect(page.getByRole('button', { name: 'Start after you finish' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: /^Start (?!after)/ })).toHaveCount(0);
   });
 });
 
@@ -169,15 +219,15 @@ test.describe('importing', () => {
     // Previewing wrote nothing.
     expect((await readRoutines(page)).length).toBe(before);
 
-    // Cancelling writes nothing either, and puts the picker back.
+    // Cancelling writes nothing either, and puts the list back as it was.
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Choose file' })).toBeVisible();
+    await expect(found).toBeHidden();
     expect((await readRoutines(page)).length).toBe(before);
 
     // Only "Import it" writes.
     await page.getByLabel('Bompa export file').setInputFiles(file);
     await page.getByRole('button', { name: 'Import it' }).click();
-    await expect(page.getByRole('button', { name: 'Choose file' })).toBeVisible();
+    await expect(found).toBeHidden();
     await expect.poll(async () => (await readRoutines(page)).length).toBe(before + 1);
   });
 });

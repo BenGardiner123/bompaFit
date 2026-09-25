@@ -103,13 +103,13 @@ export function exercisedbFixture(name: 'liveness' | 'exercise-by-id' | 'exercis
   return fixture('exercisedb', name);
 }
 
-// ─── The Tools screen ─────────────────────────────────────────
+// ─── The Exercise instructions screen ─────────────────────────
 
 export function providerRow(page: Page, name: string) {
   return page.getByRole('button', { name: new RegExp(`^${name}, (not )?connected$`) });
 }
 
-/** Connect wger through Tools → Exercise content. Assumes Tools is on screen. */
+/** Connect wger from Settings → Exercise instructions. Assumes that screen is open. */
 export async function connectWger(page: Page) {
   const testButton = page.getByRole('button', { name: 'Test connection' });
   // After a disconnect the row is still open on its connect panel; a second

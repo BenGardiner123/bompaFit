@@ -6,7 +6,7 @@
 // How-to, RPE and set-type explainers can't drift apart in how they label things.
 
 import type { CSSProperties, ReactNode } from 'react';
-import { C, num, onInk } from '@/lib/tokens';
+import { C, T, num, onInk } from '@/lib/tokens';
 
 /**
  * The small all-caps label over a block inside a sheet: EXECUTION, WHY I ASK.
@@ -20,7 +20,7 @@ export function SheetHeading({ children, color = onInk.muted, style }: { childre
     <h3
       style={{
         margin: 0,
-        fontSize: 10.5,
+        fontSize: T.xs,
         fontWeight: 800,
         letterSpacing: '.14em',
         textTransform: 'uppercase',

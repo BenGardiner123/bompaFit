@@ -6,7 +6,7 @@
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DarkSheet, EditableNumber, HeroNumeral, HeroTabs, InkButton, InkChip, Row } from './ui';
+import { ConfirmSheet, DarkSheet, EditableNumber, HeroNumeral, HeroTabs, InkButton, InkChip, Row } from './ui';
 
 afterEach(cleanup);
 
@@ -228,5 +228,63 @@ describe('EditableNumber', () => {
     const button = screen.getByRole('button', { name: /tap to type/ });
     expect(button.style.minHeight).toBe('44px');
     expect(button.style.minWidth).toBe('44px');
+  });
+});
+
+describe('ConfirmSheet', () => {
+  function ask(extra: { open?: boolean } = {}) {
+    const onConfirm = vi.fn();
+    const onCancel = vi.fn();
+    render(
+      <ConfirmSheet
+        open={extra.open ?? true}
+        title="Erase everything?"
+        body="There is no getting it back."
+        confirmLabel="Erase everything"
+        onConfirm={onConfirm}
+        onCancel={onCancel}
+      />,
+    );
+    return { onConfirm, onCancel };
+  }
+
+  it('is a dialog named by its question', () => {
+    ask();
+    expect(screen.getByRole('dialog', { name: 'Erase everything?' })).toBeTruthy();
+    expect(screen.getByText('There is no getting it back.')).toBeTruthy();
+  });
+
+  it('renders nothing while closed', () => {
+    ask({ open: false });
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('does the destructive thing only from its own button', () => {
+    const { onConfirm, onCancel } = ask();
+    fireEvent.click(screen.getByRole('button', { name: 'Erase everything' }));
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(onCancel).not.toHaveBeenCalled();
+  });
+
+  it('backs out from Cancel, the close button, Escape and the dimmed area', () => {
+    const { onConfirm, onCancel } = ask();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    fireEvent.keyDown(window, { key: 'Escape' });
+    fireEvent.click(screen.getByRole('dialog'));
+    expect(onCancel).toHaveBeenCalledTimes(4);
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+
+  it('puts Cancel before the destructive button, so the thumb meets it first', () => {
+    ask();
+    const buttons = screen.getAllByRole('button').map((b) => b.textContent);
+    expect(buttons.indexOf('Cancel')).toBeLessThan(buttons.indexOf('Erase everything'));
+  });
+
+  it('marks the destructive button in the light red that reads on ink', () => {
+    ask();
+    // jsdom normalises colours to rgb().
+    expect(screen.getByRole('button', { name: 'Erase everything' }).style.color).toBe('rgb(248, 113, 113)');
   });
 });

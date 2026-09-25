@@ -3,7 +3,7 @@
 import { useLayoutEffect, useState } from 'react';
 import { HOWTO_BY_ID } from '@/lib/data';
 import { statusSentence, type ResolvedHowTo } from '@/lib/content/resolve';
-import { C, R, num, onInk } from '@/lib/tokens';
+import { C, R, T, num, onInk } from '@/lib/tokens';
 import type { ProviderCredit, ProviderMedia } from '@/lib/types';
 import { useBompa } from '@/state/BompaContext';
 import { DarkSheet } from '@/components/ui';
@@ -123,7 +123,7 @@ function AvailabilityTag({ view }: { view: ResolvedHowTo }) {
   return (
     <span
       style={{
-        fontSize: 9.5,
+        fontSize: T.xs,
         fontWeight: 800,
         letterSpacing: '.08em',
         padding: '4px 7px',
@@ -185,7 +185,7 @@ function Demo({ media, movement, providerName, note }: { media?: ProviderMedia; 
   // readable, so both lines use body text.
   return (
     <div style={demoBox}>
-      <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase', color: onInk.body }}>Demo clip</span>
+      <span style={{ fontSize: T.xs, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase', color: onInk.body }}>Demo clip</span>
       <span style={{ fontSize: 12, fontWeight: 600, color: onInk.body }}>{line}</span>
     </div>
   );
@@ -299,7 +299,7 @@ function Cues({ view, sentence }: { view: ResolvedHowTo; sentence: string | null
                 <span aria-hidden style={{ fontSize: 24, fontWeight: 800, lineHeight: 1, color: C.amber, ...num }}>
                   {index + 1}
                 </span>
-                <span style={{ fontSize: 14, lineHeight: 1.5, color: onInk.body }}>{step}</span>
+                <span style={{ fontSize: T.md, lineHeight: 1.5, color: onInk.body }}>{step}</span>
               </li>
             ))}
           </ol>
@@ -314,7 +314,7 @@ function Cues({ view, sentence }: { view: ResolvedHowTo; sentence: string | null
             <SheetDot />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <SheetHeading color={C.amberLight}>Common fault</SheetHeading>
-              <span style={{ fontSize: 14, lineHeight: 1.5, color: onInk.text }}>{text.fault}</span>
+              <span style={{ fontSize: T.md, lineHeight: 1.5, color: onInk.text }}>{text.fault}</span>
             </div>
           </section>
         )}
@@ -323,11 +323,11 @@ function Cues({ view, sentence }: { view: ResolvedHowTo; sentence: string | null
   }
 
   if (view.loading) {
-    return <span style={{ fontSize: 14, lineHeight: 1.5, color: onInk.muted, padding: '12px 0', ...sheetHairline }}>Loading cues…</span>;
+    return <span style={{ fontSize: T.md, lineHeight: 1.5, color: onInk.muted, padding: '12px 0', ...sheetHairline }}>Loading cues…</span>;
   }
 
   return (
-    <span style={{ fontSize: 14, lineHeight: 1.5, color: onInk.muted, padding: '12px 0', ...sheetHairline }}>
+    <span style={{ fontSize: T.md, lineHeight: 1.5, color: onInk.muted, padding: '12px 0', ...sheetHairline }}>
       {sentence ?? 'No cues bundled for this movement yet.'}
     </span>
   );
@@ -336,7 +336,7 @@ function Cues({ view, sentence }: { view: ResolvedHowTo; sentence: string | null
 function Fact({ label, value }: { label: string; value: string }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-      <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: onInk.muted }}>{label}</span>
+      <span style={{ fontSize: T.xs, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: onInk.muted }}>{label}</span>
       <span style={{ fontSize: 14.5, fontWeight: 800, color: onInk.text }}>{value}</span>
     </div>
   );

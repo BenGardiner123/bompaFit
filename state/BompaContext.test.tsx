@@ -15,8 +15,10 @@ import type { ContentProvider } from '@/lib/content/provider';
 import { dateKey, toKg } from '@/lib/calc';
 import { planWeekStart, weekIsUserModified } from '@/lib/schedule';
 import type { Routine } from '@/lib/types';
-import { BompaProvider, useBompa, type BompaValue } from './BompaContext';
+import { BompaProvider, TRAIN_HINTS_SESSIONS, useBompa, type BompaValue } from './BompaContext';
 import Page from '@/app/page';
+import { EditSetSheet } from '@/components/screens/EditSetSheet';
+import { FinishSummary } from '@/components/screens/FinishSummary';
 
 function wrapper({ children }: { children: ReactNode }) {
   return <BompaProvider>{children}</BompaProvider>;
@@ -265,15 +267,12 @@ describe('logging', () => {
     await act(async () => result.current.startSession('my-push'));
     await waitFor(() => expect(result.current.openSession).not.toBeNull());
 
-    await act(async () => result.current.patch({ entryRpe: 8 }));
     await act(async () => result.current.logSet());
     await waitFor(() => expect(result.current.sets).toHaveLength(1));
 
     expect(result.current.restActive).toBe(true);
     expect(result.current.restRemainingMs).toBeGreaterThan(148_000);
     expect(result.current.restRemainingMs).toBeLessThanOrEqual(150_000);
-    // The RPE selection clears so the next set doesn't inherit it silently.
-    expect(result.current.s.entryRpe).toBeNull();
   });
 
   it('skipping rest returns the idle row', async () => {
@@ -663,6 +662,37 @@ describe('moving, dropping and swapping', () => {
     await waitFor(() => expect(result.current.thisWeekSlots[0]?.id).toBe(first.id));
   });
 
+  it('a move offers Undo in its toast, and the Undo puts the week back', async () => {
+    const view = await mount();
+    await withPlan(view);
+    const { result } = view;
+
+    const first = result.current.thisWeekSlots[0]!;
+    await act(async () => {
+      await result.current.moveSession(first.id!, 2);
+    });
+    await waitFor(() => expect(result.current.thisWeekSlots[2]?.id).toBe(first.id));
+
+    const toast = result.current.s.toast;
+    expect(toast?.text).toMatch(/moved to position 3 this week/);
+    expect(toast?.action?.label).toBe('Undo');
+
+    await act(async () => toast!.action!.run());
+    await waitFor(() => expect(result.current.thisWeekSlots[0]?.id).toBe(first.id));
+    expect(result.current.adjustments.find((a) => a.rule === 'user-reschedule')?.revertedAt).toBeDefined();
+  });
+
+  it('a dismissed toast only takes itself down, never a newer one', async () => {
+    const { result } = await mount();
+    act(() => result.current.say('First'));
+    const first = result.current.s.toast;
+    act(() => result.current.say('Second'));
+    act(() => result.current.dismissToast(first));
+    expect(result.current.s.toast?.text).toBe('Second');
+    act(() => result.current.dismissToast(result.current.s.toast));
+    expect(result.current.s.toast).toBeNull();
+  });
+
   it('dropping lowers the budget and is not a skip', async () => {
     const view = await mount();
     await withPlan(view);
@@ -680,6 +710,57 @@ describe('moving, dropping and swapping', () => {
     expect(result.current.thisWeekSlots.some((p) => p.status === 'skip')).toBe(false);
     expect(result.current.adjustments).toHaveLength(0);
     expect(result.current.thisWeekSlots.map((p) => p.slotIndex)).toEqual([0, 1, 2]);
+  });
+
+  it("a drop's Undo puts the same row back where it was, in memory and on disk, still with no adjustment", async () => {
+    const view = await mount();
+    await withPlan(view);
+    const { result } = view;
+
+    const before = result.current.thisWeekSlots.map((p) => p.id);
+    const budget = result.current.budget.budget;
+    const target = result.current.thisWeekSlots[1]!;
+    await act(async () => {
+      await result.current.dropSlot(target.id!);
+    });
+    await waitFor(() => expect(result.current.thisWeekSlots).toHaveLength(3));
+
+    const toast = result.current.s.toast;
+    expect(toast?.action?.label).toBe('Undo');
+    await act(async () => toast!.action!.run());
+
+    await waitFor(() => expect(result.current.thisWeekSlots.map((p) => p.id)).toEqual(before));
+    expect(result.current.budget.budget).toBeCloseTo(budget, 5);
+    expect(weekIsUserModified(result.current.thisWeekSlots, result.current.currentWeek)).toBe(false);
+    expect(result.current.adjustments).toHaveLength(0);
+
+    await waitFor(async () => {
+      const stored = await db.plannedSessions.where('weekStart').equals(result.current.currentWeek).sortBy('slotIndex');
+      expect(stored.map((p) => p.id)).toEqual(before);
+      expect(stored.some((p) => p.userModified === true)).toBe(false);
+    });
+  });
+
+  it("a drop's Undo keeps the mark on a slot swapped since the drop", async () => {
+    const view = await mount();
+    await withPlan(view);
+    const { result } = view;
+
+    const target = result.current.thisWeekSlots[1]!;
+    await act(async () => {
+      await result.current.dropSlot(target.id!);
+    });
+    const undo = result.current.s.toast!.action!;
+    const other = result.current.thisWeekSlots.find((p) => p.routineId === 'my-pull')!;
+    await act(async () => {
+      await result.current.swapSlotRoutine(other.id!, 'my-push');
+    });
+    await act(async () => undo.run());
+
+    await waitFor(() => expect(result.current.thisWeekSlots.some((p) => p.id === target.id)).toBe(true));
+    expect(result.current.thisWeekSlots.find((p) => p.id === other.id)?.userModified).toBe(true);
+    expect(weekIsUserModified(result.current.thisWeekSlots, result.current.currentWeek)).toBe(true);
+    await waitFor(async () => expect((await db.plannedSessions.get(other.id!))?.userModified).toBe(true));
   });
 
   it('swapping a routine re-prices the week', async () => {
@@ -1613,6 +1694,36 @@ describe('editing a logged set', () => {
     });
   });
 
+  it('saving the edit sheet with only the reps changed leaves an unrated set unrated', async () => {
+    const seen: { current: BompaValue | null } = { current: null };
+    function Grab() {
+      seen.current = useBompa();
+      return null;
+    }
+    render(
+      <BompaProvider>
+        <Grab />
+        <EditSetSheet />
+      </BompaProvider>,
+    );
+    await waitFor(() => expect(seen.current?.s.hydrated).toBe(true), { timeout: 4000 });
+    const view = { result: seen as { current: BompaValue } };
+    await withPlan(view);
+    const row = await oneLoggedSet(view);
+    expect(row.rpeEstimated).toBe(true);
+
+    await act(async () => view.result.current.patch({ editingSetId: row.id! }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Increase reps' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(async () => {
+      const stored = await db.sets.get(row.id!);
+      expect(stored?.reps).toBe(row.reps + 1);
+      expect(stored?.rpeEstimated).toBe(true);
+    });
+    expect(view.result.current.sets.find((x) => x.id === row.id)?.rpeEstimated).toBe(true);
+  });
+
   it('an edit in pounds still stores kilograms', async () => {
     const view = await mount();
     await withPlan(view);
@@ -1795,6 +1906,533 @@ describe('the finished-session summary', () => {
     await act(async () => result.current.closeSummary());
     expect(result.current.s.summary).toBeNull();
     expect(result.current.s.tab).toBe('home');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────
+// Rating after the set, finishing with care, and taking things back
+// ─────────────────────────────────────────────────────────────
+
+/** One set of each lift, so the plan runs out in two sets. */
+const TINY: Routine = {
+  id: 'tiny',
+  name: 'Tiny Day',
+  source: 'user',
+  phase: 'strength',
+  estMinutes: 10,
+  slots: [
+    { exerciseId: 'barbell-bench-press', order: 0, sets: 1, reps: 5, targetWeightKg: 80, targetPct1RM: null, targetRpe: 7, supersetGroup: null },
+    { exerciseId: 'overhead-press', order: 1, sets: 1, reps: 5, targetWeightKg: 45, targetPct1RM: null, targetRpe: 7, supersetGroup: null },
+  ],
+};
+
+async function pushSession() {
+  const view = await mount();
+  await withPlan(view);
+  await act(async () => view.result.current.startSession('my-push'));
+  await waitFor(() => expect(view.result.current.openSession).not.toBeNull());
+  return view;
+}
+
+async function tinySession() {
+  const view = await mount();
+  await act(async () => {
+    await view.result.current.saveRoutine(TINY);
+  });
+  await act(async () => view.result.current.startSession(TINY.id));
+  await waitFor(() => expect(view.result.current.openSession).not.toBeNull());
+  return view;
+}
+
+/** Log a set and wait for its database id, which rating and deleting go by. */
+async function logAndStore(view: { result: { current: BompaValue } }) {
+  const before = view.result.current.sets.length;
+  await act(async () => view.result.current.logSet());
+  await waitFor(() => {
+    expect(view.result.current.sets).toHaveLength(before + 1);
+    expect(view.result.current.sets.every((row) => row.id !== undefined)).toBe(true);
+  });
+}
+
+describe('RPE after the set', () => {
+  it('the rest screen asks about the set just logged, and only that one', async () => {
+    const view = await pushSession();
+    await logAndStore(view);
+    expect(view.result.current.justLoggedRows.map((row) => row.setNo)).toEqual([1]);
+
+    await logAndStore(view);
+    expect(view.result.current.justLoggedRows.map((row) => row.setNo)).toEqual([2]);
+  });
+
+  it('a rating writes the RPE and clears the estimate, on disk too', async () => {
+    const view = await pushSession();
+    await logAndStore(view);
+    const id = view.result.current.sets[0]!.id!;
+
+    await act(async () => view.result.current.rateSet(id, 8.5));
+    expect(view.result.current.sets[0]).toMatchObject({ rpe: 8.5, rpeEstimated: false });
+    await waitFor(async () => expect(await db.sets.get(id)).toMatchObject({ rpe: 8.5, rpeEstimated: false }));
+  });
+
+  it('leaving a lift with unrated sets raises the catch-up line, and the next set clears it', async () => {
+    const view = await pushSession();
+    await logAndStore(view);
+    await act(async () => view.result.current.pickExercise(1));
+    expect(view.result.current.s.catchUpLift).toBe('barbell-bench-press');
+
+    await logAndStore(view);
+    expect(view.result.current.s.catchUpLift).toBeNull();
+  });
+
+  it('leaving a lift whose sets are all rated raises nothing', async () => {
+    const view = await pushSession();
+    await logAndStore(view);
+    await act(async () => view.result.current.rateSet(view.result.current.sets[0]!.id!, 7));
+    await act(async () => view.result.current.pickExercise(1));
+    expect(view.result.current.s.catchUpLift).toBeNull();
+  });
+
+  it('after a superset round, asks about every set in the round', async () => {
+    const SS: Routine = {
+      id: 'rate-ss',
+      name: 'Round day',
+      source: 'user',
+      phase: 'strength',
+      estMinutes: 30,
+      slots: [
+        { exerciseId: 'cable-fly', order: 0, sets: 3, reps: 12, targetWeightKg: 20, targetPct1RM: null, targetRpe: 8, supersetGroup: 'A' },
+        { exerciseId: 'rope-extension', order: 1, sets: 3, reps: 12, targetWeightKg: 25, targetPct1RM: null, targetRpe: 8, supersetGroup: 'A' },
+      ],
+    };
+    const view = await mount();
+    await act(async () => {
+      await view.result.current.saveRoutine(SS);
+    });
+    await act(async () => view.result.current.startSession(SS.id));
+    await waitFor(() => expect(view.result.current.openSession).not.toBeNull());
+
+    await logAndStore(view);
+    // Mid-round: nothing is asked, and no rest takes the screen.
+    expect(view.result.current.justLoggedRows).toEqual([]);
+    await logAndStore(view);
+    expect(view.result.current.justLoggedRows.map((row) => row.exerciseId)).toEqual(['cable-fly', 'rope-extension']);
+  });
+});
+
+describe('the rest screen', () => {
+  it('minimising once starts later rests minimised, until the next session', async () => {
+    const view = await pushSession();
+    await logAndStore(view);
+    expect(view.result.current.s.restFull).toBe(true);
+    await act(async () => view.result.current.minimiseRest());
+    await act(async () => view.result.current.skipRest());
+
+    await logAndStore(view);
+    expect(view.result.current.restActive).toBe(true);
+    expect(view.result.current.s.restFull).toBe(false);
+
+    await act(async () => view.result.current.finishSession());
+    await act(async () => view.result.current.closeSummary());
+    await act(async () => view.result.current.startSession('my-pull'));
+    await waitFor(() => expect(view.result.current.openSession?.routineId).toBe('my-pull'));
+    expect(view.result.current.s.restPrefersMinimised).toBe(false);
+  });
+
+  it('names the next set from the plan, not from the steppers', async () => {
+    const view = await pushSession();
+    await logAndStore(view);
+    // The lifter nudged the weight; the plan still says 80.
+    await act(async () => view.result.current.patch({ entryWeight: 100, entryReps: 3 }));
+    expect(view.result.current.restNext).toEqual({ exerciseId: 'barbell-bench-press', setNo: 2, weight: 80, reps: 8 });
+  });
+
+  it('names the next lift once this one has run out of planned sets', async () => {
+    const view = await tinySession();
+    await logAndStore(view);
+    expect(view.result.current.restNext).toMatchObject({ exerciseId: 'overhead-press', setNo: 1, weight: 45, reps: 5 });
+  });
+
+  it('once a lift has run out of planned sets, Train moves to the lift the rest screen names', async () => {
+    const THREE: Routine = {
+      ...TINY,
+      id: 'three',
+      slots: [
+        { ...TINY.slots[0]!, sets: 3 },
+        { ...TINY.slots[1]!, sets: 3 },
+      ],
+    };
+    const view = await mount();
+    await act(async () => {
+      await view.result.current.saveRoutine(THREE);
+    });
+    await act(async () => view.result.current.startSession(THREE.id));
+    await waitFor(() => expect(view.result.current.openSession).not.toBeNull());
+
+    await logAndStore(view);
+    await logAndStore(view);
+    expect(view.result.current.activeExerciseId).toBe('barbell-bench-press');
+    await logAndStore(view);
+    expect(view.result.current.restNext).toMatchObject({ exerciseId: 'overhead-press', setNo: 1, weight: 45, reps: 5 });
+
+    await act(async () => view.result.current.skipRest());
+    expect(view.result.current.activeExerciseId).toBe('overhead-press');
+    expect(view.result.current.s.entryWeight).toBe(45);
+
+    // Logging now records the next lift's first set, not a fourth bench.
+    await logAndStore(view);
+    expect(view.result.current.sessionSets.filter((row) => row.exerciseId === 'barbell-bench-press')).toHaveLength(3);
+    expect(view.result.current.sessionSets.filter((row) => row.exerciseId === 'overhead-press')).toHaveLength(1);
+  });
+
+  it('a superset whose lifts have different set counts finishes the plan on the last set, and asks about it', async () => {
+    const UNEVEN: Routine = {
+      id: 'uneven',
+      name: 'Uneven Day',
+      source: 'user',
+      phase: 'strength',
+      estMinutes: 30,
+      slots: [
+        { exerciseId: 'barbell-bench-press', order: 0, sets: 4, reps: 8, targetWeightKg: 80, targetPct1RM: null, targetRpe: 8, supersetGroup: 'A' },
+        { exerciseId: 'cable-fly', order: 1, sets: 3, reps: 12, targetWeightKg: 20, targetPct1RM: null, targetRpe: 8, supersetGroup: 'A' },
+      ],
+    };
+    const view = await mount();
+    await act(async () => {
+      await view.result.current.saveRoutine(UNEVEN);
+    });
+    await act(async () => view.result.current.startSession(UNEVEN.id));
+    await waitFor(() => expect(view.result.current.openSession).not.toBeNull());
+
+    for (let round = 0; round < 3; round++) {
+      await logAndStore(view);
+      await logAndStore(view);
+    }
+    expect(view.result.current.activeExerciseId).toBe('barbell-bench-press');
+    expect(view.result.current.s.sessionComplete).toBe(false);
+
+    await logAndStore(view);
+    expect(view.result.current.s.sessionComplete).toBe(true);
+    // The last round was bench alone, so bench's fourth set is all it asks about.
+    expect(view.result.current.justLoggedRows.map((row) => [row.exerciseId, row.setNo])).toEqual([['barbell-bench-press', 4]]);
+    expect(view.result.current.activeExerciseId).toBe('barbell-bench-press');
+    expect(view.result.current.sessionSets.filter((row) => row.exerciseId === 'cable-fly')).toHaveLength(3);
+  });
+
+  it('the set that finishes the plan opens the plan-done screen, and an extra set does not', async () => {
+    const view = await tinySession();
+    await logAndStore(view);
+    expect(view.result.current.s.sessionComplete).toBe(false);
+
+    await act(async () => view.result.current.pickExercise(1));
+    await logAndStore(view);
+    expect(view.result.current.s.sessionComplete).toBe(true);
+    expect(view.result.current.restNext).toBeNull();
+
+    await act(async () => view.result.current.keepTraining());
+    expect(view.result.current.s.sessionComplete).toBe(false);
+    await logAndStore(view);
+    expect(view.result.current.s.sessionComplete).toBe(false);
+  });
+});
+
+describe('finishing', () => {
+  it('with a planned lift untrained, asks first and finishes nothing', async () => {
+    const view = await pushSession();
+    await logAndStore(view);
+    await act(async () => view.result.current.requestFinish());
+    expect(view.result.current.s.finishGuardOpen).toBe(true);
+    expect(view.result.current.openSession).not.toBeNull();
+  });
+
+  it('with every planned lift started, finishes straight away', async () => {
+    const view = await tinySession();
+    await logAndStore(view);
+    await act(async () => view.result.current.pickExercise(1));
+    await logAndStore(view);
+    await act(async () => view.result.current.requestFinish());
+    expect(view.result.current.s.finishGuardOpen).toBe(false);
+    expect(view.result.current.openSession).toBeNull();
+    expect(view.result.current.s.summary).not.toBeNull();
+  });
+
+  it('undo reopens the session and puts its slot back exactly as it was', async () => {
+    const view = await pushSession();
+    await logAndStore(view);
+    const session = view.result.current.openSession!;
+    const slotBefore = view.result.current.planned.find((p) => p.id === session.plannedSessionId)!;
+    expect(slotBefore.status).toBe('plan');
+
+    await act(async () => view.result.current.finishSession());
+    await waitFor(async () => expect((await db.plannedSessions.get(slotBefore.id!))?.status).toBe('done'));
+    expect(view.result.current.lastFinishedAt).not.toBeNull();
+
+    await act(async () => view.result.current.undoFinish());
+    expect(view.result.current.openSession?.id).toBe(session.id);
+    expect(view.result.current.openSession?.finishedAt).toBeUndefined();
+    expect(view.result.current.s.summary).toBeNull();
+    expect(view.result.current.s.tab).toBe('log');
+    expect(view.result.current.planned.find((p) => p.id === slotBefore.id)).toEqual(slotBefore);
+
+    await waitFor(async () => {
+      const stored = await db.plannedSessions.get(slotBefore.id!);
+      // A pending slot has no date and no session, and undo leaves none behind.
+      expect(stored).toEqual(slotBefore);
+      expect(stored?.date).toBeUndefined();
+      expect(stored?.sessionId).toBeUndefined();
+      expect((await db.sessions.get(session.id!))?.finishedAt).toBeUndefined();
+    });
+    // The sets were never touched.
+    expect(view.result.current.sessionSets).toHaveLength(1);
+  });
+
+  it('undo does nothing once its 30 seconds are up', async () => {
+    const view = await pushSession();
+    await logAndStore(view);
+    await act(async () => view.result.current.finishSession());
+    const later = Date.now() + 31_000;
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(later);
+    try {
+      await act(async () => view.result.current.undoFinish());
+    } finally {
+      clock.mockRestore();
+    }
+    expect(view.result.current.openSession).toBeNull();
+  });
+
+  it('Done on the summary ends the chance to undo', async () => {
+    const view = await pushSession();
+    await logAndStore(view);
+    await act(async () => view.result.current.finishSession());
+    await act(async () => view.result.current.closeSummary());
+    expect(view.result.current.lastFinishedAt).toBeNull();
+    await act(async () => view.result.current.undoFinish());
+    expect(view.result.current.openSession).toBeNull();
+  });
+
+  it('counts finished sessions for the hint, keeps the count, and undo uncounts it', async () => {
+    const view = await pushSession();
+    expect(view.result.current.s.trainHintsSeen).toBe(0);
+    await act(async () => view.result.current.finishSession());
+    expect(view.result.current.s.trainHintsSeen).toBe(1);
+    await act(async () => view.result.current.undoFinish());
+    expect(view.result.current.s.trainHintsSeen).toBe(0);
+    await act(async () => view.result.current.finishSession());
+    await waitFor(async () => expect((await db.settings.get('trainHintsSeen'))?.value).toBe(1));
+  });
+
+  it('undo puts the hint count back exactly, even when finishing did not move it', async () => {
+    const view = await pushSession();
+    await act(async () => view.result.current.patch({ trainHintsSeen: TRAIN_HINTS_SESSIONS }));
+    await act(async () => view.result.current.finishSession());
+    expect(view.result.current.s.trainHintsSeen).toBe(TRAIN_HINTS_SESSIONS);
+    await act(async () => view.result.current.undoFinish());
+    // Past the cap finishing counts nothing, so undo has nothing to take back.
+    expect(view.result.current.s.trainHintsSeen).toBe(TRAIN_HINTS_SESSIONS);
+  });
+
+  it('undo tapped after its window says it is too late, rather than doing nothing silently', async () => {
+    const view = await pushSession();
+    await logAndStore(view);
+    await act(async () => view.result.current.finishSession());
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 31_000);
+    try {
+      await act(async () => view.result.current.undoFinish());
+    } finally {
+      clock.mockRestore();
+    }
+    expect(view.result.current.openSession).toBeNull();
+    expect(view.result.current.s.toast?.text).toBe('Too late to undo. The session is saved.');
+  });
+
+  it('the undo pill never shows more than its 30 seconds, however the clock tick lines up', async () => {
+    const seen: { current: BompaValue | null } = { current: null };
+    function Grab() {
+      seen.current = useBompa();
+      return null;
+    }
+    render(
+      <BompaProvider>
+        <Grab />
+        <FinishSummary />
+      </BompaProvider>,
+    );
+    await waitFor(() => expect(seen.current?.s.hydrated).toBe(true), { timeout: 4000 });
+    const view = { result: seen as { current: BompaValue } };
+    await withPlan(view);
+    await act(async () => view.result.current.startSession('my-push'));
+    await waitFor(() => expect(view.result.current.openSession).not.toBeNull());
+    await logAndStore(view);
+
+    // The finish lands most of a second after the last tick of the app's clock.
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(view.result.current.now + 900);
+    try {
+      await act(async () => view.result.current.finishSession());
+    } finally {
+      clock.mockRestore();
+    }
+    expect(screen.getByRole('button', { name: /^Undo finish/ }).textContent).toBe('Undo finish · 0:30');
+  });
+
+  describe('the summary screen', () => {
+    async function finishedWithSummary(logs: number) {
+      const seen: { current: BompaValue | null } = { current: null };
+      function Grab() {
+        seen.current = useBompa();
+        return null;
+      }
+      render(
+        <BompaProvider>
+          <Grab />
+          <FinishSummary />
+        </BompaProvider>,
+      );
+      await waitFor(() => expect(seen.current?.s.hydrated).toBe(true), { timeout: 4000 });
+      const view = { result: seen as { current: BompaValue } };
+      await withPlan(view);
+      await act(async () => view.result.current.startSession('my-push'));
+      await waitFor(() => expect(view.result.current.openSession).not.toBeNull());
+      for (let i = 0; i < logs; i++) await logAndStore(view);
+      await act(async () => view.result.current.finishSession());
+      return view;
+    }
+
+    it('does not call unrated sets on target, and names the lift never started', async () => {
+      await finishedWithSummary(2);
+      expect(screen.queryByText(/On target across the board/)).toBeNull();
+      expect(
+        screen.getByText("You didn't get to Overhead Press, and with nothing rated I can't judge the rest yet."),
+      ).toBeTruthy();
+    });
+
+    it("reads tomorrow's readiness as still learning while Today does", async () => {
+      const view = await finishedWithSummary(1);
+      // A first session: Today has almost no history to stand on.
+      expect(view.result.current.scores.lowConfidence).toBe(true);
+      const figure = screen.getByRole('img', { name: /^Tomorrow's readiness/ });
+      expect(figure.getAttribute('aria-label')).toMatch(/still learning/);
+      expect(figure.textContent).toMatch(/Still learning/);
+      expect(figure.textContent).not.toMatch(/Primed|Steady|Buried/);
+    });
+  });
+
+  it('a rating on the summary rebuilds it, so the verdict reads the new number', async () => {
+    const view = await pushSession();
+    await logAndStore(view);
+    const id = view.result.current.sets[0]!.id!;
+    await act(async () => view.result.current.finishSession());
+    await act(async () => view.result.current.rateSet(id, 9.5));
+    expect(view.result.current.s.summary?.lifts[0]?.sets[0]).toMatchObject({ rpe: 9.5, rpeEstimated: false });
+  });
+});
+
+describe('taking a set back', () => {
+  it('deleting a set offers Undo, which puts it back under the same id, on disk too', async () => {
+    const view = await pushSession();
+    await logAndStore(view);
+    const row = view.result.current.sets[0]!;
+
+    await act(async () => view.result.current.deleteSet(row));
+    expect(view.result.current.sets).toHaveLength(0);
+    await waitFor(async () => expect(await db.sets.get(row.id!)).toBeUndefined());
+    const toast = view.result.current.s.toast;
+    expect(toast?.text).toBe('Deleted Bench set 1');
+    expect(toast?.action?.label).toBe('Undo');
+
+    await act(async () => toast!.action!.run());
+    expect(view.result.current.sets).toEqual([row]);
+    await waitFor(async () => expect(await db.sets.get(row.id!)).toEqual(row));
+  });
+
+  /** Log a set and then an unplanned drop off it, both with their ids. */
+  async function setWithDrop(view: { result: { current: BompaValue } }) {
+    await logAndStore(view);
+    await act(async () => view.result.current.startSegments('drop'));
+    await logAndStore(view);
+    expect(view.result.current.segment).toBeNull();
+  }
+
+  it("undoing the delete of a set with a drop brings every row back, with its id, in time order, on disk too", async () => {
+    const view = await pushSession();
+    await logAndStore(view);
+    await act(async () => view.result.current.skipRest());
+    await setWithDrop(view);
+    const before = view.result.current.sets;
+    expect(before.map((row) => [row.setNo, row.segment])).toEqual([
+      [1, undefined],
+      [2, undefined],
+      [2, 1],
+    ]);
+
+    await act(async () => view.result.current.deleteSet(before[1]!));
+    expect(view.result.current.sets).toEqual([before[0]]);
+    await waitFor(async () => expect(await db.sets.count()).toBe(1));
+
+    await act(async () => view.result.current.s.toast!.action!.run());
+    expect(view.result.current.sets).toEqual(before);
+    await waitFor(async () => expect(await db.sets.orderBy('at').toArray()).toEqual(before));
+  });
+
+  it('undoing a delete after the set number was reused puts the set back above the others, pieces with it', async () => {
+    const view = await pushSession();
+    await logAndStore(view);
+    await logAndStore(view);
+    await act(async () => view.result.current.skipRest());
+    await setWithDrop(view);
+    const [, , third, drop] = view.result.current.sets;
+    expect([third!.setNo, drop!.setNo]).toEqual([3, 3]);
+
+    await act(async () => view.result.current.deleteSet(third!));
+    const undo = view.result.current.s.toast!.action!;
+    await act(async () => view.result.current.skipRest());
+    await logAndStore(view);
+    const fresh = view.result.current.sets.find((row) => row.at > drop!.at)!;
+    expect(fresh.setNo).toBe(3);
+
+    await act(async () => undo.run());
+    const bench = view.result.current.sets.filter((row) => row.exerciseId === 'barbell-bench-press');
+    // Each set number belongs to one set, and the drop still hangs off its own.
+    expect(bench.filter((row) => row.segment === undefined).map((row) => row.setNo).sort()).toEqual([1, 2, 3, 4]);
+    expect(bench.find((row) => row.id === third!.id)).toMatchObject({ setNo: 4, weightKg: third!.weightKg });
+    expect(bench.find((row) => row.id === drop!.id)).toMatchObject({ setNo: 4, segment: 1 });
+    expect(bench.find((row) => row.id === fresh.id)).toEqual(fresh);
+    await waitFor(async () => {
+      expect((await db.sets.get(third!.id!))?.setNo).toBe(4);
+      expect((await db.sets.get(drop!.id!))?.setNo).toBe(4);
+      expect((await db.sets.get(fresh.id!))?.setNo).toBe(3);
+    });
+  });
+
+  it("rating a set leaves its drop's own RPE alone", async () => {
+    const view = await pushSession();
+    await setWithDrop(view);
+    const [main, drop] = view.result.current.sets;
+    expect(drop).toMatchObject({ rpe: 10, rpeEstimated: true, segmentStyle: 'drop' });
+
+    await act(async () => view.result.current.rateSet(main!.id!, 8));
+    expect(view.result.current.sets[0]).toMatchObject({ rpe: 8, rpeEstimated: false });
+    expect(view.result.current.sets[1]).toEqual(drop);
+    await waitFor(async () => expect(await db.sets.get(main!.id!)).toMatchObject({ rpe: 8, rpeEstimated: false }));
+    expect(await db.sets.get(drop!.id!)).toEqual(drop);
+  });
+});
+
+describe('Train controls', () => {
+  it('a long press moves the weight step on, and says so', async () => {
+    const view = await pushSession();
+    expect(view.result.current.s.step).toBe(2.5);
+    await act(async () => view.result.current.setStepByLongPress());
+    expect(view.result.current.s.step).toBe(5);
+    expect(view.result.current.s.toast?.text).toBe('Step 5 kg');
+    await act(async () => view.result.current.setStepByLongPress());
+    expect(view.result.current.s.step).toBe(1.25);
+  });
+
+  it('reordering moves a lift in this session only, and the lift on screen stays on screen', async () => {
+    const view = await pushSession();
+    await act(async () => view.result.current.moveSessionLift(0, 1));
+    expect(view.result.current.openSession?.exerciseIds).toEqual(['overhead-press', 'barbell-bench-press']);
+    expect(view.result.current.activeExerciseId).toBe('barbell-bench-press');
+    expect(view.result.current.routineById('my-push')?.slots[0]?.exerciseId).toBe('barbell-bench-press');
   });
 });
 
@@ -2009,6 +2647,22 @@ describe('training methods', () => {
       expect(pieces.map((row) => row.segment)).toEqual([1, 2, 3, 4]);
       // A cluster single is as hard as the set it belongs to.
       expect(pieces.every((row) => row.rpe === 8 && row.weightKg === 140)).toBe(true);
+    });
+
+    it('a cluster is rated once, after its last piece, and its singles take the rating', async () => {
+      const view = await training('methods-pieces');
+      const { result } = view;
+      await select(view, 'deadlift');
+
+      await log(view);
+      // Between singles nothing is asked.
+      expect(result.current.justLoggedRows).toEqual([]);
+      for (let i = 0; i < 4; i++) await log(view);
+      expect(result.current.justLoggedRows.map((row) => row.segment)).toEqual([undefined]);
+
+      await waitFor(() => expect(result.current.sets.every((row) => row.id !== undefined)).toBe(true));
+      await act(async () => result.current.rateSet(result.current.justLoggedRows[0]!.id!, 9));
+      expect(result.current.sets.every((row) => row.rpe === 9 && !row.rpeEstimated)).toBe(true);
     });
 
     it('a rest-pause set with a 50-rep target ends itself on the piece that reaches 50', async () => {
@@ -2418,5 +3072,86 @@ describe('warm-up checklist', () => {
     await act(async () => result.current.startSession('my-push'));
     await waitFor(() => expect(result.current.openSession?.id).toBeDefined());
     expect(result.current.warmupDone).toEqual([]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────
+// Navigation: the Workouts tab, pushed views and the Settings sheet
+// ─────────────────────────────────────────────────────────────
+
+describe('navigation', () => {
+  it('a pushed view keeps its tab lit, and Back returns to the tab', async () => {
+    const { result } = await mount();
+    act(() => result.current.go('workouts'));
+    act(() => result.current.openView('timer'));
+    expect(result.current.s.tab).toBe('workouts');
+    expect(result.current.s.pushed).toEqual({ view: 'timer', from: 'tab' });
+
+    act(() => result.current.closeView());
+    expect(result.current.s.pushed).toBeNull();
+    expect(result.current.s.settingsOpen).toBe(false);
+  });
+
+  it('a view opened from Settings closes the sheet, and Back reopens it', async () => {
+    const { result } = await mount();
+    act(() => result.current.openSettings());
+    act(() => result.current.openView('alerts', 'settings'));
+    // Not drawn under the sheet it came from.
+    expect(result.current.s.settingsOpen).toBe(false);
+
+    act(() => result.current.closeView());
+    expect(result.current.s.pushed).toBeNull();
+    expect(result.current.s.settingsOpen).toBe(true);
+  });
+
+  it('a tab tap clears any view or sheet left open', async () => {
+    const { result } = await mount();
+    act(() => result.current.openView('calc'));
+    act(() => result.current.openSettings());
+    act(() => result.current.go('plan'));
+    expect(result.current.s.pushed).toBeNull();
+    expect(result.current.s.settingsOpen).toBe(false);
+    expect(result.current.s.tab).toBe('plan');
+  });
+
+  it('starting a session lands on Train, not on a view left open', async () => {
+    const view = await mount();
+    await withPlan(view);
+    act(() => view.result.current.go('workouts'));
+    act(() => view.result.current.openView('timer'));
+    act(() => view.result.current.startSession(PUSH.id));
+    expect(view.result.current.s.tab).toBe('log');
+    expect(view.result.current.s.pushed).toBeNull();
+  });
+
+  it('running setup again closes the Settings sheet it was started from', async () => {
+    const view = await mount();
+    await withPlan(view);
+    act(() => view.result.current.openSettings());
+    act(() => view.result.current.restartSetup());
+    expect(view.result.current.s.settingsOpen).toBe(false);
+    expect(view.result.current.needsSetup).toBe(true);
+  });
+});
+
+describe('last backup', () => {
+  it('is never until an export, then kept across a reload', async () => {
+    const first = await mount();
+    expect(first.result.current.s.lastExportAt).toBeNull();
+
+    const at = Date.UTC(2026, 8, 20, 9);
+    act(() => first.result.current.recordExport(at));
+    expect(first.result.current.s.lastExportAt).toBe(at);
+    await waitFor(async () => expect((await db.settings.get('lastExportAt'))?.value).toBe(at));
+
+    first.unmount();
+    const second = await mount();
+    expect(second.result.current.s.lastExportAt).toBe(at);
+  });
+
+  it('reads a damaged value as never', async () => {
+    await db.settings.put({ key: 'lastExportAt', value: 'yesterday' });
+    const { result } = await mount();
+    expect(result.current.s.lastExportAt).toBeNull();
   });
 });

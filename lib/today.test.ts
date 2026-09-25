@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { C, onInk } from './tokens';
 import {
+  READY_AT,
   READY_LABEL,
   curveGeometry,
+  daysToMeet,
   historyPhrase,
+  loadWord,
   readinessBand,
+  readinessMarker,
+  readinessScale,
   readinessTrend,
   readySentence,
   trendColour,
@@ -24,10 +29,60 @@ describe('readinessBand', () => {
     expect(readinessBand(0)).toBe('buried');
   });
 
-  it('labels each band with its arrow', () => {
-    expect(READY_LABEL[readinessBand(80)]).toBe('↑ Primed');
-    expect(READY_LABEL[readinessBand(50)]).toBe('→ Steady');
-    expect(READY_LABEL[readinessBand(10)]).toBe('↓ Buried');
+  it('labels each band with a plain word', () => {
+    expect(READY_LABEL[readinessBand(80)]).toBe('Primed');
+    expect(READY_LABEL[readinessBand(50)]).toBe('Steady');
+    expect(READY_LABEL[readinessBand(10)]).toBe('Buried');
+  });
+});
+
+describe('readinessScale', () => {
+  it('covers the whole 0–100 scale, lowest band first', () => {
+    const scale = readinessScale();
+    expect(scale.map((s) => s.band)).toEqual(['buried', 'steady', 'primed']);
+    expect(scale.reduce((sum, s) => sum + s.share, 0)).toBe(100);
+  });
+
+  it('puts each boundary exactly where the band word changes', () => {
+    // The marker and the word beside the number must never disagree, so the
+    // track is cut at the same numbers readinessBand uses.
+    const [buried, steady] = readinessScale();
+    expect(readinessBand(buried!.share)).toBe('steady');
+    expect(readinessBand(buried!.share - 1)).toBe('buried');
+    expect(readinessBand(buried!.share + steady!.share)).toBe('primed');
+    expect(readinessBand(buried!.share + steady!.share - 1)).toBe('steady');
+    expect(READY_AT).toEqual({ primed: 75, steady: 45 });
+  });
+
+  it('keeps the marker on the track', () => {
+    expect(readinessMarker(-5)).toBe(0);
+    expect(readinessMarker(62)).toBe(62);
+    expect(readinessMarker(140)).toBe(100);
+  });
+});
+
+describe('loadWord', () => {
+  it('says nothing until there is a ratio to judge', () => {
+    expect(loadWord(null)).toBeNull();
+  });
+
+  it('is ok through the usual range, high above it, too high past the danger line', () => {
+    expect(loadWord(0.6)).toBe('ok');
+    expect(loadWord(1.3)).toBe('ok');
+    expect(loadWord(1.31)).toBe('high');
+    expect(loadWord(1.5)).toBe('high');
+    expect(loadWord(1.51)).toBe('too high');
+  });
+});
+
+describe('daysToMeet', () => {
+  it('counts whole days to the meet', () => {
+    expect(daysToMeet('2026-09-25', '2026-11-11')).toBe(47);
+  });
+
+  it('is null with no meet, and zero once the meet has passed', () => {
+    expect(daysToMeet('2026-09-25', undefined)).toBeNull();
+    expect(daysToMeet('2026-09-25', '2026-09-01')).toBe(0);
   });
 });
 

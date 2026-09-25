@@ -9,6 +9,7 @@ import {
   pendingSlotFor,
   planWeekStart,
   renumber,
+  restoreDropped,
   spreadWeekDays,
   trimToBudget,
   weekBudget,
@@ -302,6 +303,70 @@ describe('week helpers', () => {
     expect(three).toHaveLength(3);
     expect(new Set(three).size).toBe(3);
     expect(spreadWeekDays(WEEK, 0)).toEqual([]);
+  });
+});
+
+describe('restoreDropped', () => {
+  const before = [
+    slot({ id: 1, slotIndex: 0, status: 'done' }),
+    slot({ id: 2, slotIndex: 1, routineId: 'pull' }),
+    slot({ id: 3, slotIndex: 2, routineId: 'legs', userModified: true }),
+  ];
+  const dropped = before[1]!;
+  // What a drop leaves: the rest renumbered, and every slot marked as rearranged.
+  const afterDrop = [
+    { ...before[0]!, userModified: true },
+    { ...before[2]!, slotIndex: 1, userModified: true },
+  ];
+
+  it('puts the slot back with its own id at the position it left', () => {
+    const week = restoreDropped(afterDrop, dropped, before, afterDrop);
+    expect(week.map((p) => [p.id, p.slotIndex])).toEqual([
+      [1, 0],
+      [2, 1],
+      [3, 2],
+    ]);
+  });
+
+  it('gives each slot back the rearranged flag it had before the drop', () => {
+    const week = restoreDropped(afterDrop, dropped, before, afterDrop);
+    expect(week.map((p) => p.userModified)).toEqual([undefined, undefined, true]);
+    // Absent, not false: a drop and its undo leave the row as it was.
+    expect('userModified' in week[0]!).toBe(false);
+  });
+
+  it('keeps what happened since, rather than restoring an old snapshot', () => {
+    // A slot added after the drop stays, and the dropped one slots in around it.
+    const added = slot({ id: 9, slotIndex: 2, routineId: 'arms', userModified: true });
+    const week = restoreDropped([...afterDrop, added], dropped, before, afterDrop);
+    expect(week.map((p) => p.id)).toEqual([1, 2, 3, 9]);
+    expect(week.map((p) => p.slotIndex)).toEqual([0, 1, 2, 3]);
+    expect(week[3]!.userModified).toBe(true);
+  });
+
+  it('lands at the end when the week has since shrunk below its old position', () => {
+    const week = restoreDropped([afterDrop[0]!], before[2]!, before, afterDrop);
+    expect(week.map((p) => [p.id, p.slotIndex])).toEqual([
+      [1, 0],
+      [3, 1],
+    ]);
+  });
+
+  it('leaves the flag of a slot changed since the drop, since that change was the lifter too', () => {
+    // After the drop, the lifter swapped slot 1's workout: it is marked for that
+    // reason now, and undoing the drop must not take the mark away.
+    const swapped = [{ ...afterDrop[0]!, routineId: 'arms' }, afterDrop[1]!];
+    const week = restoreDropped(swapped, dropped, before, afterDrop);
+    expect(week.map((p) => [p.id, p.userModified])).toEqual([
+      [1, true],
+      [2, undefined],
+      [3, true],
+    ]);
+  });
+
+  it('does nothing when the slot is already back, so a second Undo cannot duplicate it', () => {
+    const once = restoreDropped(afterDrop, dropped, before, afterDrop);
+    expect(restoreDropped(once, dropped, before, afterDrop)).toBe(once);
   });
 });
 

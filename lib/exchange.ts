@@ -6,7 +6,7 @@
 
 import { isKnownProvider } from './content/registry';
 import { MAX_ID_CHARS } from './content/provider';
-import { db } from './db';
+import { db, warn } from './db';
 import type { ContentLink, Envelope } from './types';
 
 export const ENVELOPE_VERSION = 1;
@@ -154,6 +154,15 @@ function isValidLink(raw: unknown): raw is ContentLink {
   return shortString(row.externalId);
 }
 
+/** The settings key the "Last backup" line reads. */
+export const LAST_EXPORT_KEY = 'lastExportAt';
+
+/** The later of two times, ignoring anything that is not a real positive timestamp. */
+function newestTime(...times: unknown[]): number | null {
+  const valid = times.filter((t): t is number => typeof t === 'number' && Number.isFinite(t) && t > 0);
+  return valid.length ? Math.max(...valid) : null;
+}
+
 /** Write a parsed envelope. bulkPut so re-importing the same file is idempotent. */
 export async function applyEnvelope(envelope: Envelope): Promise<void> {
   await db.transaction(
@@ -187,7 +196,15 @@ export async function applyEnvelope(envelope: Envelope): Promise<void> {
       if (envelope.sets.length) await db.sets.bulkPut(envelope.sets);
       if (envelope.adjustments.length) await db.adjustments.bulkPut(envelope.adjustments);
       if (envelope.competitions.length) await db.competitions.bulkPut(envelope.competitions);
-      if (envelope.settings.length) await db.settings.bulkPut(envelope.settings);
+      // The last-backup time is the one setting a restore must not simply copy.
+      // The file's own record is from the export before it, so copying it would
+      // make "Last backup" claim an older date than the file in your hand, or
+      // older than a backup this phone made since.
+      const localLast = await db.settings.get(LAST_EXPORT_KEY);
+      const newestBackup = newestTime(localLast?.value, Date.parse(envelope.exportedAt));
+      const settings = envelope.settings.filter((row) => row.key !== LAST_EXPORT_KEY);
+      if (settings.length) await db.settings.bulkPut(settings);
+      if (newestBackup !== null) await db.settings.put({ key: LAST_EXPORT_KEY, value: newestBackup });
       // Links arrive without connections or content. Nothing is fetched until the
       // user connects the provider on this device.
       if (envelope.contentLinks?.length) await db.contentLinks.bulkPut(envelope.contentLinks);
@@ -195,9 +212,83 @@ export async function applyEnvelope(envelope: Envelope): Promise<void> {
   );
 }
 
-/** Trigger a download of the envelope. Browser-only. */
-export function downloadEnvelope(envelope: Envelope, filename: string): void {
+/**
+ * How a backup left the app.
+ *
+ * - `saved`: a save dialog or the share sheet finished, so a file exists somewhere.
+ * - `downloaded`: handed to the browser as a download. Nothing reports whether
+ *   it landed, so the caller should say where to look rather than promise it.
+ * - `cancelled`: the person closed the dialog. No file, and nothing to record.
+ */
+export type SaveOutcome = 'saved' | 'downloaded' | 'cancelled';
+
+type Writable = { write: (data: Blob) => Promise<void>; close: () => Promise<void> };
+type SavePicker = (options: { suggestedName: string; types: { description: string; accept: Record<string, string[]> }[] }) => Promise<{
+  createWritable: () => Promise<Writable>;
+}>;
+type ShareNavigator = { canShare?: (data: { files: File[] }) => boolean; share?: (data: { files: File[]; title?: string }) => Promise<void> };
+
+/** The parts of the browser a save uses. A parameter so tests can hand in fakes. */
+export type SaveHost = {
+  showSaveFilePicker?: unknown;
+  navigator?: unknown;
+  download: (blob: Blob, filename: string) => void;
+};
+
+function isAbort(err: unknown): boolean {
+  return err instanceof Error && err.name === 'AbortError';
+}
+
+/**
+ * Save the envelope as a file, preferring a route that tells us it worked: a
+ * save dialog on desktop, the share sheet on a phone. Only when neither exists
+ * does it fall back to a plain download, which never reports back. Any failure
+ * other than a cancel also falls back, so a refused dialog still leaves a file.
+ */
+export async function saveEnvelope(envelope: Envelope, filename: string, host: SaveHost = browserHost()): Promise<SaveOutcome> {
   const blob = new Blob([JSON.stringify(envelope, null, 2)], { type: 'application/json' });
+
+  if (typeof host.showSaveFilePicker === 'function') {
+    try {
+      const handle = await (host.showSaveFilePicker as SavePicker)({
+        suggestedName: filename,
+        types: [{ description: 'Bompa backup', accept: { 'application/json': ['.json'] } }],
+      });
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return 'saved';
+    } catch (err) {
+      if (isAbort(err)) return 'cancelled';
+      warn(err);
+    }
+  } else {
+    const nav = host.navigator as ShareNavigator | undefined;
+    const file = typeof File === 'function' ? new File([blob], filename, { type: 'application/json' }) : null;
+    if (file && typeof nav?.share === 'function' && typeof nav.canShare === 'function' && nav.canShare({ files: [file] })) {
+      try {
+        await nav.share({ files: [file], title: filename });
+        return 'saved';
+      } catch (err) {
+        if (isAbort(err)) return 'cancelled';
+        warn(err);
+      }
+    }
+  }
+
+  host.download(blob, filename);
+  return 'downloaded';
+}
+
+function browserHost(): SaveHost {
+  const w = globalThis as { showSaveFilePicker?: unknown; navigator?: unknown };
+  // Bound, because the picker throws when called detached from the window.
+  const picker = typeof w.showSaveFilePicker === 'function' ? (w.showSaveFilePicker as SavePicker).bind(globalThis) : undefined;
+  return { showSaveFilePicker: picker, navigator: w.navigator, download: downloadBlob };
+}
+
+/** Trigger a download of a file. Browser-only. */
+function downloadBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;

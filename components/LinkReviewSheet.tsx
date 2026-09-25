@@ -11,7 +11,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import type { ExternalMatch } from '@/lib/content/provider';
-import { C, FONT, R, TOUCH, num, onInk } from '@/lib/tokens';
+import { C, FONT, R, T, TOUCH, num, onInk } from '@/lib/tokens';
 import { useBompa } from '@/state/BompaContext';
 import { DarkSheet, InkButton, Row } from '@/components/ui';
 import { sheetHairline } from '@/components/SheetParts';
@@ -64,13 +64,13 @@ export function LinkReviewSheet({
       }
       gap={14}
     >
-      <span style={{ fontSize: 12.5, lineHeight: 1.5, color: onInk.muted }}>
+      <span style={{ fontSize: T.sm, lineHeight: 1.5, color: onInk.muted }}>
         Only links you accept are used. Check each pair names the same movement — a near miss like a Romanian deadlift for a deadlift
         would show the wrong instructions.
       </span>
 
       {suggestions.length === 0 && (
-        <span style={{ fontSize: 14, color: onInk.muted, padding: '14px 0', ...sheetHairline }}>Nothing left to review.</span>
+        <span style={{ fontSize: T.md, color: onInk.muted, padding: '14px 0', ...sheetHairline }}>Nothing left to review.</span>
       )}
 
       <ul aria-label="Suggestions" style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column' }}>
@@ -80,7 +80,7 @@ export function LinkReviewSheet({
             <li key={link.exerciseId} aria-label={name} style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '12px 0', ...sheetHairline }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 <span style={{ fontSize: 15, fontWeight: 800 }}>{name}</span>
-                <span style={{ fontSize: 12.5, fontWeight: 600, color: onInk.muted }}>
+                <span style={{ fontSize: T.sm, fontWeight: 600, color: onInk.muted }}>
                   {providerName}: {link.externalName ?? link.externalId}
                 </span>
               </div>
@@ -217,7 +217,7 @@ const field: CSSProperties = {
   color: onInk.text,
   padding: '0 12px',
   fontFamily: FONT,
-  fontSize: 14,
+  fontSize: T.md,
   fontWeight: 600,
   caretColor: C.amber,
 };

@@ -11,13 +11,14 @@ import { REPS_MAX, SETS_MAX, weightMax, weightPrecision } from '@/lib/numberEntr
 import { describeMethod } from '@/lib/methodPresets';
 import { blocksUsing } from '@/lib/plan';
 import { normaliseRoutine } from '@/lib/supersets';
-import { C, PHASE_LABEL, R, TOUCH, num } from '@/lib/tokens';
+import { C, PHASE_LABEL, R, T, TOUCH, num } from '@/lib/tokens';
 import type { Routine, RoutineSlot } from '@/lib/types';
 import { useBompa } from '@/state/BompaContext';
-import { Btn, EditableNumber, Empty, Eyebrow, Pill } from '@/components/ui';
+import { Btn, ConfirmSheet, EditableNumber, Empty, Eyebrow, Pill } from '@/components/ui';
 import { useBodyweight } from '@/components/WeightFigure';
 import { ExercisePicker } from '@/components/screens/ExercisePicker';
 import { MethodPicker } from '@/components/MethodPicker';
+import { Icon } from '@/components/icons';
 
 // On demand: the warm-up editor and its common moves are only needed once a
 // workout is open for editing.
@@ -65,19 +66,20 @@ export function RoutineBuilder({ routineId, onClose }: { routineId: string; onCl
   const [picking, setPicking] = useState(false);
   /** The lift whose method sheet is open, by position in the draft. */
   const [methodFor, setMethodFor] = useState<number | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const guideOpen = b.s.methodGuide !== null;
 
   // Escape closes, matching every other sheet in the app — but only the
   // topmost one: with a method sheet or an explainer open over the builder,
   // Escape belongs to that, not to the unsaved workout underneath.
   useEffect(() => {
-    if (methodFor !== null || guideOpen) return;
+    if (methodFor !== null || guideOpen || confirmDelete) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose, methodFor, guideOpen]);
+  }, [onClose, methodFor, guideOpen, confirmDelete]);
 
   const dirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(source), [draft, source]);
 
@@ -185,11 +187,11 @@ export function RoutineBuilder({ routineId, onClose }: { routineId: string; onCl
               fontWeight: 800,
             }}
           >
-            ✕
+            <Icon name="close" size={16} />
           </Btn>
         </div>
 
-        {reach && <span style={{ fontSize: 12.5, lineHeight: 1.45, color: C.ink60, marginTop: -6 }}>{reach}</span>}
+        {reach && <span style={{ fontSize: T.sm, lineHeight: 1.45, color: C.ink60, marginTop: -6 }}>{reach}</span>}
 
         <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <Eyebrow style={{ letterSpacing: '.12em' }}>Name</Eyebrow>
@@ -251,7 +253,7 @@ export function RoutineBuilder({ routineId, onClose }: { routineId: string; onCl
               >
                 {startsGroup && letter !== null && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                    <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '.14em', color: C.amberDark }}>
+                    <span style={{ fontSize: T.xs, fontWeight: 800, letterSpacing: '.14em', color: C.amberDark }}>
                       {groupNoun(groupSize(letter)).toUpperCase()} {letter} ·{' '}
                       {groupRest(letter) === 0 ? 'NO REST BETWEEN THESE' : `${groupRest(letter)}S BETWEEN THESE`}
                     </span>
@@ -271,17 +273,17 @@ export function RoutineBuilder({ routineId, onClose }: { routineId: string; onCl
                   <span style={{ fontSize: 13.5, fontWeight: 800, minWidth: 0 }}>{exercise?.name ?? slot.exerciseId}</span>
                   <div style={{ display: 'flex', gap: 4, flex: 'none' }}>
                     <MiniBtn onClick={() => move(index, -1)} label="Move up" disabled={index === 0}>
-                      ↑
+                      <Icon name="arrow-up" size={15} />
                     </MiniBtn>
                     <MiniBtn onClick={() => move(index, 1)} label="Move down" disabled={index === draft.slots.length - 1}>
-                      ↓
+                      <Icon name="arrow-down" size={15} />
                     </MiniBtn>
                     <MiniBtn
                       onClick={() => setDraft({ ...draft, slots: draft.slots.filter((_, i) => i !== index) })}
                       label="Remove lift"
                       danger
                     >
-                      ✕
+                      <Icon name="close" size={15} />
                     </MiniBtn>
                   </div>
                 </div>
@@ -311,7 +313,7 @@ export function RoutineBuilder({ routineId, onClose }: { routineId: string; onCl
                       border: `1px solid ${C.lineStrong}`,
                       background: C.screen,
                       color: C.ink60,
-                      fontSize: 11,
+                      fontSize: T.xs,
                       fontWeight: 800,
                       flex: 'none',
                     }}
@@ -354,11 +356,11 @@ export function RoutineBuilder({ routineId, onClose }: { routineId: string; onCl
                   }}
                 >
                   <Eyebrow style={{ letterSpacing: '.12em', flex: 'none' }}>Method</Eyebrow>
-                  <span data-testid="method-row-summary" style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 700, color: C.ink80, ...num }}>
+                  <span data-testid="method-row-summary" style={{ flex: 1, minWidth: 0, fontSize: T.sm, fontWeight: 700, color: C.ink80, ...num }}>
                     {describeMethod(slot)}
                   </span>
-                  <span aria-hidden style={{ flex: 'none', fontSize: 14, fontWeight: 800, color: C.muted }}>
-                    ›
+                  <span style={{ flex: 'none', display: 'flex', color: C.muted }}>
+                    <Icon name="chevron-right" size={16} />
                   </span>
                 </Btn>
 
@@ -400,17 +402,13 @@ export function RoutineBuilder({ routineId, onClose }: { routineId: string; onCl
           <Btn
             onClick={save}
             disabled={draft.slots.length === 0}
-            style={{ flex: 1, height: 48, borderRadius: R.chip, background: C.ink, color: C.white, fontSize: 14, fontWeight: 800 }}
+            style={{ flex: 1, height: 48, borderRadius: R.chip, background: C.ink, color: C.white, fontSize: T.md, fontWeight: 800 }}
           >
             {dirty ? 'Save workout' : 'Done'}
           </Btn>
           {source?.source !== 'template' && (
             <Btn
-              onClick={async () => {
-                if (!window.confirm(`Delete ${draft.name}? Your logged history stays.`)) return;
-                await b.deleteRoutine(draft.id);
-                onClose();
-              }}
+              onClick={() => setConfirmDelete(true)}
               style={{
                 width: 96,
                 height: 48,
@@ -427,6 +425,19 @@ export function RoutineBuilder({ routineId, onClose }: { routineId: string; onCl
             </Btn>
           )}
         </div>
+
+        <ConfirmSheet
+          open={confirmDelete}
+          title={`Delete ${draft.name}?`}
+          body="Sessions still planned with it go too. Anything you have already logged with it stays in your history."
+          confirmLabel="Delete workout"
+          onCancel={() => setConfirmDelete(false)}
+          onConfirm={async () => {
+            setConfirmDelete(false);
+            await b.deleteRoutine(draft.id);
+            onClose();
+          }}
+        />
 
         {methodFor !== null && draft.slots[methodFor] && (
           <MethodPicker
@@ -480,7 +491,7 @@ function groupStyle(on: boolean) {
     border: `1px solid ${on ? C.ink : C.line}`,
     background: on ? C.ink : C.screen,
     color: on ? C.white : C.muted,
-    fontSize: 11,
+    fontSize: T.xs,
     fontWeight: 800,
   } as const;
 }
@@ -546,10 +557,10 @@ function Field({
 }) {
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
-      <Eyebrow style={{ letterSpacing: '.1em', fontSize: 8.5 }}>{label}</Eyebrow>
+      <Eyebrow style={{ letterSpacing: '.1em' }}>{label}</Eyebrow>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
         <MiniBtn onClick={() => onChange(value - step)} label={`Decrease ${label}`}>
-          −
+          <Icon name="minus" size={16} />
         </MiniBtn>
         <EditableNumber
           label={label}
@@ -560,10 +571,10 @@ function Field({
           display={display}
           spoken={spoken}
           onCommit={onChange}
-          style={{ flex: 1, fontSize: 14, fontWeight: 800 }}
+          style={{ flex: 1, fontSize: T.md, fontWeight: 800 }}
         />
         <MiniBtn onClick={() => onChange(value + step)} label={`Increase ${label}`}>
-          +
+          <Icon name="plus" size={16} />
         </MiniBtn>
       </div>
     </div>

@@ -8,7 +8,7 @@ test.beforeEach(async ({ page }) => {
   await gotoApp(page);
   await completeSetup(page, { workouts: [['Bench Press', 'Overhead Press']], names: ['Push A'] });
   await goToTab(page, 'Today');
-  await page.getByRole('button', { name: /^(Start workout|Train anyway)$/ }).click();
+  await page.getByRole('button', { name: /^(Start .+|Train anyway)$/ }).click();
   await goToTab(page, 'Train');
   await page.getByRole('button', { name: 'Log set' }).click();
   // Logging opens the full-screen rest over the set dots.

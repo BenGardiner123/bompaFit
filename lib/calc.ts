@@ -156,6 +156,16 @@ export function increments(unit: Unit): number[] {
   return unit === 'kg' ? [1.25, 2.5, 5] : [2.5, 5, 10];
 }
 
+/**
+ * The step after this one, round the unit's list and back to the start. A
+ * step not on the list (one saved in the other unit) starts from the first.
+ */
+export function nextStep(step: number, unit: Unit): number {
+  const options = increments(unit);
+  const at = options.indexOf(step);
+  return options[(at + 1) % options.length] ?? options[0]!;
+}
+
 export function defaultIncrement(unit: Unit): number {
   return unit === 'kg' ? 2.5 : 5;
 }
@@ -565,6 +575,25 @@ export function scores(loads: SessionLoad[], now: number): Scores {
   };
 }
 
+/**
+ * What readiness will read tomorrow, for the finish summary: the model read a
+ * day after `at`, the moment the session ended, with the session already in
+ * `loads`. `change` is against readiness just before the session began, so it
+ * says what this session cost and nothing else.
+ *
+ * A day on rather than the next morning because nothing here knows when the
+ * lifter sleeps, and a day is the shortest interval the model's decay means
+ * anything over.
+ */
+export function tomorrowReadiness(
+  loads: SessionLoad[],
+  before: number,
+  at: number,
+): { readiness: number; change: number } {
+  const readiness = scores(loads, at + DAY_MS).readiness;
+  return { readiness, change: readiness - scores(loads, before).readiness };
+}
+
 function clamp01to100(n: number): number {
   return Math.max(0, Math.min(100, n));
 }
@@ -709,6 +738,38 @@ export function startOfWeek(key: string, weekStart: 'Mon' | 'Sun'): string {
 }
 
 // ─────────────────────────────────────────────────────────────
+// RPE on the rest screen
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Seven readings fit one row at 412px with every chip over the touch minimum.
+ * The halves below 7 and at 9.5 are the ones left out: they are the least
+ * used, and 9 against 10 is a distinction a lifter can feel where 9 against
+ * 9.5 mostly is not.
+ */
+const RPE_CHOICES = [6, 7, 7.5, 8, 8.5, 9, 10] as const;
+
+/**
+ * The rest screen's chips for a set aimed at `target`. The aim is always on
+ * the row, because it is what gets logged if the lifter says nothing: one
+ * missing from the seven replaces its nearest neighbour. On a tie the lower
+ * neighbour goes, which keeps 7 (the commonest aim) and 10 (failure) whatever
+ * the aim. An aim off the scale is pulled onto its nearest end.
+ */
+export function rpeChoices(target: number): number[] {
+  const aim = Math.min(10, Math.max(6, target));
+  const out: number[] = [...RPE_CHOICES];
+  if (out.includes(aim)) return out;
+  let nearest = 0;
+  for (let i = 1; i < out.length; i++) {
+    // Strictly closer wins, so a tie keeps the lower one found first.
+    if (Math.abs(out[i]! - aim) < Math.abs(out[nearest]! - aim)) nearest = i;
+  }
+  out[nearest] = aim;
+  return out.sort((a, b) => a - b);
+}
+
+// ─────────────────────────────────────────────────────────────
 // Formatting
 // ─────────────────────────────────────────────────────────────
 
@@ -722,6 +783,24 @@ export function fmtClock(totalSeconds: number): string {
 /** Tonnage in tonnes to one decimal, e.g. "24.8". */
 export function fmtTonnes(kg: number): string {
   return (kg / 1000).toFixed(1);
+}
+
+/**
+ * Kilograms moved by a session's work so far, pieces included and warm-ups
+ * out, counted as every other tonnage in the app is (see `rowTonnage`).
+ */
+export function sessionTonnage(rows: LoggedSet[]): number {
+  return rows.reduce((total, row) => (countsAsWork(row.type) ? total + rowTonnage(row) : total), 0);
+}
+
+/**
+ * A running volume, short enough for a header: "640 kg", then "1.3 t" from a
+ * tonne. The switch is made in kilograms, so it happens at the same load for
+ * everyone. Pounds have no tonne, so past it they read in thousands: "3.0k lb".
+ */
+export function fmtVolume(kg: number, unit: Unit): string {
+  if (kg < 1000) return `${Math.round(toDisplay(kg, unit))} ${unit}`;
+  return unit === 'kg' ? `${fmtTonnes(kg)} t` : `${fmtTonnes(toDisplay(kg, unit))}k lb`;
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];

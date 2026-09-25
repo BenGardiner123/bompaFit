@@ -112,28 +112,39 @@ export function roundsCompleted(group: SupersetGroup, sessionSets: LoggedSet[]):
  *
  * Returns null when the round is complete — that is the signal to rest, and the
  * only point in a superset where resting is correct.
+ *
+ * A member that has done all its planned sets sits the rest of the group's
+ * planned rounds out: with bench for 4 and fly for 3, the fourth round is bench
+ * alone, and handing on to fly would ask for a set nobody planned. `planned`
+ * gives each lift's count as the session has it (adaptation can trim one);
+ * without it, the slot's own count is used. Once every member is past its
+ * plan, an extra round runs through the whole group again.
  */
 export function nextInRound(
   group: SupersetGroup,
   sessionSets: LoggedSet[],
   currentExerciseId: string,
+  planned?: Record<string, number>,
 ): RoutineSlot | null {
   const index = group.slots.findIndex((slot) => slot.exerciseId === currentExerciseId);
   if (index === -1) return null;
 
   const counts = group.slots.map((slot) => workingSetCount(sessionSets, slot.exerciseId));
+  const plans = group.slots.map((slot) => planned?.[slot.exerciseId] ?? resolveSlotMethod(slot).setCount);
   // A member still owes the round in progress if it is behind the furthest-ahead
   // member. When every count is level the round is finished, and that — not a
   // set count — is what says it is time to rest.
   const ahead = Math.max(...counts);
+  const plannedRound = ahead <= Math.max(...plans);
+  const owes = (i: number) => (counts[i] ?? 0) < ahead && !(plannedRound && (counts[i] ?? 0) >= (plans[i] ?? 0));
 
   // Look forward from the current lift first: a superset runs in order.
   for (let i = index + 1; i < group.slots.length; i++) {
-    if ((counts[i] ?? 0) < ahead) return group.slots[i] ?? null;
+    if (owes(i)) return group.slots[i] ?? null;
   }
   // Then wrap, in case the user jumped into the middle of the group.
   for (let i = 0; i < index; i++) {
-    if ((counts[i] ?? 0) < ahead) return group.slots[i] ?? null;
+    if (owes(i)) return group.slots[i] ?? null;
   }
   return null;
 }
@@ -174,8 +185,10 @@ export function restAfterSet(args: {
    * round and the full rest wait until the set is over.
    */
   midSet?: { intraRestSec: number } | null;
+  /** Each lift's planned sets as the session has them. See `nextInRound`. */
+  planned?: Record<string, number>;
 }): RestPlan {
-  const { group, sessionSetsAfterLogging, exerciseId, fullRestSec, midSet } = args;
+  const { group, sessionSetsAfterLogging, exerciseId, fullRestSec, midSet, planned } = args;
   if (midSet) {
     const sec = Math.max(0, Math.round(midSet.intraRestSec));
     return sec > 0 ? { sec, kind: 'intra' } : { sec: 0, kind: 'none' };
@@ -187,7 +200,7 @@ export function restAfterSet(args: {
   // Still lifts owing the round: the rest that belongs here is the gap after
   // this member — its own if it has one, the group's otherwise — not the full
   // one. The full rest waits for the end of the round.
-  if (nextInRound(group, sessionSetsAfterLogging, exerciseId) === null) return full;
+  if (nextInRound(group, sessionSetsAfterLogging, exerciseId, planned) === null) return full;
   const member = group.slots.find((slot) => slot.exerciseId === exerciseId);
   const gap = (member ? resolveSlotMethod(member).gapAfterSec : null) ?? group.restSec;
   return gap > 0 ? { sec: gap, kind: 'transition' } : { sec: 0, kind: 'none' };

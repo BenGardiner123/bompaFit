@@ -337,3 +337,56 @@ export function spreadWeekDays(weekStart: string, count: number): string[] {
   const step = 7 / count;
   return Array.from({ length: count }, (_, i) => addDays(weekStart, Math.min(6, Math.round(i * step))));
 }
+
+/**
+ * The week with a dropped slot put back, for Undo.
+ *
+ * The slot returns with its own id, so anything that pointed at it still does,
+ * and at the position it was dropped from. It is spliced into the week as it
+ * stands now rather than the week as it stood then: something may have moved
+ * or been added in the seconds since, and restoring an old snapshot wholesale
+ * would throw that away.
+ *
+ * Dropping marks the whole week as rearranged by hand. Undoing gives a slot
+ * back the flag it had before, but only a slot still exactly as the drop left
+ * it: one changed since (swapped, moved) was changed by the lifter, and its
+ * mark is theirs now, not the drop's. A slot added since keeps its own too, so
+ * a drop and its undo leave no trace and take nothing else away.
+ *
+ * `before` is the week as it was just before the drop, dropped slot included,
+ * and `after` the week as the drop left it. If the slot is somehow already
+ * back, the week is returned as it is, so a second tap on Undo cannot put in a
+ * duplicate.
+ */
+export function restoreDropped(
+  week: PlannedSession[],
+  dropped: PlannedSession,
+  before: PlannedSession[],
+  after: PlannedSession[],
+): PlannedSession[] {
+  if (week.some((p) => p.id === dropped.id)) return week;
+  const flags = new Map(before.map((p) => [p.id, p.userModified]));
+  const left = new Map(after.map((p) => [p.id, p]));
+  const untouched = (slot: PlannedSession) => {
+    const was = left.get(slot.id);
+    return (
+      was !== undefined &&
+      was.slotIndex === slot.slotIndex &&
+      was.routineId === slot.routineId &&
+      was.status === slot.status &&
+      was.userModified === slot.userModified
+    );
+  };
+  const ordered = week.slice().sort((a, b) => a.slotIndex - b.slotIndex);
+  const kept = new Set(ordered.filter(untouched).map((p) => p.id));
+  ordered.splice(Math.min(dropped.slotIndex, ordered.length), 0, dropped);
+  return ordered.map((slot, index) => {
+    const next: PlannedSession = { ...slot, slotIndex: index };
+    if (flags.has(slot.id) && kept.has(slot.id)) {
+      const flag = flags.get(slot.id);
+      if (flag === undefined) delete next.userModified;
+      else next.userModified = flag;
+    }
+    return next;
+  });
+}

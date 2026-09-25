@@ -4,23 +4,26 @@ import { useEffect } from 'react';
 import { AndroidFrame } from '@/components/AndroidFrame';
 import { MethodGuideSheet } from '@/components/MethodGuideSheet';
 import { TabBar } from '@/components/TabBar';
+import { Toast } from '@/components/Toast';
 import { EditSetSheet } from '@/components/screens/EditSetSheet';
 import { FinishSummary } from '@/components/screens/FinishSummary';
 import { SetTypeSheet } from '@/components/screens/SetTypeSheet';
 import { History } from '@/components/screens/History';
 import { HowToSheet } from '@/components/screens/HowToSheet';
-import { Library } from '@/components/screens/Library';
 import { Log } from '@/components/screens/Log';
 import { Plan } from '@/components/screens/Plan';
-import { RestOverlay } from '@/components/screens/RestOverlay';
+import { RateSheet } from '@/components/screens/RateSheet';
+import { RestOverlay, useRestView } from '@/components/screens/RestOverlay';
 import { RoutineBuilder } from '@/components/screens/RoutineBuilder';
 import { RpeSheet } from '@/components/screens/RpeSheet';
 import { Setup } from '@/components/screens/Setup';
 import { Today } from '@/components/screens/Today';
-import { Tools } from '@/components/screens/Tools';
+import { PushedScreen } from '@/components/screens/ToolViews';
+import { Workouts } from '@/components/screens/Workouts';
+import { SettingsSheet } from '@/components/SettingsSheet';
 import { useThemeColor } from '@/components/useThemeColor';
 import { TimerAlerts } from '@/components/TimerAlerts';
-import { C, R, SHADOW, Z, onInk } from '@/lib/tokens';
+import { C } from '@/lib/tokens';
 import { BompaProvider, useBompa } from '@/state/BompaContext';
 
 export default function Page() {
@@ -42,10 +45,12 @@ export default function Page() {
  */
 function Frame() {
   const { s } = useBompa();
-  const dark = s.hydrated && ((s.tab === 'log' && !s.library) || s.summary !== null);
-  useThemeColor(dark ? C.ink : C.screen);
+  const dark = s.hydrated && ((s.tab === 'log' && s.pushed === null) || s.summary !== null);
+  // The rest screen's last ten seconds are amber from edge to edge, the bar included.
+  const urgent = useRestView().urgent;
+  useThemeColor(urgent ? C.amber : dark ? C.ink : C.screen);
   return (
-    <AndroidFrame dark={dark}>
+    <AndroidFrame dark={dark} urgent={urgent}>
       <App />
     </AndroidFrame>
   );
@@ -78,17 +83,23 @@ function App() {
     >
       <StorageBanner />
 
-      {/* Setup owns the viewport and suppresses the tab bar — a fourth branch of
-          the ternary below would leave the tabs live, which is why the Library
-          sits there and this does not. */}
+      {/* Setup owns the viewport and suppresses the tab bar, so it is a branch
+          of its own rather than one more screen inside the scrolling area. */}
       {b.s.hydrated && b.needsSetup ? (
-        <Setup />
+        <>
+          <Setup />
+          <ToastSlot />
+        </>
       ) : (
         <>
           <div className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
-            {!b.s.hydrated ? <Booting /> : b.s.library ? <Library /> : <Screen />}
+            {!b.s.hydrated ? <Booting /> : b.s.pushed ? <PushedScreen /> : <Screen />}
           </div>
+          <ToastSlot />
           <TabBar />
+          {/* Drawn from the shell, not from Today, so the sheet and the erase
+              question over it cover the tab bar as well. */}
+          <SettingsSheet />
         </>
       )}
 
@@ -101,15 +112,15 @@ function App() {
       {/* Overlays live outside the branch so setup can open them too. */}
       <HowToSheet />
       <EditSetSheet />
+      <RateSheet />
       <RpeSheet />
       <SetTypeSheet />
       {b.s.editingRoutineId && (
         <RoutineBuilder routineId={b.s.editingRoutineId} onClose={() => b.patch({ editingRoutineId: null })} />
       )}
       {/* After the builder, not before: both sit at the same layer, so the one
-          drawn later is on top, and the builder's "?" buttons open this. */}
+          drawn later is on top, and the builder's help buttons open this. */}
       <MethodGuideSheet />
-      <Toast />
       <TimerAlerts />
     </div>
   );
@@ -121,7 +132,7 @@ function Screen() {
   if (s.tab === 'log') return <Log />;
   if (s.tab === 'plan') return <Plan />;
   if (s.tab === 'stats') return <History />;
-  return <Tools />;
+  return <Workouts />;
 }
 
 function Booting() {
@@ -134,45 +145,21 @@ function Booting() {
   );
 }
 
-function Toast() {
-  const { s } = useBompa();
-  // On the dark Train screen an ink toast would vanish into the page, so it
-  // lifts to the next shade up there.
-  const onTrain = s.tab === 'log' && !s.library;
+/**
+ * A zero-height strip on top of the tab bar that the toast hangs from, so it
+ * sits a fixed distance above the bar without anyone having to know how tall
+ * the bar is.
+ *
+ * On Train with a session open, the toast moves into the sticky footer above
+ * the Log button instead, and this one stands down.
+ */
+function ToastSlot() {
+  const b = useBompa();
+  const inTrainFooter = b.s.tab === 'log' && b.s.pushed === null && b.openSession !== null && !b.needsSetup;
+  if (inTrainFooter) return null;
   return (
-    <div
-      role="status"
-      aria-live="polite"
-      style={{
-        position: 'absolute',
-        left: 18,
-        right: 18,
-        bottom: 100,
-        zIndex: Z.toast,
-        pointerEvents: 'none',
-        // Rendered always so screen readers keep a stable live region to
-        // announce into; only visible when there is something to say.
-        opacity: s.toast ? 1 : 0,
-        transition: 'opacity .2s ease',
-      }}
-    >
-      {s.toast && (
-        <div
-          className="sheet"
-          style={{
-            background: onTrain ? onInk.line : C.ink,
-            borderRadius: R.control,
-            padding: '13px 15px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 11,
-            boxShadow: SHADOW.toast,
-          }}
-        >
-          <span style={{ width: 7, height: 7, borderRadius: '50%', background: C.amber, flex: 'none' }} />
-          <span style={{ fontSize: 13, fontWeight: 600, color: C.white, lineHeight: 1.4 }}>{s.toast.text}</span>
-        </div>
-      )}
+    <div style={{ position: 'relative', height: 0, flex: 'none' }}>
+      <Toast placement="shell" />
     </div>
   );
 }
@@ -186,7 +173,7 @@ function Toast() {
  * and it was worse than nothing — `logSet` raises "Set logged. Rest running."
  * on the same tap, which buried the warning and left the reassuring lie on
  * screen. It sits above the tab bar so it is visible from every screen rather
- * than only from Tools, which is where this used to hide.
+ * than only from the settings, which is where this used to hide.
  */
 function StorageBanner() {
   const { s } = useBompa();
@@ -208,7 +195,7 @@ function StorageBanner() {
     >
       <span style={{ width: 7, height: 7, borderRadius: '50%', background: C.red, flex: 'none' }} />
       <span style={{ fontSize: 12, fontWeight: 600, color: C.redDark, lineHeight: 1.4 }}>
-        Not saving to this device. Today&rsquo;s sets are in memory only — export a backup from Tools before you reload.
+        Not saving to this device. Today&rsquo;s sets are in memory only — export a backup from Settings (the gear on Today) before you reload.
       </span>
     </div>
   );
