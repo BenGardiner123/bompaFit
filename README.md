@@ -36,6 +36,12 @@ On iPhone, install it rather than using it in a Safari tab. Safari can clear a w
 
 ## How it works
 
+<img src=".github/readme/feature-train.png" alt="Train: log a set in three taps, one-handed" width="100%">
+
+<img src=".github/readme/feature-rest.png" alt="Rest: rate the set while you catch your breath" width="100%">
+
+<img src=".github/readme/feature-summary.png" alt="After the session: a coach's verdict and tomorrow's readiness" width="100%">
+
 **Fatigue.** Every session adds both fitness and fatigue. Both fade over time, but fatigue fades roughly six times faster. What you can lift on a given day is fitness minus fatigue, which is why resting before a competition makes you stronger. Bompa turns this into a readiness score on the home screen. The maths is in `lib/calc.ts`.
 
 **Adapting the plan.** Each week Bompa compares how hard your sets felt (RPE, a 6–10 effort scale) with what was planned. A lift that keeps feeling easier than planned gets more weight. A lift that feels harder than planned all week gets 10% less volume next week. Every change comes with a sentence saying why, and can be undone.
