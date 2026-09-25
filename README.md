@@ -1,5 +1,13 @@
 # Bompa
 
+<p align="center">
+  <img src=".github/readme/bompa-hero.png" alt="Bompa: a training log that knows when to push" width="100%">
+</p>
+
+<p align="center">
+  <img src=".github/readme/bompa-session-loop.png" alt="The session loop: readiness, log the set, rest and rate it, the plan adapts" width="100%">
+</p>
+
 A workout tracker that plans your training, then rewrites the plan when you're more tired than it expected.
 
 Most training apps are logbooks: they record what you did and leave the thinking to you. Bompa models the fatigue your training builds up and adjusts next week in response. It runs in the browser, installs on your phone like an app, and works with no signal. Your training data never leaves the device.
@@ -24,7 +32,7 @@ On iPhone, install it rather than using it in a Safari tab. Safari can clear a w
 
 - Everything is stored on your phone, in the browser's own database. There is no account, no server and no sign-in.
 - The running app makes no network requests: no analytics, no tracking, no font downloads. The one exception is a content service you choose to connect (see below): lookups go only to that service and send only exercise names, never your training.
-- **Back up now and then.** Tools → Export JSON downloads everything, and Import JSON brings it back. If you clear your browser data or lose the phone, the export is the only copy.
+- **Back up now and then.** Open Settings from the gear on Today: **Export backup** saves everything to a file, and **Restore** brings it back. Settings also says when you last backed up. If you clear your browser data or lose the phone, that file is the only copy.
 
 ## How it works
 
@@ -42,17 +50,18 @@ On iPhone, install it rather than using it in a Safari tab. Safari can clear a w
 
 Every movement ships with short step-by-step cues **written for Bompa** (`public/howtos.json`), shown as "Written by Bompa" on each How-to sheet. They were written from each movement's facts (name, muscles, equipment, movement pattern), not adapted from any existing instruction text, and checked for overlap against the freely available datasets. They are general guidance: if a cue reads wrong for a movement you know, please open an issue.
 
-For more detail, pictures or video, **connect a content service** in Tools → Exercise content. wger works with no account. ExerciseDB (via RapidAPI) works with your own key. Content is saved on your phone for offline use where the service's terms allow it, and each entry shows its credit and licence.
+For more detail, pictures or video, **connect a content service** in Settings → Exercise instructions. wger works with no account. ExerciseDB (via RapidAPI) works with your own key. Content is saved on your phone for offline use where the service's terms allow it, and each entry shows its credit and licence.
 
 ## What's here
 
-| Tab | File | Contains |
+| Screen | File | Contains |
 |---|---|---|
-| Today | `components/screens/Today.tsx` | Readiness score and its trend since your last session, the fitness and fatigue curve, this week's sessions, insights, next session |
-| Train | `components/screens/Log.tsx` | Each set's target, tempo and method, set entry, drop and cluster pieces, full-screen rest, swipe between lifts, finish summary |
-| Plan | `components/screens/Plan.tsx` | Training block timeline, this week's sessions, taper to a competition |
-| History | `components/screens/History.tsx` | Past sessions, estimated one-rep max over time, personal records |
-| Tools | `components/screens/Tools.tsx` | Starting maxes, one-rep max calculator, interval timers, exercise content services, settings, export and import |
+| Today | `components/screens/Today.tsx` | Readiness score and its trend since your last session, the 28-day fitness and fatigue curve, this week's sessions, insights, next session. The gear opens Settings (`components/SettingsSheet.tsx`) |
+| Train | `components/screens/Log.tsx` | Each set's target, tempo and method, set entry, drop and cluster pieces, swipe between lifts, finishing (with 30 seconds to undo) |
+| Rest | `components/screens/RestOverlay.tsx` | Full-screen rest, where you rate how the set felt; `FinishSummary.tsx` is the session summary |
+| Plan | `components/screens/Plan.tsx` | Training block timeline, this week's sessions, what Bompa changed and why, taper to a competition |
+| History | `components/screens/History.tsx` | Past sessions, estimated one-rep max over time, personal records, starting maxes |
+| Workouts | `components/screens/Workouts.tsx` | Your workouts, templates and imports, plus the interval timer, one-rep max calculator and import (`ToolViews.tsx`) |
 
 Underneath: `lib/calc.ts` is the pure maths (units, one-rep max estimates, the fatigue model). `lib/adapt.ts` is the weekly review that rewrites next week. `lib/methods.ts` reads training methods and decides what each kind of set counts toward. `lib/plan.ts` builds training blocks and works a taper backwards from a competition date. `lib/content/` connects exercise content services. `lib/db.ts` is the database schema. `state/BompaContext.tsx` holds everything the screens read.
 
