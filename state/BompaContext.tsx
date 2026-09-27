@@ -211,12 +211,14 @@ export type Pushed = { view: PushedView; from: 'tab' | 'settings' } | null;
  */
 export type SetKey = { sessionId: number; exerciseId: string; setNo: number };
 
-/** The rating sheet: which lift, and the sets it asks about, fixed when it opens. */
 /**
  * The rating sheet: which sets, and whose name heads it. `title` stands in for
  * the lift's name when the sets span several lifts, as a superset round does.
+ * `closeOnPick` shuts it on the first answer, for a sheet opened mid-rest
+ * about one set, where a Done tap is one more thing between the lifter and
+ * their phone going back in the pocket.
  */
-export type RateSheet = { exerciseId: string; setIds: number[]; title?: string } | null;
+export type RateSheet = { exerciseId: string; setIds: number[]; title?: string; closeOnPick?: boolean } | null;
 
 /**
  * What finishing a session changed, kept for the short time it can be undone:

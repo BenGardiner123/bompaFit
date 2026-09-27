@@ -28,9 +28,9 @@ export function RateSheet() {
     mixed ? `${b.exerciseById.get(row.exerciseId)?.short ?? row.exerciseId} set ${row.setNo} · ` : `Set ${row.setNo} · `;
 
   return (
-    <DarkSheet open onClose={close} eyebrow="How did they feel?" title={name} titleSize={22} label={`Rate ${name}`} gap={16}>
+    <DarkSheet open onClose={close} eyebrow={rows.length === 1 ? 'How did it feel?' : 'How did they feel?'} title={name} titleSize={22} label={`Rate ${name}`} gap={16}>
       {rows.map((row) => (
-        <RateSetRow key={row.id} row={row} prefix={prefix(row)} />
+        <RateSetRow key={row.id} row={row} prefix={prefix(row)} onRated={sheet.closeOnPick && rows.length === 1 ? close : undefined} />
       ))}
       <span style={{ fontSize: T.sm, lineHeight: 1.4, color: onInk.muted }}>
         Any you leave keep your aim, marked as an estimate.{' '}

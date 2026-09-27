@@ -121,11 +121,16 @@ test.describe('the Train screen', () => {
       await page.getByRole('button', { name: 'Log set' }).click();
       await restScreen(page).getByRole('button', { name: 'Minimise' }).click();
 
-      // The question the rest screen would have asked, here instead.
+      // The question the rest screen would have asked, here instead, as a
+      // link rather than a row of chips.
       const asked = page.getByRole('region', { name: 'How did that feel?' });
-      await expect(asked).toBeVisible();
+      await expect(asked.getByRole('button', { name: /^RPE / })).toHaveCount(0);
+      await asked.getByRole('button', { name: /^Rate this set: / }).click();
       // Not the aim, so what is stored can only have come from the tap.
-      await asked.getByRole('button', { name: 'RPE 9', exact: true }).click();
+      const sheet = page.getByRole('dialog', { name: /^Rate / });
+      await sheet.getByRole('button', { name: 'RPE 9', exact: true }).click();
+      // One set: the answer closes the sheet, so rating is two taps.
+      await expect(sheet).toBeHidden();
       await expect(asked).toBeHidden();
       await expect.poll(async () => (await readSets(page))[0]).toMatchObject({ rpe: 9, rpeEstimated: false });
 

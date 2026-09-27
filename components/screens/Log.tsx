@@ -36,7 +36,6 @@ import type { LoggedSet, SetPrescription, SetType } from '@/lib/types';
 import { TRAIN_HINTS_SESSIONS, useBompa } from '@/state/BompaContext';
 import { Btn, DarkSheet, EditableNumber, InkButton, InkSegmented, StepperTile, useLongPress } from '@/components/ui';
 import { sheetHairline } from '@/components/SheetParts';
-import { RpeChipRow, targetFor } from '@/components/RpeChips';
 import { ExercisePicker } from '@/components/screens/ExercisePicker';
 import { BodyweightChip, WeightFigure, useBodyweight } from '@/components/WeightFigure';
 import { SegmentControls, offersDrop } from '@/components/screens/SegmentControls';
@@ -605,16 +604,13 @@ function CatchUpLine({ catchUp }: { catchUp: CatchUp }) {
   );
 }
 
-/** Seven 44px chips and the gaps between them: what the one-line rating gives its chips. */
-const INLINE_CHIP_GAP = 3;
-const INLINE_CHIPS_WIDTH = 7 * TOUCH + 6 * INLINE_CHIP_GAP;
-
 /**
- * The minimised rest's question, on one line: the newest unrated set's short
- * name, then its seven chips. A round asks about several sets; only the
- * newest gets chips here, and the rest, with any the catch-up line was
- * holding, sit behind "+N more", which opens them all in the rating sheet.
- * One line, because Train has no height for a row per set.
+ * The minimised rest's question, as one line of link text: "Rate this set?"
+ * and whose set it is. Seven full-size chips took the width of the screen for
+ * a question most rests leave alone, so the chips wait in the rating sheet. A
+ * round asks about several sets, and any the catch-up line was holding join
+ * them: "Rate these 3 sets?" opens them all. One set closes the sheet on the
+ * answer, so rating it is still two taps.
  */
 function InlineRating({ asked, catchUp }: { asked: LoggedSet[]; catchUp: CatchUp | null }) {
   const b = useBompa();
@@ -622,37 +618,32 @@ function InlineRating({ asked, catchUp }: { asked: LoggedSet[]; catchUp: CatchUp
   const others = [...asked.slice(1), ...(catchUp?.unrated ?? []).filter((x) => !asked.some((y) => y.id === x.id))];
   const ids = [row, ...others].map((x) => x.id).filter((id): id is number => id !== undefined);
   const name = b.exerciseById.get(row.exerciseId)?.short ?? row.exerciseId;
-  const labelText = { fontSize: T.sm, fontWeight: 800, color: onInk.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' } as const;
+  const single = others.length === 0;
+  const count = others.length + 1;
 
   return (
-    <section
-      aria-label="How did that feel?"
-      // Runs nearer the screen edges than the rows above it, so the name
-      // beside seven full-size chips has room to be read.
-      style={{ display: 'flex', alignItems: 'center', gap: 6, height: TOUCH, margin: '0 -8px' }}
-    >
-      {others.length === 0 && <span style={{ ...labelText, flex: 1, minWidth: 0 }}>{name}</span>}
-      {others.length > 0 && (
-        <Btn
-          onClick={() => b.patch({ rateSheet: { exerciseId: row.exerciseId, setIds: ids, title: 'These sets' } })}
-          label={`${name}, +${others.length} more to rate. Opens them all.`}
-          style={{ flex: 1, minWidth: 0, height: TOUCH, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', gap: 1 }}
-        >
-          <span style={labelText}>{name}</span>
-          <span style={{ ...labelText, fontSize: T.xs, color: C.amberLight, ...num }}>+{others.length} more</span>
-        </Btn>
-      )}
-      <div style={{ flex: 'none', width: INLINE_CHIPS_WIDTH }}>
-        <RpeChipRow
-          compact
-          gap={INLINE_CHIP_GAP}
-          target={targetFor(b, row)}
-          value={null}
-          onPick={(rpe) => row.id !== undefined && b.rateSet(row.id, rpe)}
-          disabled={row.id === undefined}
-          label={`RPE for ${name} set ${row.setNo}`}
-        />
-      </div>
+    <section aria-label="How did that feel?" style={{ display: 'flex', alignItems: 'center', height: TOUCH }}>
+      <Btn
+        onClick={() =>
+          b.patch({ rateSheet: single ? { exerciseId: row.exerciseId, setIds: ids, closeOnPick: true } : { exerciseId: row.exerciseId, setIds: ids, title: 'These sets' } })
+        }
+        label={single ? `Rate this set: ${name} set ${row.setNo}` : `Rate these ${count} sets`}
+        // Until the database id arrives there is nothing to write the rating to.
+        disabled={ids.length === 0}
+        style={{ height: TOUCH, minWidth: 0, maxWidth: '100%', display: 'flex', alignItems: 'center', gap: 8 }}
+      >
+        <span style={{ fontSize: T.md, fontWeight: 800, color: C.amberLight, flex: 'none', ...num }}>
+          {single ? 'Rate this set?' : `Rate these ${count} sets?`}
+        </span>
+        {/* Only for one set: after a round, one lift's name would read as if
+            it were the only set waiting. minWidth 0 lets a long name shrink and
+            ellipsise; a flex child otherwise refuses to go narrower than its text. */}
+        {single && (
+          <span style={{ fontSize: T.sm, fontWeight: 700, color: onInk.muted, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', ...num }}>
+            {name} · set {row.setNo}
+          </span>
+        )}
+      </Btn>
     </section>
   );
 }

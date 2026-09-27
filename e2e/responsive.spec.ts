@@ -148,13 +148,13 @@ test.describe('at 412px', () => {
         await page.getByRole('button', { name: /^Fly · A, / }).click();
 
         // A full round of the superset, rated nowhere yet: the minimised rest
-        // asks about the round on one line, with the rest behind "+1 more".
+        // asks about the round on one line: one link for both sets.
         await page.getByRole('button', { name: 'Log set' }).click();
         await page.getByRole('button', { name: 'Log set' }).click();
         const asked = page.getByRole('region', { name: 'How did that feel?' });
         await expect(page.getByRole('button', { name: /^Rest, / })).toBeVisible();
         await expect(page.getByRole('button', { name: 'Drop the weight and carry on this set' })).toBeVisible();
-        await expect(asked.getByRole('button', { name: /\+1 more to rate/ })).toBeVisible();
+        await expect(asked.getByRole('button', { name: 'Rate these 2 sets' })).toBeVisible();
         await expectTrainFits(page);
 
         // Leaving the group puts Fly on the catch-up line, folded into the same line.
@@ -163,9 +163,9 @@ test.describe('at 412px', () => {
         await expectTrainFits(page);
 
         // Back into the group, where the superset line shows too: Bench is now
-        // the lift left unrated, so there are two more to rate.
+        // the lift left unrated, so there are three to rate.
         await page.getByRole('button', { name: /^Rope · A, / }).click();
-        await expect(asked.getByRole('button', { name: /\+2 more to rate/ })).toBeVisible();
+        await expect(asked.getByRole('button', { name: 'Rate these 3 sets' })).toBeVisible();
         await expect(page.getByText(/^Superset A · round 2 of 3/)).toBeVisible();
         await expectTrainFits(page);
       });

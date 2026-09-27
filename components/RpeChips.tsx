@@ -91,7 +91,17 @@ export function RpeChipRow({
  * for each set of a superset round, for the other unrated sets on the
  * plan-done screen, and in the rating sheet.
  */
-export function RateSetRow({ row, prefix }: { row: LoggedSet; /** e.g. "Set 2 · ", before the weight. */ prefix?: string }) {
+export function RateSetRow({
+  row,
+  prefix,
+  onRated,
+}: {
+  row: LoggedSet;
+  /** e.g. "Set 2 · ", before the weight. */
+  prefix?: string;
+  /** Called after a value is written, for a sheet that closes on the answer. */
+  onRated?: () => void;
+}) {
   const b = useBompa();
   const { unit } = b.s;
   const exercise = b.exerciseById.get(row.exerciseId);
@@ -108,7 +118,11 @@ export function RateSetRow({ row, prefix }: { row: LoggedSet; /** e.g. "Set 2 ·
         compact
         target={target}
         value={row.rpeEstimated ? null : row.rpe}
-        onPick={(rpe) => row.id !== undefined && b.rateSet(row.id, rpe)}
+        onPick={(rpe) => {
+          if (row.id === undefined) return;
+          b.rateSet(row.id, rpe);
+          onRated?.();
+        }}
         disabled={row.id === undefined}
         label={`RPE for ${name} set ${row.setNo}`}
       />

@@ -207,23 +207,28 @@ test.describe('logging through a superset', () => {
       ]);
   });
 
-  test('with the rest minimised, the round is asked on one line, and the other set opens in the rating sheet', async ({ page }) => {
+  test('with the rest minimised, the round is asked on one line, and the link opens every set in the rating sheet', async ({ page }) => {
     await groupedSession(page);
     await page.getByRole('button', { name: 'Log set' }).click();
     await page.getByRole('button', { name: 'Log set' }).click();
     await page.getByRole('dialog', { name: 'Resting' }).getByRole('button', { name: 'Minimise' }).click();
 
-    // The newest set of the round gets the chips; the other waits behind "+1 more".
+    // The whole round sits behind one link, with no chips on Train.
     const asked = page.getByRole('region', { name: 'How did that feel?' });
-    await expect(asked.getByRole('group')).toHaveCount(1);
-    await asked.getByRole('group', { name: 'RPE for Rope set 1' }).getByRole('button', { name: 'RPE 9', exact: true }).click();
-    // Rope is answered, so the line moves on to Fly.
-    await expect(asked.getByRole('group', { name: 'RPE for Fly set 1' })).toBeVisible();
+    await expect(asked.getByRole('group')).toHaveCount(0);
+    await asked.getByRole('button', { name: 'Rate these 2 sets' }).click();
+    let sheet = page.getByRole('dialog', { name: 'Rate These sets' });
+    await sheet.getByRole('group', { name: 'RPE for Rope set 1' }).getByRole('button', { name: 'RPE 9', exact: true }).click();
+    // Several sets: the sheet stays open until Done, so the rest can be rated.
+    await expect(sheet).toBeVisible();
+    await sheet.getByRole('button', { name: 'Done' }).click();
+    // Rope is answered, so the line moves on to Fly alone.
+    await expect(asked.getByRole('button', { name: /^Rate this set: Fly set 1/ })).toBeVisible();
 
     await page.getByRole('button', { name: 'Log set' }).click();
     await page.getByRole('button', { name: 'Log set' }).click();
-    await asked.getByRole('button', { name: /\+1 more to rate/ }).click();
-    const sheet = page.getByRole('dialog', { name: 'Rate These sets' });
+    await asked.getByRole('button', { name: 'Rate these 2 sets' }).click();
+    sheet = page.getByRole('dialog', { name: 'Rate These sets' });
     await expect(sheet.getByText(/^Rope set 2 · /)).toBeVisible();
     await sheet.getByRole('group', { name: 'RPE for Fly set 2' }).getByRole('button', { name: 'RPE 7', exact: true }).click();
     await sheet.getByRole('button', { name: 'Done' }).click();
