@@ -19,8 +19,17 @@ const DELOAD_INTENSITY_FACTOR = 0.55;
 export function weekShape(phase: Phase, weekIndex: number, totalWeeks: number): { volume: number; intensity: number } {
   if (phase === 'deload') return { volume: DELOAD_VOLUME_FACTOR, intensity: DELOAD_INTENSITY_FACTOR };
   const t = totalWeeks <= 1 ? 1 : weekIndex / (totalWeeks - 1);
-  if (phase === 'peak') return { volume: 1 - t * 0.55, intensity: 0.7 + t * 0.3 };
-  return { volume: 0.62 + t * 0.38, intensity: 0.68 + t * 0.28 };
+  if (phase === 'peak') return { volume: round3(1 - t * 0.55), intensity: round3(0.7 + t * 0.3) };
+  return { volume: round3(0.62 + t * 0.38), intensity: round3(0.68 + t * 0.28) };
+}
+
+/**
+ * Three decimal places, as the adaptation rules store theirs. Without it 1 −
+ * 0.55 × ⅔ is written to every slot as 0.44999999999999996, which then
+ * shows up in exports and anywhere the factor is printed.
+ */
+function round3(n: number): number {
+  return Math.round(n * 1000) / 1000;
 }
 
 /** One bar in the mesocycle builder's chart, including the trailing deload. */

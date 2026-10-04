@@ -49,6 +49,18 @@ describe('weekShape', () => {
   it('drops a deload well below any working week', () => {
     expect(weekShape('deload', 0, 1).volume).toBeLessThan(weekShape('strength', 0, 4).volume);
   });
+
+  it('stores factors at three decimal places, not floating-point noise', () => {
+    // The last week of a three-week peak is 1 − 0.55, which unrounded is 0.44999999999999996.
+    expect(weekShape('peak', 2, 3).volume).toBe(0.45);
+    for (const phase of ['strength', 'hypertrophy', 'power', 'peak'] as const) {
+      for (let w = 0; w < 7; w++) {
+        const { volume, intensity } = weekShape(phase, w, 7);
+        expect(Math.round(volume * 1000) / 1000).toBe(volume);
+        expect(Math.round(intensity * 1000) / 1000).toBe(intensity);
+      }
+    }
+  });
 });
 
 describe('mesocycleCurve', () => {
