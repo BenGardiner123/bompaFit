@@ -57,7 +57,7 @@ import { readWarmupItems, readWarmupTicks, resolveWarmup, toggleTick, type Warmu
 import { copyName, uniqueId, versionName } from '@/lib/ids';
 import { PHASE_LABEL } from '@/lib/tokens';
 import { summariseSessions, type SessionSummary } from '@/lib/history';
-import { buildInsights, type Insight } from '@/lib/insights';
+import { buildInsights, noteKey, type Insight } from '@/lib/insights';
 import { moveLift, nextLift as nextLiftToTrain, planDone, roundSets, unratedSets, untrainedLifts, type LiftPlan } from '@/lib/train';
 import {
   DEFAULT_BLOCKS,
@@ -180,6 +180,14 @@ export const SETUP_DONE_KEY = 'setupComplete';
  * the first few sessions and then get out of the way.
  */
 export const TRAIN_HINTS_KEY = 'trainHintsSeen';
+
+/**
+ * The notifications the lifter has dismissed, by `noteKey`. Kept to the most
+ * recent ones: an old key only hides a note that has long since dropped out
+ * of the list anyway.
+ */
+export const NOTES_DISMISSED_KEY = 'dismissedNotes';
+const NOTES_DISMISSED_KEEP = 200;
 
 /** Train's hint line shows until this many sessions have been finished. */
 export const TRAIN_HINTS_SESSIONS = 3;
@@ -336,6 +344,8 @@ type UIState = {
   rateSheet: RateSheet;
   /** Sessions finished so far, capped where the hint stops; see TRAIN_HINTS_KEY. */
   trainHintsSeen: number;
+  /** See NOTES_DISMISSED_KEY. */
+  dismissedNotes: string[];
   /**
    * What the session just finished looked like, shown once on its own screen.
    * Null the rest of the time. It holds a copy rather than an id so the summary
@@ -395,6 +405,7 @@ const INITIAL: UIState = {
   finishGuardOpen: false,
   rateSheet: null,
   trainHintsSeen: 0,
+  dismissedNotes: [],
   summary: null,
 
   unit: 'kg',
@@ -626,6 +637,7 @@ function useBompaState() {
           restPresetSec: (settingsRow.restPresetSec as number) ?? INITIAL.restPresetSec,
           statsLift: (settingsRow.statsLift as string) ?? INITIAL.statsLift,
           trainHintsSeen: readCount(settingsRow[TRAIN_HINTS_KEY]),
+          dismissedNotes: readStrings(settingsRow[NOTES_DISMISSED_KEY]),
           lastExportAt: readTime(settingsRow[LAST_EXPORT_KEY]),
           hydrated: true,
         });
@@ -917,13 +929,28 @@ function useBompaState() {
       buildInsights({
         scores,
         acwr: ratio,
-        recentAdjustments: adjustments.slice(0, 3),
+        // More than are shown, so dismissing one lets the next through.
+        recentAdjustments: adjustments.slice(0, 10),
         daysSinceRest: restDays,
         now,
         week: budget,
         weekOverBudget: overBudget,
+        dismissed: new Set(s.dismissedNotes),
+        weekStart: currentWeek,
       }),
-    [scores, ratio, adjustments, restDays, now, budget, overBudget],
+    [scores, ratio, adjustments, restDays, now, budget, overBudget, s.dismissedNotes, currentWeek],
+  );
+
+  /** Hide a note from the notifications list. The change it reports stays made. */
+  const dismissNote = useCallback(
+    (insight: Insight) => {
+      const key = noteKey(insight, currentWeek);
+      if (s.dismissedNotes.includes(key)) return;
+      const next = [...s.dismissedNotes, key].slice(-NOTES_DISMISSED_KEEP);
+      patch({ dismissedNotes: next });
+      writeSetting(NOTES_DISMISSED_KEY, next, Date.now());
+    },
+    [s.dismissedNotes, currentWeek, patch],
   );
 
   const taper: TaperPlan | null = useMemo(
@@ -3326,6 +3353,7 @@ function useBompaState() {
     scores,
     acwr: ratio,
     insights,
+    dismissNote,
     metrics,
     peakWindow,
     taper,
@@ -3503,6 +3531,11 @@ function readTime(raw: unknown): number | null {
 }
 
 /** A stored count, read defensively: anything that is not a whole number of zero or more reads as zero. */
+/** A stored list of strings, or empty if what is stored is anything else. */
+function readStrings(raw: unknown): string[] {
+  return Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string') : [];
+}
+
 function readCount(raw: unknown): number {
   return typeof raw === 'number' && Number.isInteger(raw) && raw >= 0 ? raw : 0;
 }

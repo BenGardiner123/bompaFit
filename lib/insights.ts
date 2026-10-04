@@ -21,7 +21,18 @@ export type Insight = {
 };
 
 export const MAX_INSIGHT_CHARS = 140;
-const MAX_ON_DASHBOARD = 2;
+/** How many notes the notifications list holds at once, most urgent first. */
+export const MAX_NOTES = 5;
+
+/**
+ * What a dismissal is stored under. A note about something Bompa did is that
+ * one change, so dismissing it is for good. A note about a condition, such as
+ * high fatigue, is dismissed for the week it was read in: if it still holds
+ * next week, it is news again.
+ */
+export function noteKey(insight: Insight, weekStart: string): string {
+  return insight.adjustmentId !== undefined ? insight.id : `${insight.id}@${weekStart}`;
+}
 
 /**
  * Callouts must fit the card without wrapping into a paragraph. Templates are
@@ -42,8 +53,12 @@ export function buildInsights(args: {
   /** This week against what it was planned to cost. */
   week?: WeekBudget;
   weekOverBudget?: boolean;
+  /** Keys from `noteKey` the lifter has dismissed. */
+  dismissed?: ReadonlySet<string>;
+  /** The Monday of the week being read, which a condition note's dismissal is tied to. */
+  weekStart?: string;
 }): Insight[] {
-  const { scores, acwr, recentAdjustments, daysSinceRest, week, weekOverBudget } = args;
+  const { scores, acwr, recentAdjustments, daysSinceRest, week, weekOverBudget, dismissed, weekStart = '' } = args;
   const out: Insight[] = [];
 
   // Nothing logged yet means nothing to say. Filler on an empty dashboard is
@@ -52,7 +67,10 @@ export function buildInsights(args: {
 
   // 1. Something Bompa actually changed. Highest urgency: the user needs to know
   //    their plan moved before they need to know anything else.
-  for (const adj of recentAdjustments.filter((a) => !a.revertedAt).slice(0, 2)) {
+  //    Dismissed ones are skipped before counting, so dismissing one lets the
+  //    next most recent through rather than leaving a gap.
+  const live = recentAdjustments.filter((a) => !a.revertedAt && !dismissed?.has(`adj-${a.id ?? a.at}`));
+  for (const adj of live.slice(0, 3)) {
     out.push({
       id: `adj-${adj.id ?? adj.at}`,
       tone: 'action',
@@ -136,5 +154,8 @@ export function buildInsights(args: {
     });
   }
 
-  return out.sort((a, b) => b.urgency - a.urgency).slice(0, MAX_ON_DASHBOARD);
+  return out
+    .filter((insight) => !dismissed?.has(noteKey(insight, weekStart)))
+    .sort((a, b) => b.urgency - a.urgency)
+    .slice(0, MAX_NOTES);
 }

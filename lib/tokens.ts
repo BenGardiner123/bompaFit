@@ -288,6 +288,8 @@ export const HERO_SIZE = {
  */
 export const Z = {
   tabBar: 10,
+  /** The notifications list dropping from Today's bell: over the page, under any toast or sheet. */
+  popover: 15,
   toast: 20,
   rest: 25,
   summary: 28,

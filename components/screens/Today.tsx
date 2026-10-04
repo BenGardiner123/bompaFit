@@ -27,6 +27,8 @@ import type { PlannedSession } from '@/lib/types';
 import { useBompa } from '@/state/BompaContext';
 import { Btn, Hero, HeroEyebrow, HeroNumeral, HeroText, Sheet } from '@/components/ui';
 import { Icon } from '@/components/icons';
+import { Notifications } from '@/components/Notifications';
+import type { Insight } from '@/lib/insights';
 
 /** The readiness word on ink. The light-surface greens and reds are too dark to read there. */
 const READY_ON_INK: Record<ReadinessBand, string> = {
@@ -36,27 +38,22 @@ const READY_ON_INK: Record<ReadinessBand, string> = {
 };
 
 /**
- * The way into Settings. It sits in the eyebrow row, and pulls itself out by
- * the same amount it adds so the hero stays the height it was: the 44px target
- * is for the thumb, not for the layout.
+ * The bell and the way into Settings. They sit in the eyebrow row, and pull
+ * themselves out by the same amount they add so the hero stays the height it
+ * was: the 44px targets are for the thumb, not for the layout.
  */
-function SettingsGear({ onOpen }: { onOpen: () => void }) {
+function HeaderButtons({ notes, onOpenSettings }: { notes: Insight[]; onOpenSettings: () => void }) {
   return (
-    <Btn
-      onClick={onOpen}
-      label="Settings"
-      style={{
-        width: TOUCH,
-        height: TOUCH,
-        margin: '-14px -10px -14px 0',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        color: onInk.body,
-      }}
-    >
-      <Icon name="gear" size={20} />
-    </Btn>
+    <span style={{ display: 'flex', alignItems: 'center', margin: '-14px -10px -14px 0' }}>
+      <Notifications notes={notes} />
+      <Btn
+        onClick={onOpenSettings}
+        label="Settings"
+        style={{ width: TOUCH, height: TOUCH, display: 'flex', alignItems: 'center', justifyContent: 'center', color: onInk.body }}
+      >
+        <Icon name="gear" size={20} />
+      </Btn>
+    </span>
   );
 }
 
@@ -106,7 +103,7 @@ export function Today() {
   return (
     <div className="rise" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
       <Hero style={{ paddingTop: 4 }}>
-        <HeroEyebrow right={<SettingsGear onOpen={b.openSettings} />}>
+        <HeroEyebrow right={<HeaderButtons notes={insights} onOpenSettings={b.openSettings} />}>
           {block && weekInBlock && totalWeeks ? `Readiness · ${PHASE_LABEL[block.phase]} wk ${weekInBlock} of ${totalWeeks}` : 'Readiness'}
         </HeroEyebrow>
 
@@ -269,34 +266,6 @@ export function Today() {
             Other workouts
           </Btn>
         </div>
-
-        {insights.map((insight) => {
-          const action = insight.tone === 'action';
-          const adjustment = insight.adjustmentId === undefined ? undefined : b.adjustments.find((a) => a.id === insight.adjustmentId);
-          // One tap, and only ever an offer — an overreaching week is
-          // sometimes exactly what you meant to do.
-          const canTrim = insight.id === 'week-over-budget' && b.budget.remaining.length > 0;
-          return (
-            <div key={insight.id} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '0 2px' }}>
-              {/* Always ink: amber is kept for things you can tap, and the
-                  Undo beside the sentence already says there is an action.
-                  It pulses on arrival when Bompa did or wants something. */}
-              <span
-                className={action ? 'pulse' : undefined}
-                style={{ width: 7, height: 7, borderRadius: '50%', background: C.ink, flex: 'none', alignSelf: 'flex-start', marginTop: 6 }}
-              />
-              <span style={{ flex: 1, minWidth: 0, fontSize: T.sm, lineHeight: 1.45, color: C.ink80 }}>{insight.text}</span>
-              {/* The actions sit beside the sentence rather than inside it so
-                  they can be a full thumb's height without stretching the line. */}
-              {adjustment && (
-                <InsightAction onClick={() => b.undoAdjustment(adjustment)} label={`Undo: ${insight.text}`}>
-                  Undo
-                </InsightAction>
-              )}
-              {canTrim && <InsightAction onClick={() => void b.trimWeekToBudget()}>Trim what’s left</InsightAction>}
-            </div>
-          );
-        })}
 
         {/* Three figures that fit the width, rather than five that scrolled
             sideways where the last two were never seen. Volume and intensity
@@ -521,17 +490,6 @@ function TrendSub({ first, trend }: { first: string; trend: number | null }) {
   );
 }
 
-function InsightAction({ onClick, children, label }: { onClick: () => void; children: string; label?: string }) {
-  return (
-    <Btn
-      onClick={onClick}
-      label={label}
-      style={{ flex: 'none', minHeight: TOUCH, minWidth: TOUCH, padding: '0 4px', fontSize: T.sm, fontWeight: 800, color: C.amberDark, whiteSpace: 'nowrap' }}
-    >
-      {children}
-    </Btn>
-  );
-}
 
 /** One figure in the grid at the foot of Today. A description list, so each value is read with its name. */
 function StripMetric({
