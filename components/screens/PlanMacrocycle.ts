@@ -64,10 +64,7 @@ export function macrocycle(blocks: Block[], todayKey: string): Macrocycle | null
       segments.push({ key: `${block.id ?? block.startDate}-deload`, phase: 'deload', weeks: block.deloadWeeks, done: blockEnds <= todayKey });
     }
 
-    if (block.startDate <= todayKey && todayKey < blockEnds) {
-      const weekIn = Math.floor(daysBetween(block.startDate, todayKey) / 7) + 1;
-      blockWeek = { phase: block.phase, week: weekIn, of: block.weeks, deload: weekIn > block.weeks };
-    }
+    blockWeek ??= positionIn(block, todayKey);
   }
 
   const inside = dayInPlan >= 0 && dayInPlan < totalWeeks * 7;
@@ -81,6 +78,44 @@ export function macrocycle(blocks: Block[], todayKey: string): Macrocycle | null
     todayAt: inside ? (dayInPlan + 0.5) / (totalWeeks * 7) : null,
     blockWeek,
   };
+}
+
+/** Where a day falls inside one block, or null when the block does not cover it. */
+function positionIn(block: Block, dayKey: string): BlockWeek | null {
+  const blockEnds = addDays(block.startDate, (block.weeks + block.deloadWeeks) * 7);
+  if (dayKey < block.startDate || dayKey >= blockEnds) return null;
+  const weekIn = Math.floor(daysBetween(block.startDate, dayKey) / 7) + 1;
+  return { phase: block.phase, week: weekIn, of: block.weeks, deload: weekIn > block.weeks };
+}
+
+/** Where a week sits in the plan: which block, which week of it, and whether it is the deload. Null outside the plan. */
+export function weekPosition(blocks: Block[], weekStart: string): BlockWeek | null {
+  for (const block of blocks) {
+    const at = positionIn(block, weekStart);
+    if (at) return at;
+  }
+  return null;
+}
+
+/**
+ * The week a point along the macrocycle bar falls in, as its Monday. `fraction`
+ * is how far across the bar, 0 to 1; anything past either end lands on the
+ * first or last week rather than outside the plan.
+ */
+export function weekAt(macro: Pick<Macrocycle, 'start' | 'totalWeeks'>, fraction: number): string {
+  const index = Math.min(macro.totalWeeks - 1, Math.max(0, Math.floor(fraction * macro.totalWeeks)));
+  return addDays(macro.start, index * 7);
+}
+
+/**
+ * The weeks the Plan screen can step through: the whole plan, stretched to
+ * take in the current week when today is outside it, so This week is always
+ * one of them.
+ */
+export function browsableWeeks(macro: Pick<Macrocycle, 'start' | 'totalWeeks'> | null, currentWeek: string): { first: string; last: string } {
+  if (!macro) return { first: currentWeek, last: currentWeek };
+  const last = addDays(macro.start, (macro.totalWeeks - 1) * 7);
+  return { first: currentWeek < macro.start ? currentWeek : macro.start, last: currentWeek > last ? currentWeek : last };
 }
 
 /** Where the next block would start: the day after the last one ends, or today with nothing planned. */

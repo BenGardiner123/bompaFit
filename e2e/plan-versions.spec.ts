@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { addLift, builder, completeSetup, goToTab, gotoApp, readRoutines, saveBuilder, trainOneSession } from './helpers';
+import { addLift, builder, completeSetup, goToTab, gotoApp, readRoutines, saveBuilder, trainOneSession, undoChange } from './helpers';
 
 // Each block can run its own versions of your workouts: picked when the block
 // is added, made from a session's options, or swapped in across the block.
@@ -45,10 +45,6 @@ async function addBlock(page: Page) {
   await expect(page.getByRole('dialog', { name: 'Add a block' })).toHaveCount(0);
 }
 
-/** The Undo beside the adjustment whose sentence matches. */
-function undoFor(page: Page, narrative: RegExp) {
-  return page.getByText(narrative).locator('xpath=../..').getByRole('button', { name: 'Undo' });
-}
 
 test.beforeEach(async ({ page }) => {
   await gotoApp(page);
@@ -126,7 +122,7 @@ test('a version for this block replaces the workout here only, and can be undone
   await expect(blockList(page).nth(1)).not.toContainText('Its own workouts');
 
   // One Undo puts every slot and the block's list back.
-  await undoFor(page, /^You made Push A \(Strength\) for this strength block/).click();
+  await undoChange(page, /^You made Push A \(Strength\) for this strength block/);
   await expect(page.getByRole('button', { name: 'Options for Push A', exact: true })).toBeVisible();
   await expect.poll(async () => count(await readPlanned(page), 1, version, true)).toBe(0);
   expect(count(await readPlanned(page), 1, push, true)).toBe(count(rows, 1, version, true));
@@ -162,7 +158,7 @@ test('a swap for every week in the block changes that block only, and can be und
     expect(indices).toEqual(indices.map((_, i) => i));
   }
 
-  await undoFor(page, /^You swapped Legs B for Pull A in every week left in this block/).click();
+  await undoChange(page, /^You swapped Legs B for Pull A in every week left in this block/);
   await expect(page.getByRole('button', { name: 'Options for Legs B' })).toBeVisible();
   await expect.poll(async () => count(await readPlanned(page), 1, legs, true)).toBe(legsInBlock);
   expect(count(await readPlanned(page), 1, pull, true)).toBe(pullInBlock);

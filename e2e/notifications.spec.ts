@@ -45,8 +45,19 @@ test('a change shows on the bell, not on Today, and dismissing it keeps the chan
   await page.reload();
   await goToTab(page, 'Today');
   await expect(bell(page)).toHaveAccessibleName('Notifications');
-  await goToTab(page, 'Plan');
-  await expect(page.getByText(/You swapped/).first()).toBeVisible();
+  const changes = await page.evaluate(async () => {
+    const open = indexedDB.open('bompa');
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      open.onsuccess = () => resolve(open.result);
+      open.onerror = () => reject(open.error);
+    });
+    return new Promise<{ narrative: string; revertedAt?: number }[]>((resolve, reject) => {
+      const request = db.transaction('adjustments').objectStore('adjustments').getAll();
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  });
+  expect(changes.filter((c) => c.narrative.startsWith('You swapped') && !c.revertedAt)).toHaveLength(1);
 });
 
 test('Undo this change reverses it, and the note goes with it', async ({ page }) => {

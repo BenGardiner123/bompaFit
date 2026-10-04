@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { builder, completeSetup, goToTab, gotoApp, readRoutines, saveBuilder } from './helpers';
+import { builder, completeSetup, goToTab, gotoApp, readRoutines, saveBuilder, undoChange } from './helpers';
 
 // Every scheduled session points at a shared workout. Editing one from a
 // session in a block that shares it with another block must ask first: change
@@ -84,7 +84,7 @@ test.describe('a workout two blocks share', () => {
     const before = (await routines(page)).length;
     await page.getByRole('button', { name: 'Edit for this block only' }).click();
     await saveBuilder(page);
-    await page.getByText(/^You made Push A \(Strength\) for this strength block/).locator('xpath=../..').getByRole('button', { name: 'Undo' }).click();
+    await undoChange(page, /^You made Push A \(Strength\) for this strength block/);
     await expect(page.getByRole('button', { name: 'Options for Push A', exact: true })).toHaveCount(2);
 
     await page.getByRole('button', { name: 'Options for Push A', exact: true }).first().click();

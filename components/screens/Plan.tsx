@@ -1,27 +1,46 @@
 'use client';
 
-import { useState, type CSSProperties, type ReactNode } from 'react';
-import { dateKey, daysBetween, fmtDayMonth } from '@/lib/calc';
+import { useId, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { addDays, daysBetween, fmtDayMonth, toDisplay } from '@/lib/calc';
+import { weightShort } from '@/lib/bodyweight';
+import { summariseSessions } from '@/lib/history';
 import { blockContaining, blockRotation, blocksUsing, mesocycleCurve } from '@/lib/plan';
-import { weekIsUserModified } from '@/lib/schedule';
+import { weekIsUserModified, weekSlots } from '@/lib/schedule';
 import { daysToMeet } from '@/lib/today';
-import { C, HERO_SIZE, ON_PHASE, PH, PHASE_ABBR, PHASE_LABEL, PH_ON_INK, R, T, TOUCH, num, onInk } from '@/lib/tokens';
+import { C, FONT, HERO_SIZE, ON_PHASE, PH, PHASE_ABBR, PHASE_LABEL, PH_ON_INK, R, T, TOUCH, num, onInk } from '@/lib/tokens';
 import type { Phase, PlannedSession, Routine } from '@/lib/types';
 import { useBompa } from '@/state/BompaContext';
 import { Btn, DarkSheet, Hero, HeroEyebrow, HeroNumeral, HeroText, InkButton, Row, Scroller, Section, Segmented, Sheet, Tag } from '@/components/ui';
-import { macrocycle, nextBlockStart } from './PlanMacrocycle';
+import { browsableWeeks, macrocycle, nextBlockStart, weekAt, weekPosition } from './PlanMacrocycle';
+import { SessionRow } from './SessionHistory';
 import { Icon } from '@/components/icons';
 
 /**
- * One scrolling view: where you are in the macrocycle, this week, what I
- * changed, the meet, then the blocks. It used to be three tabs, and the meet
- * and the block builder each hid the other two thirds of the plan while you
- * were in them. Building a block and editing the meet are occasional jobs, so
- * they open as sheets over the plan rather than replacing it.
+ * One scrolling view: where you are in the macrocycle, a week of the plan, the
+ * meet, then the blocks. It used to be three tabs, and the meet and the block
+ * builder each hid the other two thirds of the plan while you were in them.
+ * Building a block and editing the meet are occasional jobs, so they open as
+ * sheets over the plan rather than replacing it.
+ *
+ * The week shown is this week until you step to another, with the arrows, by
+ * tapping the macrocycle bar, or by tapping a block. What Bompa changed is not
+ * listed here: it lives behind the bell on Today, where it can be dismissed.
  */
 export function Plan() {
+  const b = useBompa();
   const [building, setBuilding] = useState(false);
   const [editingMeet, setEditingMeet] = useState(false);
+  // The week being looked at. Null means this week, and keeps meaning it if
+  // the week rolls over with the screen open. Local on purpose: it is browsing,
+  // and coming back to Plan should start from now.
+  const [picked, setPicked] = useState<string | null>(null);
+  const week = picked ?? b.currentWeek;
+  const weekTop = useRef<HTMLDivElement>(null);
+  const show = (target: string, scroll: boolean) => {
+    setPicked(target === b.currentWeek ? null : target);
+    // From the bar or a block, the week can be a long way up the page.
+    if (scroll) weekTop.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   return (
     <div className="rise" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
@@ -29,13 +48,15 @@ export function Plan() {
           is still announced for anyone navigating by heading. */}
       <h1 className="sr-only">Plan</h1>
       <Hero gap={12}>
-        <MacrocycleHero />
+        <MacrocycleHero week={week} onPick={(target) => show(target, true)} />
       </Hero>
       <Sheet gap={20}>
-        <ThisWeek />
-        <AdjustmentLog />
+        <div ref={weekTop} style={{ display: 'flex', flexDirection: 'column', gap: 8, scrollMarginTop: 12 }}>
+          <WeekNav week={week} onPick={(target) => show(target, false)} />
+          {week === b.currentWeek ? <ThisWeek /> : <OtherWeek key={week} week={week} />}
+        </div>
         <Meet onEdit={() => setEditingMeet(true)} />
-        <PlanBlocks />
+        <PlanBlocks week={week} onPick={(target) => show(target, true)} />
         <Btn onClick={() => setBuilding(true)} style={inkButton(52, R.block, 15)}>
           <Icon name="plus" size={16} style={{ marginRight: 8 }} />
           Add a block
@@ -79,7 +100,7 @@ function inkButton(height: number, radius: number, fontSize: number): CSSPropert
 // The macrocycle
 // ─────────────────────────────────────────────────────────────
 
-function MacrocycleHero() {
+function MacrocycleHero({ week: viewing, onPick }: { week: string; onPick: (week: string) => void }) {
   const b = useBompa();
   const macro = macrocycle(b.blocks, b.todayKey);
 
@@ -111,6 +132,10 @@ function MacrocycleHero() {
     subColor = PH_ON_INK[blockWeek.phase];
   }
 
+  // The week being looked at, outlined on the bar when it is not this week.
+  const viewedIndex = daysBetween(macro.start, viewing) / 7;
+  const viewedAt = viewing !== b.currentWeek && viewedIndex >= 0 && viewedIndex < totalWeeks ? viewedIndex / totalWeeks : null;
+
   return (
     <>
       <HeroEyebrow>Plan · {totalWeeks}-week macrocycle</HeroEyebrow>
@@ -126,13 +151,23 @@ function MacrocycleHero() {
         ariaLabel={`Week ${week} of ${totalWeeks}. ${sub}.`}
       />
 
-      {/* The top padding is the room the today marker's dot pokes up into. */}
-      <div style={{ position: 'relative', paddingTop: 10 }}>
+      {/* The top padding is the room the today marker's dot pokes up into.
+          Tapping anywhere on the bar shows that week below. Touch and mouse
+          only: the week arrows and the block list do the same from a
+          keyboard, so the bar stays one picture to a screen reader. */}
+      <div
+        data-macrocycle-bar
+        style={{ position: 'relative', paddingTop: 10, cursor: 'pointer' }}
+        onClick={(event) => {
+          const box = event.currentTarget.getBoundingClientRect();
+          onPick(weekAt(macro, (event.clientX - box.left) / box.width));
+        }}
+      >
         <div
           role="img"
-          aria-label={macro.segments
+          aria-label={`${macro.segments
             .map((seg) => `${PHASE_LABEL[seg.phase]} ${seg.weeks} ${seg.weeks === 1 ? 'week' : 'weeks'}${seg.done ? ', done' : ''}`)
-            .join('; ')}
+            .join('; ')}. Tap the bar to see that week.`}
           style={{ display: 'flex', gap: 3, height: 38 }}
         >
           {macro.segments.map((seg, index) => {
@@ -167,6 +202,23 @@ function MacrocycleHero() {
             );
           })}
         </div>
+        {viewedAt !== null && (
+          <span
+            aria-hidden
+            data-viewing-week
+            style={{
+              position: 'absolute',
+              top: 7,
+              height: 44,
+              left: `${viewedAt * 100}%`,
+              width: `${100 / totalWeeks}%`,
+              boxSizing: 'border-box',
+              border: `2px solid ${onInk.text}`,
+              borderRadius: R.tag,
+              pointerEvents: 'none',
+            }}
+          />
+        )}
         {macro.todayAt !== null && (
           <>
             <span
@@ -348,6 +400,214 @@ function ThisWeek() {
         Train these whenever the week suits you. Dropping one lowers what the week expects; it isn&apos;t a miss, and you can undo it.
       </span>
     </Section>
+  );
+}
+
+/** "This week", "Last week", "3 weeks ago", "In 5 weeks": the week said against this one. */
+function relativeWeek(week: string, currentWeek: string): string {
+  const n = Math.round(daysBetween(currentWeek, week) / 7);
+  if (n === 0) return 'This week';
+  if (n === -1) return 'Last week';
+  if (n === 1) return 'Next week';
+  return n < 0 ? `${-n} weeks ago` : `In ${n} weeks`;
+}
+
+/**
+ * Step through the plan a week at a time. The dates and where the week sits in
+ * its block are said here; the list below carries "This week", "Last week" and
+ * so on in its heading.
+ */
+function WeekNav({ week, onPick }: { week: string; onPick: (week: string) => void }) {
+  const b = useBompa();
+  const { first, last } = browsableWeeks(macrocycle(b.blocks, b.todayKey), b.currentWeek);
+  const at = weekPosition(b.blocks, week);
+  const where = !at ? 'Outside your plan' : at.deload ? `Deload after ${PHASE_LABEL[at.phase].toLowerCase()}` : `${PHASE_LABEL[at.phase]} · week ${at.week} of ${at.of}`;
+
+  return (
+    <div role="group" aria-label="Week" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <WeekArrow icon="chevron-left" label="Previous week" disabled={week <= first} onClick={() => onPick(addDays(week, -7))} />
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, textAlign: 'center' }}>
+        <span style={{ fontSize: T.title, fontWeight: 800, color: C.ink, ...num }}>
+          {fmtDayMonth(week)} – {fmtDayMonth(addDays(week, 6))}
+        </span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: T.caption, fontWeight: 700, color: C.tertiary }}>
+          {at && <span aria-hidden style={{ width: 8, height: 8, flex: 'none', borderRadius: R.swatch, background: PH[at.deload ? 'deload' : at.phase] }} />}
+          {where}
+        </span>
+        {week !== b.currentWeek && (
+          <Btn onClick={() => onPick(b.currentWeek)} style={{ minHeight: TOUCH, padding: '0 8px', fontSize: T.sm, fontWeight: 800, color: C.amberDark }}>
+            Back to this week
+          </Btn>
+        )}
+      </div>
+      <WeekArrow icon="chevron-right" label="Next week" disabled={week >= last} onClick={() => onPick(addDays(week, 7))} />
+    </div>
+  );
+}
+
+function WeekArrow({ icon, label, disabled, onClick }: { icon: 'chevron-left' | 'chevron-right'; label: string; disabled: boolean; onClick: () => void }) {
+  return (
+    <Btn
+      onClick={onClick}
+      label={label}
+      disabled={disabled}
+      style={{
+        width: TOUCH,
+        height: TOUCH,
+        flex: 'none',
+        borderRadius: R.chip,
+        border: `1px solid ${C.lineStrong}`,
+        color: C.ink,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <Icon name={icon} size={18} />
+    </Btn>
+  );
+}
+
+/**
+ * Any week but this one. A week behind you shows what happened: each done
+ * session opens to every set, as on History, and anything trained that week
+ * outside the plan is listed after it. A week ahead shows what is planned, and
+ * each workout opens to its lifts. Neither can be rearranged from here; that
+ * is this week's job.
+ */
+function OtherWeek({ week }: { week: string }) {
+  const b = useBompa();
+  const [open, setOpen] = useState<string | null>(null);
+  const slots = weekSlots(b.planned, week);
+  const past = week < b.currentWeek;
+  const done = slots.filter((slot) => slot.status === 'done').length;
+  const summaries = summariseSessions(b.sessions, b.sets);
+  const bySession = new Map(summaries.map((summary) => [summary.session.id, summary]));
+  const inPlan = new Set(slots.map((slot) => slot.sessionId).filter((id): id is number => id !== undefined));
+  const weekEnds = addDays(week, 7);
+  const extras = summaries.filter((x) => x.session.date >= week && x.session.date < weekEnds && !inPlan.has(x.session.id ?? -1));
+  const toggle = (key: string) => setOpen(open === key ? null : key);
+  const name = relativeWeek(week, b.currentWeek);
+
+  return (
+    <Section title={past ? `${name} · ${done} of ${slots.length} done` : `${name} · ${slots.length} planned`}>
+      {slots.length === 0 && extras.length === 0 && <Note>{past ? 'Nothing planned or trained this week.' : 'Nothing planned this week.'}</Note>}
+      {slots.map((slot, index) => {
+        const summary = slot.sessionId === undefined ? undefined : bySession.get(slot.sessionId);
+        const key = `slot-${slot.id ?? index}`;
+        if (slot.status === 'done' && summary) {
+          return (
+            <SessionRow
+              key={key}
+              summary={summary}
+              unit={b.s.unit}
+              todayKey={b.todayKey}
+              expanded={open === key}
+              onToggle={() => toggle(key)}
+            />
+          );
+        }
+        return <PlannedRow key={key} slot={slot} index={index} expanded={open === key} onToggle={() => toggle(key)} />;
+      })}
+      {extras.length > 0 && (
+        <>
+          <span style={{ paddingTop: 10, fontSize: T.xs, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: C.tertiary }}>
+            Also trained
+          </span>
+          {extras.map((summary) => {
+            const key = `session-${summary.session.id}`;
+            return (
+              <SessionRow
+                key={key}
+                summary={summary}
+                unit={b.s.unit}
+                todayKey={b.todayKey}
+                expanded={open === key}
+                onToggle={() => toggle(key)}
+              />
+            );
+          })}
+        </>
+      )}
+    </Section>
+  );
+}
+
+/**
+ * A slot in a week other than this one. It opens to the workout's lifts as the
+ * workout is written; the line under the name already says how this week
+ * scales them. A skipped slot, or one whose workout was deleted, has nothing
+ * to open.
+ */
+function PlannedRow({ slot, index, expanded, onToggle }: { slot: PlannedSession; index: number; expanded: boolean; onToggle: () => void }) {
+  const b = useBompa();
+  const panelId = useId();
+  const routine = b.routineById(slot.routineId);
+  const tag = statusTag(slot, false);
+  const name = routine?.name ?? 'Deleted workout';
+  const canOpen = Boolean(routine) && slot.status !== 'skip';
+
+  const head = (
+    <>
+      <span style={{ width: 18, flex: 'none', fontSize: T.sm, fontWeight: 800, color: C.tertiary, ...num }}>{index + 1}</span>
+      <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <span style={{ fontSize: T.title, fontWeight: 800, color: routine ? C.ink : C.tertiary }}>{name}</span>
+        <span style={{ fontSize: T.caption, fontWeight: 600, color: C.tertiary, ...num }}>{detailFor(slot, routine)}</span>
+      </span>
+      <Tag bg={tag.bg} fg={tag.fg}>
+        {tag.label}
+      </Tag>
+      <span style={{ width: 16, flex: 'none', display: 'flex', color: C.tertiary }}>
+        {canOpen && <Icon name={expanded ? 'chevron-up' : 'chevron-down'} size={14} />}
+      </span>
+    </>
+  );
+  const line = { display: 'flex', alignItems: 'center', gap: 10, width: '100%', minHeight: TOUCH, padding: '10px 0', textAlign: 'left', color: C.ink } as const;
+
+  return (
+    <div style={{ borderTop: `1px solid ${C.line}`, display: 'flex', flexDirection: 'column' }}>
+      {canOpen ? (
+        // A plain button rather than Row, because a row that opens has to say
+        // whether it is open, and that needs aria-expanded.
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={expanded}
+          aria-controls={panelId}
+          aria-label={`${expanded ? 'Hide' : 'Show'} ${name}, slot ${index + 1}`}
+          style={{ ...line, fontFamily: FONT, border: 'none', background: 'transparent', cursor: 'pointer' }}
+        >
+          {head}
+        </button>
+      ) : (
+        <div style={line}>{head}</div>
+      )}
+      {expanded && routine && (
+        <ul id={panelId} className="rise" style={{ listStyle: 'none', margin: 0, padding: '0 0 12px 28px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {routine.slots.map((lift) => {
+            const exercise = b.exerciseById.get(lift.exerciseId);
+            const reps = lift.repsMax ? `${lift.reps}–${lift.repsMax}` : `${lift.reps}`;
+            const weight =
+              lift.targetWeightKg !== null
+                ? weightShort(toDisplay(lift.targetWeightKg, b.s.unit), b.s.unit, b.isBodyweightLift(lift.exerciseId))
+                : lift.targetPct1RM
+                  ? `${Math.round(lift.targetPct1RM * 100)}% of max`
+                  : weightShort(0, b.s.unit);
+            return (
+              <li key={`${lift.exerciseId}-${lift.order}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: T.note, color: C.ink80 }}>
+                <span style={{ minWidth: 0 }}>
+                  {lift.supersetGroup && <span style={{ fontWeight: 800, color: C.tertiary }}>{lift.supersetGroup} · </span>}
+                  {exercise?.name ?? lift.exerciseId}
+                </span>
+                <span style={{ flex: 'none', fontWeight: 700, ...num }}>
+                  {lift.sets} × {reps} @ {weight}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -565,40 +825,6 @@ function detailFor(slot: PlannedSession, routine: Routine | undefined): string {
 }
 
 // ─────────────────────────────────────────────────────────────
-// What I changed
-// ─────────────────────────────────────────────────────────────
-
-function AdjustmentLog() {
-  const b = useBompa();
-  const live = b.adjustments.filter((a) => !a.revertedAt).slice(0, 6);
-
-  return (
-    <Section title="What I changed">
-      {live.length === 0 && <Note>Nothing live. The plan is exactly as you built it.</Note>}
-      {live.map((adjustment) => (
-        <div
-          key={adjustment.id ?? adjustment.at}
-          style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '6px 0', borderTop: `1px solid ${C.line}` }}
-        >
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <span style={{ fontSize: T.copy, lineHeight: 1.4, color: C.ink80 }}>
-              {adjustment.narrative} <span style={{ color: C.tertiary, ...num }}>· {fmtDayMonth(dateKey(adjustment.at))}</span>
-            </span>
-          </div>
-          <Btn
-            onClick={() => b.undoAdjustment(adjustment)}
-            // Drawn as bare text, but sized so a thumb can hit it.
-            style={{ flex: 'none', height: TOUCH, minWidth: TOUCH, fontSize: T.sm, fontWeight: 800, color: C.amberDark }}
-          >
-            Undo
-          </Btn>
-        </div>
-      ))}
-    </Section>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────
 // The meet
 // ─────────────────────────────────────────────────────────────
 
@@ -789,8 +1015,12 @@ const BLOCK_TYPES: { id: Phase; label: string; sub: string }[] = [
   { id: 'peak', label: 'Peak', sub: 'Taper to test' },
 ];
 
-/** Every block in the plan and the workouts it cycles through, so a block with its own versions says so. */
-function PlanBlocks() {
+/**
+ * Every block in the plan, its dates and the workouts it cycles through, so a
+ * block with its own versions says so. Tapping one shows its first week above,
+ * or the week being looked at if that is already inside it.
+ */
+function PlanBlocks({ week, onPick }: { week: string; onPick: (week: string) => void }) {
   const b = useBompa();
   if (b.blocks.length === 0) return null;
   const blocks = [...b.blocks].sort((x, y) => (x.startDate < y.startDate ? -1 : 1));
@@ -800,21 +1030,29 @@ function PlanBlocks() {
       <div role="list" aria-label="Blocks in your plan" style={{ display: 'flex', flexDirection: 'column' }}>
         {blocks.map((block) => {
           const names = blockRotation(block, b.plan).map((id) => b.routineById(id)?.name ?? 'Deleted workout');
+          const ends = addDays(block.startDate, (block.weeks + block.deloadWeeks) * 7 - 1);
+          const inside = week >= block.startDate && week <= ends;
+          const length = `${block.weeks} ${block.weeks === 1 ? 'week' : 'weeks'}${block.deloadWeeks > 0 ? ' + deload' : ''}`;
           return (
-            <div
-              key={block.id ?? block.startDate}
-              role="listitem"
-              style={{ display: 'grid', gridTemplateColumns: '12px 1fr auto', gap: 12, alignItems: 'flex-start', padding: '12px 0', borderTop: `1px solid ${C.line}` }}
-            >
-              <span aria-hidden style={{ width: 10, height: 10, borderRadius: R.swatch, background: PH[block.phase], marginTop: 5 }} />
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-                <span style={{ fontSize: T.title, fontWeight: 800 }}>{PHASE_LABEL[block.phase]} block</span>
-                <span style={{ fontSize: T.caption, fontWeight: 600, color: C.tertiary }}>
-                  {block.rotation ? 'Its own workouts: ' : ''}
-                  {names.join(', ')}
+            <div key={block.id ?? block.startDate} role="listitem" style={{ borderTop: `1px solid ${C.line}` }}>
+              <Btn
+                onClick={() => onPick(inside ? week : block.startDate)}
+                label={`Show the ${PHASE_LABEL[block.phase].toLowerCase()} block, ${fmtDayMonth(block.startDate)} to ${fmtDayMonth(ends)}`}
+                style={{ width: '100%', display: 'grid', gridTemplateColumns: '12px 1fr auto', gap: 12, alignItems: 'flex-start', padding: '12px 0', textAlign: 'left', color: C.ink }}
+              >
+                <span aria-hidden style={{ width: 10, height: 10, borderRadius: R.swatch, background: PH[block.phase], marginTop: 5 }} />
+                <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                  <span style={{ fontSize: T.title, fontWeight: 800 }}>{PHASE_LABEL[block.phase]} block</span>
+                  <span style={{ fontSize: T.caption, fontWeight: 700, color: C.ink80, ...num }}>
+                    {fmtDayMonth(block.startDate)} – {fmtDayMonth(ends)} · {length}
+                  </span>
+                  <span style={{ fontSize: T.caption, fontWeight: 600, color: C.tertiary }}>
+                    {block.rotation ? 'Its own workouts: ' : ''}
+                    {names.join(', ')}
+                  </span>
                 </span>
-              </div>
-              <span style={{ fontSize: T.caption, fontWeight: 800, color: C.ink80, ...num }}>{fmtDayMonth(block.startDate)}</span>
+                <Icon name="chevron-right" size={16} style={{ marginTop: 3, color: inside ? C.ink : C.tertiary }} />
+              </Btn>
             </div>
           );
         })}

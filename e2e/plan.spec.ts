@@ -164,10 +164,12 @@ test.describe('the week', () => {
     await expect.poll(order).toEqual(before);
   });
 
-  test('a drop writes nothing to what I changed, because it was your decision', async ({ page }) => {
+  test('a drop writes nothing to what Bompa changed, because it was your decision', async ({ page }) => {
     await page.getByRole('button', { name: /^Options for / }).first().click();
     await page.getByRole('button', { name: 'Drop', exact: true }).click();
-    await expect(page.getByText('Nothing live. The plan is exactly as you built it.')).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Options for / }).first()).toBeVisible();
+    await goToTab(page, 'Today');
+    await expect(page.getByRole('button', { name: /^Notifications/ })).toHaveAccessibleName('Notifications');
   });
 
   test('the week survives a reload', async ({ page }) => {
@@ -194,9 +196,9 @@ test.describe('training on any day', () => {
 });
 
 test.describe('one view', () => {
-  test('there are no view tabs: the week, the changes, the meet and the blocks are all on one page', async ({ page }) => {
+  test('there are no view tabs: the week, the meet and the blocks are all on one page', async ({ page }) => {
     await expect(page.getByRole('group', { name: 'Plan view' })).toHaveCount(0);
-    for (const heading of [/^This week · \d+ of \d+ done$/, /^What I changed$/, /^Meet$/, /^Blocks in your plan$/]) {
+    for (const heading of [/^This week · \d+ of \d+ done$/, /^Meet$/, /^Blocks in your plan$/]) {
       await expect(page.getByRole('heading', { name: heading })).toBeVisible();
     }
     await expect(page.getByRole('button', { name: 'Add a block', exact: true })).toBeVisible();
@@ -214,8 +216,8 @@ test.describe('one view', () => {
     await expect(page.getByText(/Fitness is currently/)).toHaveCount(0);
   });
 
-  test('what I changed is always shown, even when nothing is live', async ({ page }) => {
-    await expect(page.getByRole('heading', { name: 'What I changed' })).toBeVisible();
+  test('what Bompa changed is not listed here; it lives behind the bell on Today', async ({ page }) => {
+    await expect(page.getByRole('heading', { name: 'What I changed' })).toHaveCount(0);
   });
 
   test('the next slot is tagged in ink, not amber, because amber means something to tap', async ({ page }) => {

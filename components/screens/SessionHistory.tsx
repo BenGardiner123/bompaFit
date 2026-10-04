@@ -153,7 +153,8 @@ function LastSevenDays() {
   );
 }
 
-function SessionRow({
+/** One finished session: its figures, opening to every set. Plan uses it too, for a past week's sessions. */
+export function SessionRow({
   summary,
   unit,
   todayKey,

@@ -173,6 +173,21 @@ export async function startFromWorkouts(page: Page, name: string) {
   await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Train' })).toHaveAttribute('aria-current', 'page');
 }
 
+/**
+ * Undo a change Bompa recorded, the way a person does: from the bell on
+ * Today, by its sentence. Comes back to Plan afterwards, where the change shows.
+ */
+export async function undoChange(page: Page, narrative: RegExp) {
+  await goToTab(page, 'Today');
+  await page.getByRole('button', { name: /^Notifications/ }).click();
+  const sentence = narrative.source.replace(/^\^/, '');
+  await page
+    .getByRole('dialog', { name: 'Notifications' })
+    .getByRole('button', { name: new RegExp(`^Undo this change: ${sentence}`) })
+    .click();
+  await goToTab(page, 'Plan');
+}
+
 /** Read every routine currently in IndexedDB, for assertions storage-side. */
 export async function readRoutines(page: Page) {
   return page.evaluate(async () => {
