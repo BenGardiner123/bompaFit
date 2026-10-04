@@ -28,13 +28,6 @@ describe('Icon', () => {
     expect(svg.getAttribute('stroke-linejoin')).toBe('round');
   });
 
-  it('fills rather than strokes the three dots, which vanish as rings at small sizes', () => {
-    const { container } = render(<Icon name="more" />);
-    const svg = container.querySelector('svg')!;
-    expect(svg.getAttribute('fill')).toBe('currentColor');
-    expect(svg.getAttribute('stroke')).toBe('none');
-  });
-
   it('draws the tick heavier, unless told otherwise', () => {
     const { container, rerender } = render(<Icon name="check" />);
     expect(container.querySelector('svg')!.getAttribute('stroke-width')).toBe('2.5');

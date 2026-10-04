@@ -23,3 +23,6 @@ playwright-report/
 blob-report/
 .playwright/
 
+
+# Backups exported from the app hold personal training data.
+bompa-*.json
