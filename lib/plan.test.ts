@@ -19,6 +19,7 @@ import {
   replaceInRotation,
   reverseTaper,
   startWeekOn,
+  weekFactors,
   weekShape,
 } from './plan';
 import { isOverBudget, renumber, weekBudget, weekSlots } from './schedule';
@@ -264,7 +265,7 @@ describe('predictPeak', () => {
 
   const pricer = (p: PlannedSession) => {
     const routine = TEMPLATE_BY_ID.get(p.routineId);
-    return routine ? plannedSessionLoad(routine, p.volumeFactor, {}) : null;
+    return routine ? plannedSessionLoad(routine, { volume: p.volumeFactor, intensity: 1 }, {}) : null;
   };
 
   it('hides the prediction below 28 days of history', () => {
@@ -356,19 +357,38 @@ describe('predictPeak', () => {
 describe('plannedSessionLoad', () => {
   it('scales with the session volume factor', () => {
     const routine = TEMPLATE_BY_ID.get('push')!;
-    const full = plannedSessionLoad(routine, 1, {});
-    const half = plannedSessionLoad(routine, 0.5, {});
+    const full = plannedSessionLoad(routine, { volume: 1, intensity: 1 }, {});
+    const half = plannedSessionLoad(routine, { volume: 0.5, intensity: 1 }, {});
     expect(half).toBeCloseTo(full / 2, 5);
+  });
+
+  it("scales a written weight by the week's intensity, the same way Train asks for it", () => {
+    const routine = TEMPLATE_BY_ID.get('push')!; // every slot is a written weight
+    const full = plannedSessionLoad(routine, { volume: 1, intensity: 1 }, {});
+    const early = plannedSessionLoad(routine, { volume: 1, intensity: 0.85 }, {});
+    expect(early).toBeCloseTo(full * 0.85, 5);
+  });
+
+  it("prices a scheme at its own set count whatever the week's volume", () => {
+    const routine = TEMPLATE_BY_ID.get('push')!;
+    const wave: Routine = { ...routine, slots: routine.slots.map((slot) => ({ ...slot, scheme: Array.from({ length: slot.sets }, () => ({ reps: slot.reps })) })) };
+    expect(plannedSessionLoad(wave, { volume: 0.62, intensity: 1 }, {})).toBe(plannedSessionLoad(wave, { volume: 1, intensity: 1 }, {}));
+  });
+
+  it('leaves a percentage-of-max slot at its own percentage whatever the week', () => {
+    const routine = TEMPLATE_BY_ID.get('meet-openers')!; // every slot is %1RM
+    const maxes = { 'back-squat': 200, 'barbell-bench-press': 120, deadlift: 240 };
+    expect(plannedSessionLoad(routine, { volume: 1, intensity: 0.85 }, maxes)).toBe(plannedSessionLoad(routine, { volume: 1, intensity: 1 }, maxes));
   });
 
   it('skips percentage-based slots when the lift has no estimated max yet', () => {
     const routine = TEMPLATE_BY_ID.get('meet-openers')!; // every slot is %1RM
-    expect(plannedSessionLoad(routine, 1, {})).toBe(0);
+    expect(plannedSessionLoad(routine, { volume: 1, intensity: 1 }, {})).toBe(0);
   });
 
   it('prices percentage-based slots once a max is known', () => {
     const routine = TEMPLATE_BY_ID.get('meet-openers')!;
-    const load = plannedSessionLoad(routine, 1, { 'back-squat': 200, 'barbell-bench-press': 120, deadlift: 240 });
+    const load = plannedSessionLoad(routine, { volume: 1, intensity: 1 }, { 'back-squat': 200, 'barbell-bench-press': 120, deadlift: 240 });
     expect(load).toBeGreaterThan(0);
   });
 
@@ -396,10 +416,10 @@ describe('plannedSessionLoad', () => {
 
     it('is priced as the share of the lifter each lift moves', () => {
       // Pull-ups: 3 × 10 × 80 × 0.8 = 1920. Hyperextensions: 3 × 12 × (40 + 10) × 0.8 = 1440.
-      expect(plannedSessionLoad(routine, 1, {}, weigh)).toBeCloseTo(3360, 9);
+      expect(plannedSessionLoad(routine, { volume: 1, intensity: 1 }, {}, weigh)).toBeCloseTo(3360, 9);
       // Without a bodyweight the pull-ups are free and only the plate counts:
       // 3 × 12 × 10 × 0.8 = 288, exactly as before.
-      expect(plannedSessionLoad(routine, 1, {})).toBeCloseTo(288, 9);
+      expect(plannedSessionLoad(routine, { volume: 1, intensity: 1 }, {})).toBeCloseTo(288, 9);
     });
 
     it('done exactly as planned, lands on budget', () => {
@@ -425,7 +445,7 @@ describe('plannedSessionLoad', () => {
         id: 1, planId: 1, blockId: 1, weekStart: WEEK, slotIndex: 0, routineId: routine.id, status: 'done', date: WEEK, adjustedByBompa: false, volumeFactor: 1,
       };
 
-      const budget = weekBudget({ planned: [slot], weekStart: WEEK, slotLoad: () => plannedSessionLoad(routine, 1, {}, weigh), loggedLoad: logged });
+      const budget = weekBudget({ planned: [slot], weekStart: WEEK, slotLoad: () => plannedSessionLoad(routine, { volume: 1, intensity: 1 }, {}, weigh), loggedLoad: logged });
       expect(budget.budget).toBeCloseTo(3360, 9);
       expect(budget.projected).toBeCloseTo(3360, 9);
       expect(budget.overshoot).toBeCloseTo(0, 9);
@@ -753,5 +773,46 @@ describe('pointing a block at a different workout', () => {
     expect(copied.projected).toBe(before.projected);
     // The done push is still priced as the original: 100 + 80 + 130.
     expect(budget(after, { push: 100, pull: 80, 'push-strength': 130 }).budget).toBe(310);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────
+// What a week asks for
+// ─────────────────────────────────────────────────────────────
+
+describe('weekShape intensity', () => {
+  it('runs an accumulation block from 85% to the written weight', () => {
+    expect(weekShape('strength', 0, 6).intensity).toBe(0.85);
+    expect(weekShape('strength', 2, 6).intensity).toBe(0.91);
+    expect(weekShape('strength', 5, 6).intensity).toBe(1);
+    expect(weekShape('hypertrophy', 1, 3).intensity).toBe(0.925);
+  });
+
+  it('starts a peak block light and climbs to the written weight', () => {
+    expect(weekShape('peak', 0, 3).intensity).toBe(0.7);
+    expect(weekShape('peak', 2, 3).intensity).toBe(1);
+  });
+
+  it('deloads at 70% of the written weight', () => {
+    expect(weekShape('deload', 0, 1).intensity).toBe(0.7);
+  });
+});
+
+describe('weekFactors', () => {
+  const blocks: Block[] = [
+    { id: 1, planId: 1, phase: 'strength', weeks: 6, deloadWeeks: 1, startDate: '2026-09-21' },
+    { id: 2, planId: 1, phase: 'hypertrophy', weeks: 3, deloadWeeks: 1, startDate: '2026-11-09' },
+  ];
+
+  it("is the week's place on its block's curve", () => {
+    expect(weekFactors(blocks, '2026-10-05')).toEqual({ volume: 0.772, intensity: 0.91 });
+    expect(weekFactors(blocks, '2026-10-26')).toEqual({ volume: 1, intensity: 1 });
+    expect(weekFactors(blocks, '2026-11-02')).toEqual({ volume: 0.38, intensity: 0.7 });
+    expect(weekFactors(blocks, '2026-11-09')).toEqual({ volume: 0.62, intensity: 0.85 });
+  });
+
+  it('is the workout as written outside any block', () => {
+    expect(weekFactors(blocks, '2026-09-14')).toEqual({ volume: 1, intensity: 1 });
+    expect(weekFactors([], '2026-10-05')).toEqual({ volume: 1, intensity: 1 });
   });
 });

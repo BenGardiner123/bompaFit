@@ -114,7 +114,7 @@ test.describe('RPE after the set', () => {
     await line.getByRole('button', { name: 'Rate Bench' }).click();
 
     const sheet = page.getByRole('dialog', { name: 'Rate Bench Press' });
-    await expect(sheet.getByText(/^Set 1 · 40 kg × 8$/)).toBeVisible();
+    await expect(sheet.getByText(/^Set 1 · 35 kg × 8$/)).toBeVisible();
     await chip(sheet, 9).click();
     await expect(chip(sheet, 9)).toHaveAttribute('aria-pressed', 'true');
     await sheet.getByRole('button', { name: 'Done' }).click();
@@ -141,14 +141,15 @@ test.describe('RPE after the set', () => {
     await finishToSummary(page);
 
     const summary = page.getByRole('dialog', { name: 'Session summary' });
-    await expect(summary.getByText(/^1 × 8 @ 40 kg · 1 set unrated$/)).toBeVisible();
+    // 40 written, 85% in the block's first week, to the plate step.
+    await expect(summary.getByText(/^1 × 8 @ 35 kg · 1 set unrated$/)).toBeVisible();
     await summary.getByRole('button', { name: 'Rate Bench Press' }).click();
 
     const sheet = page.getByRole('dialog', { name: 'Rate Bench Press' });
     await chip(sheet, 9).click();
     await sheet.getByRole('button', { name: 'Done' }).click();
 
-    await expect(summary.getByText(/^1 × 8 @ 40 kg · top RPE 9$/)).toBeVisible();
+    await expect(summary.getByText(/^1 × 8 @ 35 kg · top RPE 9$/)).toBeVisible();
     await expect(summary.getByRole('button', { name: 'Rate Bench Press' })).toHaveCount(0);
   });
 

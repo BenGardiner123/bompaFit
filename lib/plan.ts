@@ -3,24 +3,32 @@
 
 import { DAY_MS, MODEL, addDays, dateKey, daysBetween, fitness, fatigue, fromDateKey, weekdayIndex } from './calc';
 import { planWeekStart, spreadWeekDays, weekSlots } from './schedule';
+import { FULL_WEEK, type WeekFactors } from './adapt';
 import type { EffectiveWeight, SessionLoad } from './calc';
 import type { Block, Phase, Plan, PlannedSession, Routine } from './types';
 
 /** A deload week runs at roughly half the volume of a working week. */
 export const DELOAD_VOLUME_FACTOR = 0.38;
-const DELOAD_INTENSITY_FACTOR = 0.55;
+/** And at 70% of the block's top weight: light enough to recover on, heavy enough to keep the groove. */
+const DELOAD_INTENSITY_FACTOR = 0.7;
 
 /**
  * How volume and intensity move across the working weeks of a block.
  * `t` runs 0 → 1 across the block. Accumulation blocks ramp volume up; a peak
  * block does the opposite — volume falls away while intensity climbs, which is
  * what lets fatigue drain while fitness holds.
+ *
+ * Intensity is a share of the workout's written weight, and the last working
+ * week is 1: the weight written in a workout is the weight for the block's
+ * last hard week, and earlier weeks work down from it. An accumulation block
+ * starts at 85% because that is where strength coaches start one; the volume
+ * curve does the early easing, not the bar.
  */
 export function weekShape(phase: Phase, weekIndex: number, totalWeeks: number): { volume: number; intensity: number } {
   if (phase === 'deload') return { volume: DELOAD_VOLUME_FACTOR, intensity: DELOAD_INTENSITY_FACTOR };
   const t = totalWeeks <= 1 ? 1 : weekIndex / (totalWeeks - 1);
   if (phase === 'peak') return { volume: round3(1 - t * 0.55), intensity: round3(0.7 + t * 0.3) };
-  return { volume: round3(0.62 + t * 0.38), intensity: round3(0.68 + t * 0.28) };
+  return { volume: round3(0.62 + t * 0.38), intensity: round3(0.85 + t * 0.15) };
 }
 
 /**
@@ -179,20 +187,35 @@ export function generatePlan(args: {
 // Adding a workout to the plan
 // ─────────────────────────────────────────────────────────────
 
-/** One calendar week of a block, with the volume the generator gives it. */
-export type BlockWeek = { weekStart: string; isDeload: boolean; volumeFactor: number };
+/** One calendar week of a block, with the volume and intensity the generator gives it. */
+export type BlockWeek = { weekStart: string; isDeload: boolean; volumeFactor: number; intensityFactor: number };
 
 /** Every week a block covers, working weeks first and then its deloads. */
 export function blockWeeks(block: Block): BlockWeek[] {
   const total = block.weeks + block.deloadWeeks;
   return Array.from({ length: total }, (_, w) => {
     const isDeload = w >= block.weeks;
+    const shape = weekShape(isDeload ? 'deload' : block.phase, w, block.weeks);
     return {
       weekStart: addDays(block.startDate, w * 7),
       isDeload,
-      volumeFactor: weekShape(isDeload ? 'deload' : block.phase, w, block.weeks).volume,
+      volumeFactor: shape.volume,
+      intensityFactor: shape.intensity,
     };
   });
+}
+
+/**
+ * How much of a workout's written sets and weight a week asks for. Inside a
+ * block it is that week's place on the block's curve; outside any block the
+ * workout is trained as written.
+ */
+export function weekFactors(blocks: Block[], weekStart: string): WeekFactors {
+  for (const block of blocks) {
+    const week = blockWeeks(block).find((w) => w.weekStart === weekStart);
+    if (week) return { volume: week.volumeFactor, intensity: week.intensityFactor };
+  }
+  return FULL_WEEK;
 }
 
 /**
@@ -468,7 +491,7 @@ export type PeakWindow = { startDate: string; endDate: string; daysAway: number 
  */
 export function plannedSessionLoad(
   routine: Routine,
-  volumeFactor: number,
+  week: WeekFactors,
   e1rmByExercise: Record<string, number>,
   effectiveKg: EffectiveWeight = (_exerciseId, weightKg) => weightKg,
 ): number {
@@ -476,11 +499,17 @@ export function plannedSessionLoad(
   for (const slot of routine.slots) {
     const written = slotWeight(slot, e1rmByExercise);
     if (written === null) continue;
-    const weight = effectiveKg(slot.exerciseId, written);
+    // The same scaling Train applies, or the budget would price a week against
+    // numbers nobody was asked to lift. A percentage of a max is already the
+    // intensity its author chose, so only a written weight follows the week.
+    const asked = typeof slot.targetWeightKg === 'number' ? written * week.intensity : written;
+    const weight = effectiveKg(slot.exerciseId, asked);
     if (weight <= 0) continue;
-    total += slot.sets * slot.reps * weight * (slot.targetRpe / 10);
+    // A scheme keeps its set count whatever the week, as Train does.
+    const sets = slot.scheme ? slot.sets : slot.sets * week.volume;
+    total += sets * slot.reps * weight * (slot.targetRpe / 10);
   }
-  return total * volumeFactor;
+  return total;
 }
 
 /**
@@ -585,10 +614,14 @@ export function routineLoader(
   lookup: (id: string) => Routine | undefined,
   e1rmByExercise: Record<string, number>,
   effectiveKg?: EffectiveWeight,
+  blocks: Block[] = [],
 ) {
   return (p: PlannedSession): number | null => {
     const routine = lookup(p.routineId);
     if (!routine) return null;
-    return plannedSessionLoad(routine, p.volumeFactor || 1, e1rmByExercise, effectiveKg);
+    // The slot carries its own volume, which redistribution may have moved;
+    // the intensity is the week's, which nothing moves.
+    const week = { volume: p.volumeFactor || 1, intensity: weekFactors(blocks, p.weekStart).intensity };
+    return plannedSessionLoad(routine, week, e1rmByExercise, effectiveKg);
   };
 }

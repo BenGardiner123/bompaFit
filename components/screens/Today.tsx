@@ -192,8 +192,8 @@ export function Today() {
             ).map((chip, index) => {
               const slot = routine.slots.find((x) => x.exerciseId === chip.exerciseId)!;
               const exercise = b.exerciseById.get(slot.exerciseId);
-              const target = b.prescriptions[slot.exerciseId];
-              const weight = target?.weightKg ?? slot.targetWeightKg;
+              // Shaped by the slot's week, the same way Train will ask for it.
+              const target = b.targetFor(slot, shownSlot?.weekStart ?? b.currentWeek);
               return (
                 <div
                   key={slot.exerciseId}
@@ -214,8 +214,8 @@ export function Today() {
                     {chip.startsGroup && <span style={{ color: C.tertiary, fontWeight: 700 }}> · superset {chip.letter}</span>}
                   </span>
                   <span style={{ color: C.tertiary, fontWeight: 600, ...num }}>
-                    {Math.max(1, Math.round(slot.sets * (target?.volumeFactor ?? 1)))} × {slot.reps}
-                    {weight ? ` @ ${toDisplay(weight, s.unit)}` : ''}
+                    {target.sets} × {slot.reps}
+                    {target.weightKg > 0 ? ` @ ${toDisplay(target.weightKg, s.unit)}` : ''}
                   </span>
                 </div>
               );

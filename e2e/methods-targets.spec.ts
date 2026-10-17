@@ -56,22 +56,26 @@ function currentStep(page: Page) {
 test('a 7/5/3 wave loads each set’s reps and weight in turn, and the strip follows', async ({ page }) => {
   await startWorkout(page, 'Methods · schemes');
 
-  await expect(targetLine(page)).toHaveText('Set 1 of 6 · 7 reps @ 85 kg · aim RPE 8');
+  // The wave is written at 100 kg. Trained in the first week of setup's block,
+  // the working weight is 85% of that, and each set is its share of 85,
+  // rounded to the plate step: 72.25 → 72.5, 76.5 → 77.5, 80.75 → 80. The
+  // wave keeps all six of its sets whatever the week.
+  await expect(targetLine(page)).toHaveText('Set 1 of 6 · 7 reps @ 72.5 kg · aim RPE 8');
   await expect(currentStep(page)).toContainText('7');
-  await expect(logButton(page)).toContainText('85 × 7');
+  await expect(logButton(page)).toContainText('72.5 × 7');
 
   await logAndSkip(page);
-  await expect(targetLine(page)).toHaveText('Set 2 of 6 · 5 reps @ 90 kg · aim RPE 8');
+  await expect(targetLine(page)).toHaveText('Set 2 of 6 · 5 reps @ 77.5 kg · aim RPE 8');
   await expect(currentStep(page)).toContainText('Set 2');
-  await expect(logButton(page)).toContainText('90 × 5');
+  await expect(logButton(page)).toContainText('77.5 × 5');
 
   await logAndSkip(page);
-  await expect(targetLine(page)).toHaveText('Set 3 of 6 · 3 reps @ 95 kg · aim RPE 8');
-  await expect(logButton(page)).toContainText('95 × 3');
+  await expect(targetLine(page)).toHaveText('Set 3 of 6 · 3 reps @ 80 kg · aim RPE 8');
+  await expect(logButton(page)).toContainText('80 × 3');
 
-  // The second wave starts a little heavier than the first.
+  // The second wave starts a little heavier than the first: 74.375 → 75.
   await logAndSkip(page);
-  await expect(targetLine(page)).toHaveText('Set 4 of 6 · 7 reps @ 87.5 kg · aim RPE 8');
+  await expect(targetLine(page)).toHaveText('Set 4 of 6 · 7 reps @ 75 kg · aim RPE 8');
   await expect(currentStep(page)).toContainText('Set 4');
   await expect(page.getByRole('group', { name: '3 of 6 sets logged' })).toBeVisible();
 });
@@ -163,7 +167,8 @@ test('the pieces of a drop set never add sets or dots', async ({ page }) => {
   await skipRest(page);
 
   await expect(page.getByText(/^\d+:\d+ · 1 of \d+ sets · /)).toBeVisible();
-  await expect(page.getByRole('group', { name: '1 of 3 sets logged' })).toBeVisible();
-  await expect(page.getByRole('group', { name: '1 of 3 sets logged' }).getByRole('button')).toHaveCount(1);
-  await expect(page.getByRole('button', { name: /^Bench, 1 of 3 sets$/ })).toBeVisible();
+  // Three sets written; the block's first week asks for two of them.
+  await expect(page.getByRole('group', { name: '1 of 2 sets logged' })).toBeVisible();
+  await expect(page.getByRole('group', { name: '1 of 2 sets logged' }).getByRole('button')).toHaveCount(1);
+  await expect(page.getByRole('button', { name: /^Bench, 1 of 2 sets$/ })).toBeVisible();
 });

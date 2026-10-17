@@ -217,7 +217,7 @@ test.describe('logging through a superset', () => {
     const asked = page.getByRole('region', { name: 'How did that feel?' });
     await expect(asked.getByRole('group')).toHaveCount(0);
     await asked.getByRole('button', { name: 'Rate these 2 sets' }).click();
-    let sheet = page.getByRole('dialog', { name: 'Rate These sets' });
+    const sheet = page.getByRole('dialog', { name: 'Rate These sets' });
     await sheet.getByRole('group', { name: 'RPE for Rope set 1' }).getByRole('button', { name: 'RPE 9', exact: true }).click();
     // Several sets: the sheet stays open until Done, so the rest can be rated.
     await expect(sheet).toBeVisible();
@@ -225,13 +225,15 @@ test.describe('logging through a superset', () => {
     // Rope is answered, so the line moves on to Fly alone.
     await expect(asked.getByRole('button', { name: /^Rate this set: Fly set 1/ })).toBeVisible();
 
+    // The block's first week asks for two sets of each lift, so the second
+    // round completes the plan, and the plan-done screen asks about the round
+    // itself, minimised rest or not.
     await page.getByRole('button', { name: 'Log set' }).click();
     await page.getByRole('button', { name: 'Log set' }).click();
-    await asked.getByRole('button', { name: 'Rate these 2 sets' }).click();
-    sheet = page.getByRole('dialog', { name: 'Rate These sets' });
-    await expect(sheet.getByText(/^Rope set 2 · /)).toBeVisible();
-    await sheet.getByRole('group', { name: 'RPE for Fly set 2' }).getByRole('button', { name: 'RPE 7', exact: true }).click();
-    await sheet.getByRole('button', { name: 'Done' }).click();
+    const done = page.getByRole('dialog', { name: 'Session complete' });
+    await expect(done.getByRole('group', { name: 'RPE for Rope set 2' })).toBeVisible();
+    await done.getByRole('group', { name: 'RPE for Fly set 2' }).getByRole('button', { name: 'RPE 7', exact: true }).click();
+    await done.getByRole('button', { name: 'Keep training' }).click();
 
     await expect
       .poll(async () => (await readSets(page)).map(({ exerciseId, setNo, rpe, rpeEstimated }) => [exerciseId, setNo, rpe, rpeEstimated]))

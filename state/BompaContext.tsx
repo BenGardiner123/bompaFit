@@ -17,6 +17,8 @@ import {
 import {
   PRESCRIPTIONS_KEY,
   allTargetRpe,
+  plannedWeights,
+  readPrescriptions,
   redistributeWithinWeek,
   resolveTarget,
   revertPrescription,
@@ -61,6 +63,7 @@ import { buildInsights, noteKey, type Insight } from '@/lib/insights';
 import { moveLift, nextLift as nextLiftToTrain, planDone, roundSets, unratedSets, untrainedLifts, type LiftPlan } from '@/lib/train';
 import {
   DEFAULT_BLOCKS,
+  weekFactors,
   addToEveryWeek,
   addToWeek,
   blockRotation,
@@ -616,7 +619,13 @@ function useBompaState() {
         setUserExercises(userExerciseRows);
         setContentLinks(linkRows);
         setConnections(connectionRows);
-        setPrescriptions((settingsRow[PRESCRIPTIONS_KEY] as Prescriptions) ?? {});
+        // Cleaned on read, and written back when cleaning changed anything, so
+        // a backup taken after this holds prescriptions of today's shape.
+        const storedPrescriptions = readPrescriptions(settingsRow[PRESCRIPTIONS_KEY]);
+        setPrescriptions(storedPrescriptions);
+        if (JSON.stringify(settingsRow[PRESCRIPTIONS_KEY] ?? {}) !== JSON.stringify(storedPrescriptions)) {
+          writeSetting(PRESCRIPTIONS_KEY, storedPrescriptions, Date.now());
+        }
         setStartingMaxesState((settingsRow[STARTING_MAXES_KEY] as Record<string, number>) ?? {});
         setSetupDone(settingsRow[SETUP_DONE_KEY] === true);
         setBodyweightKgState(readBodyweightKg(settingsRow[BODYWEIGHT_KEY]));
@@ -898,8 +907,8 @@ function useBompaState() {
   const priceSlot = useMemo(
     // Priced with the same weighting as the logged loads, or a bodyweight
     // session done exactly as planned would read as over budget.
-    () => routineLoader(routineById, e1rmByExercise, effectiveKg),
-    [routineById, e1rmByExercise, effectiveKg],
+    () => routineLoader(routineById, e1rmByExercise, effectiveKg, blocks),
+    [routineById, e1rmByExercise, effectiveKg, blocks],
   );
 
   const peakWindow: PeakWindow = useMemo(
@@ -991,10 +1000,27 @@ function useBompaState() {
     [activeGroup, sessionSets],
   );
 
+  /** The plate step in kilograms, so a prescribed weight is one that can be loaded. */
+  const stepKg = useMemo(() => toKg(s.step, s.unit), [s.step, s.unit]);
+
+  // The week a session belongs to shapes what it asks for: a planned slot's
+  // own week, or this week for a session trained outside the plan.
+  const sessionWeek = useMemo(() => {
+    const slot = openSession?.plannedSessionId === undefined ? undefined : planned.find((p) => p.id === openSession.plannedSessionId);
+    return weekFactors(blocks, slot?.weekStart ?? currentWeek);
+  }, [openSession, planned, blocks, currentWeek]);
+
+  /** What a slot asks for in a given week: the workout as written, shaped by that week and by the review. */
+  const targetFor = useCallback(
+    (slot: RoutineSlot, weekStart: string) =>
+      resolveTarget(slot, prescriptions, e1rmByExercise[slot.exerciseId] ?? 0, weekFactors(blocks, weekStart), stepKg),
+    [prescriptions, e1rmByExercise, blocks, stepKg],
+  );
+
   const activeTarget = useMemo(() => {
     if (!activeSlot) return null;
-    return resolveTarget(activeSlot, prescriptions, e1rmByExercise[activeSlot.exerciseId] ?? 0);
-  }, [activeSlot, prescriptions, e1rmByExercise]);
+    return resolveTarget(activeSlot, prescriptions, e1rmByExercise[activeSlot.exerciseId] ?? 0, sessionWeek, stepKg);
+  }, [activeSlot, prescriptions, e1rmByExercise, sessionWeek, stepKg]);
 
   /** How the active lift is trained: tempo, rep style, scheme, pieces, rests, note. */
   const activeMethod: SlotMethod | null = useMemo(
@@ -1030,9 +1056,9 @@ function useBompaState() {
       exerciseIds.flatMap((exerciseId) => {
         const slot = activeRoutine?.slots.find((x) => x.exerciseId === exerciseId);
         if (!slot) return [];
-        return [{ exerciseId, planned: resolveTarget(slot, prescriptions, e1rmByExercise[exerciseId] ?? 0).sets }];
+        return [{ exerciseId, planned: resolveTarget(slot, prescriptions, e1rmByExercise[exerciseId] ?? 0, sessionWeek).sets }];
       }),
-    [exerciseIds, activeRoutine, prescriptions, e1rmByExercise],
+    [exerciseIds, activeRoutine, prescriptions, e1rmByExercise, sessionWeek],
   );
 
   /**
@@ -1044,7 +1070,7 @@ function useBompaState() {
   const entryFor = useCallback(
     (slot: RoutineSlot, rowsNow: LoggedSet[]) => {
       const e1rm = e1rmByExercise[slot.exerciseId] ?? 0;
-      const target = resolveTarget(slot, prescriptions, e1rm);
+      const target = resolveTarget(slot, prescriptions, e1rm, sessionWeek, stepKg);
       const method = resolveSlotMethod(slot);
       if (!method.scheme) {
         return {
@@ -1062,7 +1088,10 @@ function useBompaState() {
         entryHoldSec: null,
       };
     },
-    [prescriptions, e1rmByExercise, s.unit, s.step],
+    // sessionWeek and stepKg are in here because this is what fills the entry
+    // card when a session starts: left out, the card would open on the
+    // written weight while the target line showed the week's.
+    [prescriptions, e1rmByExercise, s.unit, s.step, sessionWeek, stepKg],
   );
 
   /**
@@ -1421,14 +1450,36 @@ function useBompaState() {
   // Routines
   // ───────────────────────────────────────────────────────────
 
-  const persistRoutine = useCallback(async (routine: Routine) => {
-    setRoutines((prev) => {
-      const exists = prev.some((r) => r.id === routine.id);
-      return exists ? prev.map((r) => (r.id === routine.id ? routine : r)) : [...prev, routine];
-    });
-    await db.routines.put(routine).catch(warn);
-    queue('routines', 'put', routine, Date.now());
-  }, []);
+  const persistRoutine = useCallback(
+    async (routine: Routine) => {
+      // A surplus the review earned is measured against the weight written
+      // for the lift. Rewrite that weight and the surplus is about a number
+      // that no longer exists, so it goes; the next review earns it again if
+      // the new weight still runs easy.
+      const before = routines.find((r) => r.id === routine.id);
+      const rewritten = routine.slots
+        .filter((slot) => {
+          const was = before?.slots.find((x) => x.exerciseId === slot.exerciseId);
+          return was !== undefined && was.targetWeightKg !== slot.targetWeightKg;
+        })
+        .map((slot) => slot.exerciseId)
+        .filter((exerciseId) => (prescriptions[exerciseId]?.extraKg ?? 0) > 0);
+      if (rewritten.length > 0) {
+        const next = { ...prescriptions };
+        for (const exerciseId of rewritten) next[exerciseId] = { ...next[exerciseId]!, extraKg: 0 };
+        setPrescriptions(next);
+        writeSetting(PRESCRIPTIONS_KEY, next, Date.now());
+      }
+
+      setRoutines((prev) => {
+        const exists = prev.some((r) => r.id === routine.id);
+        return exists ? prev.map((r) => (r.id === routine.id ? routine : r)) : [...prev, routine];
+      });
+      await db.routines.put(routine).catch(warn);
+      queue('routines', 'put', routine, Date.now());
+    },
+    [routines, prescriptions],
+  );
 
   /** Create an empty routine and open it for editing. */
   const createRoutine = useCallback(
@@ -2781,6 +2832,9 @@ function useBompaState() {
       prescriptions,
       planId: plan.id,
       now: Date.now(),
+      // The week being entered, so an easy lift is raised to what that week
+      // already asks for rather than to last week's weight plus a step.
+      plannedNextKg: plannedWeights(routines, e1rmByExercise, weekFactors(blocks, thisWeek).intensity),
     });
 
     if (result.adjustments.length > 0) {
@@ -2788,7 +2842,7 @@ function useBompaState() {
       await persistAdjustments(result.adjustments);
     }
     writeSetting('lastReviewedWeek', thisWeek, Date.now());
-  }, [plan, todayKey, sets, routines, prescriptions, savePrescriptions, persistAdjustments]);
+  }, [plan, todayKey, sets, routines, prescriptions, blocks, e1rmByExercise, savePrescriptions, persistAdjustments]);
 
   /**
    * Close out weeks that have rolled over.
@@ -3354,6 +3408,7 @@ function useBompaState() {
     acwr: ratio,
     insights,
     dismissNote,
+    targetFor,
     metrics,
     peakWindow,
     taper,

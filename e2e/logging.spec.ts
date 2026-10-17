@@ -39,11 +39,12 @@ test.describe('logging sets', () => {
 
   test('steppers change the entry without touching stored units', async ({ page }) => {
     await startSession(page);
-    await expect(page.getByRole('button', { name: 'Log set 40 × 8' })).toBeVisible();
+    // 40 written; the block's first week asks for 85% of it, to the plate step.
+    await expect(page.getByRole('button', { name: 'Log set 35 × 8' })).toBeVisible();
 
     await page.getByRole('button', { name: 'Increase weight' }).click();
     await page.getByRole('button', { name: 'Increase reps' }).click();
-    await expect(page.getByRole('button', { name: 'Log set 42.5 × 9' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Log set 37.5 × 9' })).toBeVisible();
     await page.getByRole('button', { name: 'Log set' }).click();
     await expect(page.getByRole('timer')).toBeVisible();
   });
@@ -67,7 +68,7 @@ test.describe('logging sets', () => {
     await page.mouse.up();
     await expect(page.getByText('Step 5 kg')).toBeVisible();
     await expect(plus).toHaveAccessibleName('Increase weight by 5 kg. Hold to change the step.');
-    await expect(page.getByRole('button', { name: 'Log set 40 × 8' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Log set 35 × 8' })).toBeVisible();
 
     // The keyboard way: the context-menu key on the focused stepper.
     await plus.focus();
@@ -76,7 +77,7 @@ test.describe('logging sets', () => {
 
     // An ordinary tap steps by it.
     await plus.click();
-    await expect(page.getByRole('button', { name: 'Log set 41.25 × 8' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Log set 36.25 × 8' })).toBeVisible();
   });
 
   test('a warm-up does not start a rest timer race with working sets', async ({ page }) => {

@@ -57,8 +57,12 @@ const PULL: Routine = {
 /**
  * Put the app in the state setup would leave it in: routines plus a plan.
  * Takes anything with a live `result` so a destructured `{ result }` works too.
+ *
+ * One working week, so this week is the block's last working week and the
+ * workouts are trained exactly as written. The week's ramp has its own tests;
+ * everything else here is about logging, and reads best at the written numbers.
  */
-async function withPlan(view: { result: { current: BompaValue } }, sessionsPerWeek = 4) {
+async function withPlan(view: { result: { current: BompaValue } }, sessionsPerWeek = 4, weeks = 1) {
   await act(async () => {
     await view.result.current.saveRoutine(PUSH);
     await view.result.current.saveRoutine(PULL);
@@ -68,7 +72,7 @@ async function withPlan(view: { result: { current: BompaValue } }, sessionsPerWe
       rotation: [PUSH.id, PULL.id],
       sessionsPerWeek,
       phase: 'strength',
-      weeks: 4,
+      weeks,
     });
   });
   await waitFor(() => expect(view.result.current.plan).not.toBeNull());
@@ -141,7 +145,7 @@ describe('first launch', () => {
 describe('setup', () => {
   it('writes exactly one plan and its slots when it completes', async () => {
     const view = await mount();
-    await withPlan(view);
+    await withPlan(view, 4, 4);
 
     expect(await db.plans.count()).toBe(1);
     expect(await db.blocks.count()).toBe(1);
@@ -175,8 +179,8 @@ describe('setup', () => {
 
   it('re-running replaces the plan rather than stacking another', async () => {
     const view = await mount();
-    await withPlan(view, 4);
-    await withPlan(view, 3);
+    await withPlan(view, 4, 4);
+    await withPlan(view, 3, 4);
 
     expect(await db.plans.count()).toBe(1);
     expect(await db.plannedSessions.count()).toBe(4 * 3 + 2);
@@ -1033,6 +1037,29 @@ describe('the routine builder', () => {
     expect(result.current.activeTarget?.sets).toBe(4);
   });
 
+  it("in the first week of a four-week block, Train asks for 85% of the written weight and 62% of the sets, and the entry card agrees", async () => {
+    const view = await mount();
+    await withPlan(view, 4, 4);
+    const { result } = view;
+    await act(async () => result.current.startSession('my-push'));
+    await waitFor(() => expect(result.current.openSession).not.toBeNull());
+    // 80 × 0.85 is 68, rounded to the 2.5 kg plate step; 4 × 0.62 rounds to 2.
+    expect(result.current.activeTarget?.weightKg).toBe(67.5);
+    expect(result.current.activeTarget?.sets).toBe(2);
+    expect(result.current.s.entryWeight).toBe(67.5);
+  });
+
+  it('a workout started with no plan behind it is trained as written', async () => {
+    const { result } = await mount();
+    await act(async () => {
+      await result.current.saveRoutine(PUSH);
+    });
+    await act(async () => result.current.startSession('my-push'));
+    await waitFor(() => expect(result.current.openSession).not.toBeNull());
+    expect(result.current.activeTarget?.weightKg).toBe(80);
+    expect(result.current.activeTarget?.sets).toBe(4);
+  });
+
   it('refuses to save a routine with no lifts', async () => {
     const { result } = await mount();
     await act(async () => {
@@ -1199,8 +1226,9 @@ describe('supersets', () => {
     await act(async () => {
       await view.result.current.saveRoutine(SS);
     });
+    // One working week, so the superset is trained as written (see withPlan).
     await act(async () => {
-      await view.result.current.createPlanFromSetup({ rotation: [SS.id], sessionsPerWeek: 3, phase: 'strength', weeks: 4 });
+      await view.result.current.createPlanFromSetup({ rotation: [SS.id], sessionsPerWeek: 3, phase: 'strength', weeks: 1 });
     });
     await waitFor(() => expect(view.result.current.plan).not.toBeNull());
     await act(async () => view.result.current.startSession(SS.id));
@@ -3155,3 +3183,55 @@ describe('last backup', () => {
     expect(result.current.s.lastExportAt).toBeNull();
   });
 });
+
+// ─────────────────────────────────────────────────────────────
+
+describe('prescriptions stored by an older build', () => {
+  it('drops the absolute weight overrides an older build stored, and writes the cleaned prescriptions back', async () => {
+    await db.settings.put({
+      key: 'prescriptions',
+      value: {
+        'barbell-hip-thrust': { weightKg: 32.5, volumeFactor: 1 },
+        'barbell-bench-press': { weightKg: null, volumeFactor: 0.9 },
+      },
+    });
+    const { result } = await mount();
+    expect(result.current.prescriptions).toEqual({
+      'barbell-hip-thrust': { extraKg: 0, volumeFactor: 1 },
+      'barbell-bench-press': { extraKg: 0, volumeFactor: 0.9 },
+    });
+    await waitFor(async () =>
+      expect((await db.settings.get('prescriptions'))?.value).toEqual({
+        'barbell-hip-thrust': { extraKg: 0, volumeFactor: 1 },
+        'barbell-bench-press': { extraKg: 0, volumeFactor: 0.9 },
+      }),
+    );
+  });
+});
+
+describe('a surplus the review earned', () => {
+  it('goes when the workout is saved with a different written weight for that lift, and stays otherwise', async () => {
+    await db.settings.put({
+      key: 'prescriptions',
+      value: { 'barbell-bench-press': { extraKg: 5, volumeFactor: 1 }, 'overhead-press': { extraKg: 2.5, volumeFactor: 0.9 } },
+    });
+    const { result } = await mount();
+    await act(async () => {
+      await result.current.saveRoutine(PUSH);
+    });
+    // Saved as written: nothing changed, so nothing is cleared.
+    expect(result.current.prescriptions['barbell-bench-press']?.extraKg).toBe(5);
+
+    await act(async () => {
+      await result.current.saveRoutine({ ...PUSH, slots: [{ ...PUSH.slots[0]!, targetWeightKg: 90 }, PUSH.slots[1]!] });
+    });
+    expect(result.current.prescriptions['barbell-bench-press']).toEqual({ extraKg: 0, volumeFactor: 1 });
+    // The press was not rewritten, so its surplus and its volume cut stay.
+    expect(result.current.prescriptions['overhead-press']).toEqual({ extraKg: 2.5, volumeFactor: 0.9 });
+    await waitFor(async () => {
+      const stored = (await db.settings.get('prescriptions'))?.value as Record<string, unknown>;
+      expect(stored['barbell-bench-press']).toEqual({ extraKg: 0, volumeFactor: 1 });
+    });
+  });
+});
+

@@ -6,8 +6,14 @@
 // logger is commentary and changes nothing.
 
 import { EXERCISE_BY_ID } from './data';
-import { countsForDrift, countsForProgression, resolveSlotMethod } from './methods';
+import { countsForDrift, countsForProgression, resolveSlotMethod, roundToStep } from './methods';
 import type { Adjustment, LoggedSet, PlannedSession, Routine, RoutineSlot } from './types';
+
+/** How much of a workout's written sets and weight a given week asks for. */
+export type WeekFactors = { volume: number; intensity: number };
+
+/** A week outside any block, or a workout trained with no plan behind it: as written. */
+export const FULL_WEEK: WeekFactors = { volume: 1, intensity: 1 };
 
 /** Trigger thresholds, kept together so they are tunable in one place. */
 export const ADAPT = {
@@ -30,8 +36,12 @@ export const ADAPT = {
 
 /** Per-lift current prescription. Lives in the settings table under one key. */
 export type Prescription = {
-  /** Overrides the routine's programmed weight once adaptation has moved it. */
-  weightKg: number | null;
+  /**
+   * Kilograms the review has earned on top of what the plan asks for the
+   * week, never negative. Kept as a difference rather than a weight so the
+   * week's ramp and the review add up instead of one replacing the other.
+   */
+  extraKg: number;
   /** Multiplies the routine's set count. 1 = as programmed. */
   volumeFactor: number;
 };
@@ -41,27 +51,92 @@ export type Prescriptions = Record<string, Prescription>;
 export const PRESCRIPTIONS_KEY = 'prescriptions';
 
 export function emptyPrescription(): Prescription {
-  return { weightKg: null, volumeFactor: 1 };
+  return { extraKg: 0, volumeFactor: 1 };
 }
 
-/** What the logger should actually show for a slot, after adaptation. */
+/**
+ * One stored prescription, cleaned. An older build stored an absolute weight
+ * here that replaced the workout's number for good. Now the week scales the
+ * written weight, an absolute override would be scaled too and land wrong, and
+ * it was anchoring lifts under the plan anyway. It is dropped on read; the next
+ * review rebuilds anything earned.
+ */
+export function readPrescription(raw: unknown): Prescription {
+  const row = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
+  const volumeFactor = typeof row.volumeFactor === 'number' && Number.isFinite(row.volumeFactor) && row.volumeFactor > 0 ? row.volumeFactor : 1;
+  const extraKg = typeof row.extraKg === 'number' && Number.isFinite(row.extraKg) && row.extraKg > 0 ? row.extraKg : 0;
+  return { extraKg, volumeFactor };
+}
+
+export function readPrescriptions(raw: unknown): Prescriptions {
+  if (typeof raw !== 'object' || raw === null) return {};
+  const out: Prescriptions = {};
+  for (const [exerciseId, row] of Object.entries(raw)) out[exerciseId] = readPrescription(row);
+  return out;
+}
+
+/**
+ * What the logger should actually show for a slot: the workout as written,
+ * shaped by the week it is trained in, with anything the review has earned
+ * on top.
+ *
+ * `stepKg` is the plate step, in kilograms; with it the weight comes out as
+ * something that can be loaded. Without it the maths is left exact.
+ */
 export function resolveTarget(
   slot: RoutineSlot,
   prescriptions: Prescriptions,
   e1rm: number,
+  week: WeekFactors = FULL_WEEK,
+  stepKg = 0,
 ): { sets: number; reps: number; weightKg: number; rpe: number } {
   const p = prescriptions[slot.exerciseId];
-  const base = slot.targetWeightKg ?? (slot.targetPct1RM ? e1rm * slot.targetPct1RM : 0);
-  const weightKg = p?.weightKg ?? base;
-  const factor = p?.volumeFactor ?? 1;
+  // A percentage of a max is already the intensity its author chose, so the
+  // week's ramp applies to written weights only.
+  const base =
+    typeof slot.targetWeightKg === 'number' ? slot.targetWeightKg * week.intensity : slot.targetPct1RM ? e1rm * slot.targetPct1RM : 0;
+  const exact = base + (p?.extraKg ?? 0);
+  const weightKg = stepKg > 0 ? roundToStep(exact, stepKg) : Math.round(exact * 100) / 100;
+  const method = resolveSlotMethod(slot);
+  // A scheme is the prescription: a 7/5/3 wave cut to four sets is no longer
+  // the wave, and a 5, 5, AMRAP trimmed to two sets loses the set that matters.
+  // The week scales a scheme's weight and leaves its shape; the review's
+  // trim still applies, as it always has.
+  const factor = (method.scheme ? 1 : week.volume) * (p?.volumeFactor ?? 1);
   return {
     // Never round a prescription down to zero sets — an adapted lift is still
     // a lift you're doing. A scheme's length is its set count.
-    sets: Math.max(1, Math.round(resolveSlotMethod(slot).setCount * factor)),
+    sets: Math.max(1, Math.round(method.setCount * factor)),
     reps: slot.reps,
-    weightKg: Math.round(weightKg * 100) / 100,
+    weightKg,
     rpe: slot.targetRpe,
   };
+}
+
+/**
+ * What the plan asks for each lift in a week, before anything the review has
+ * earned: the written weight scaled by the week's intensity, or a percentage
+ * of the lift's estimated max. Where two routines disagree the heavier wins,
+ * as the RPE targets do. A lift with no weight to speak of, a bodyweight slot
+ * or a percentage with no max yet, is left out.
+ */
+export function plannedWeights(routines: Routine[], e1rmByExercise: Record<string, number>, intensity: number): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const routine of routines) {
+    // A template is a starting point nobody trains; its weights are not the plan.
+    if (routine.source === 'template') continue;
+    for (const slot of routine.slots) {
+      const kg =
+        typeof slot.targetWeightKg === 'number'
+          ? slot.targetWeightKg * intensity
+          : slot.targetPct1RM
+            ? (e1rmByExercise[slot.exerciseId] ?? 0) * slot.targetPct1RM
+            : 0;
+      if (kg <= 0) continue;
+      out[slot.exerciseId] = Math.max(out[slot.exerciseId] ?? 0, Math.round(kg * 100) / 100);
+    }
+  }
+  return out;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -168,8 +243,10 @@ export function reviewWeek(args: {
   prescriptions: Prescriptions;
   planId: number;
   now: number;
+  /** What the plan asks for each lift in the week ahead (`plannedWeights`). */
+  plannedNextKg?: Record<string, number>;
 }): ReviewResult {
-  const { sets, targetRpe, planId, now } = args;
+  const { sets, targetRpe, planId, now, plannedNextKg = {} } = args;
   const prescriptions: Prescriptions = { ...args.prescriptions };
   const adjustments: Adjustment[] = [];
 
@@ -201,9 +278,18 @@ export function reviewWeek(args: {
 
     if (call === 'easy') {
       const step = exercise?.kind === 'accessory' ? ADAPT.STEP_ACCESSORY : ADAPT.STEP_COMPOUND;
-      const currentWeight = progressionBase(sets, lift.exerciseId);
-      if (currentWeight === null) continue;
-      const after: Prescription = { ...before, weightKg: Math.round((currentWeight + step) * 100) / 100 };
+      const lifted = progressionBase(sets, lift.exerciseId);
+      if (lifted === null) continue;
+      const planned = plannedNextKg[lift.exerciseId];
+      // Lifting light once must not drag the plan down: next week is the
+      // heavier of "what they lifted plus a step" and what the plan already
+      // asks. Only the part above the plan is kept, so the week's ramp and
+      // this step add up instead of one replacing the other.
+      const next = round2(Math.max(lifted + step, planned ?? 0));
+      const after: Prescription = {
+        ...before,
+        extraKg: planned === undefined ? round2(before.extraKg + step) : round2(Math.max(0, next - planned)),
+      };
       prescriptions[lift.exerciseId] = after;
       adjustments.push({
         at: now,
@@ -212,7 +298,10 @@ export function reviewWeek(args: {
         rule: 'rpe-drift-low',
         before,
         after,
-        narrative: `${name} keeps landing under target. Adding ${step} kg from next session.`,
+        narrative:
+          planned === undefined
+            ? `${name} keeps landing under target. Adding ${step} kg from next session.`
+            : `${name} keeps landing under target. Next week: ${next} kg.`,
       });
     }
   }
@@ -223,6 +312,10 @@ export function reviewWeek(args: {
 function fmtDeviation(d: number): string {
   const rounded = Math.round(d * 10) / 10;
   return `${rounded > 0 ? '+' : ''}${rounded} RPE`;
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -319,9 +412,10 @@ export function redistributeWithinWeek(args: {
  *  `before` is stored in full. */
 export function revertPrescription(adjustment: Adjustment, prescriptions: Prescriptions): Prescriptions {
   if (adjustment.scope.kind !== 'lift') return prescriptions;
-  const before = adjustment.before as Prescription | undefined;
-  if (!before) return prescriptions;
-  return { ...prescriptions, [adjustment.scope.exerciseId]: before };
+  if (!adjustment.before) return prescriptions;
+  // Cleaned on the way back, so a record written by an older build restores
+  // a prescription of today's shape.
+  return { ...prescriptions, [adjustment.scope.exerciseId]: readPrescription(adjustment.before) };
 }
 
 /** Target RPE per exercise for one routine, used as the yardstick for deviation. */
@@ -345,6 +439,10 @@ export function targetRpeFor(routine: Routine | undefined): Record<string, numbe
 export function allTargetRpe(routines: Routine[]): Record<string, number> {
   const out: Record<string, number> = {};
   for (const routine of routines) {
+    // A template is a starting point nobody trains; its targets are not the
+    // yardstick. With them in, a bundled workout that puts a lift at RPE 8
+    // made the user's own RPE 7.5 week read as a full point easy.
+    if (routine.source === 'template') continue;
     for (const slot of routine.slots) {
       // Where two routines disagree, the heavier target wins: it is the one that
       // would flag a genuine overshoot rather than a programming difference.
