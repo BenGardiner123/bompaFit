@@ -348,6 +348,69 @@ describe('logging', () => {
 
 // ─────────────────────────────────────────────────────────────
 
+describe('discarding a workout', () => {
+  it('an empty workout opened by mistake leaves no trace, and its planned session stays to do', async () => {
+    const view = await mount();
+    await withPlan(view);
+    const { result } = view;
+    const slot = result.current.nextSlot!;
+
+    await act(async () => result.current.startSession(slot.routineId));
+    await waitFor(() => expect(result.current.openSession?.id).toBeDefined());
+    const id = result.current.openSession!.id!;
+
+    await act(async () => result.current.discardSession());
+    expect(result.current.openSession).toBeNull();
+    expect(result.current.sessions).toHaveLength(0);
+    expect(result.current.s.tab).toBe('home');
+    expect(result.current.s.summary).toBeNull();
+    expect(result.current.s.toast?.text).toBe('Workout discarded');
+    expect(result.current.planned.find((p) => p.id === slot.id)).toEqual(slot);
+    await waitFor(async () => expect(await db.sessions.get(id)).toBeUndefined());
+  });
+
+  it('takes its sets with it, out of the fatigue model too, and Undo brings it all back, open, under the same ids', async () => {
+    const view = await pushSession();
+    const { result } = view;
+    await waitFor(() => expect(result.current.openSession?.id).toBeDefined());
+    await logAndStore(view);
+    await logAndStore(view);
+    const session = result.current.openSession!;
+    const logged = result.current.sets.map((row) => row.id);
+
+    await act(async () => result.current.discardSession());
+    expect(result.current.sets).toHaveLength(0);
+    expect(result.current.loads).toHaveLength(0);
+    await waitFor(async () => {
+      expect(await db.sessions.get(session.id!)).toBeUndefined();
+      expect(await db.sets.where('sessionId').equals(session.id!).count()).toBe(0);
+    });
+
+    await act(async () => result.current.s.toast!.action!.run());
+    expect(result.current.openSession?.id).toBe(session.id);
+    expect(result.current.s.tab).toBe('log');
+    expect(result.current.sets.map((row) => row.id)).toEqual(logged);
+    await waitFor(async () => {
+      expect((await db.sessions.get(session.id!))?.finishedAt).toBeUndefined();
+      expect(await db.sets.where('sessionId').equals(session.id!).count()).toBe(2);
+    });
+  });
+
+  it('does nothing before the workout has its database id', async () => {
+    const { result } = await mount();
+    await act(async () => {
+      await result.current.saveRoutine(PUSH);
+    });
+    act(() => {
+      result.current.startSession('my-push');
+    });
+    // Same tick: the session is open but its id has not come back yet.
+    act(() => result.current.discardSession());
+    await waitFor(() => expect(result.current.openSession?.id).toBeDefined());
+    expect(result.current.openSession).not.toBeNull();
+  });
+});
+
 describe('finishing and reloading', () => {
   it('a reload mid-session restores the session and its sets', async () => {
     const first = await mount();

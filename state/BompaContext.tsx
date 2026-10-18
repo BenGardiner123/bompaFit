@@ -2351,6 +2351,87 @@ function useBompaState() {
   }, [openSession, planned, sets, s.trainHintsSeen, patch]);
 
   /**
+   * Throw the open session away, as if it was never started: the session and
+   * every set in it are deleted, so nothing reaches History, the fatigue model
+   * or the weekly review. Its planned slot needs nothing, because a slot is
+   * only marked done at finish. One Undo puts the session back, open, with its
+   * sets.
+   *
+   * Refused until the session has its database id: a discard before then
+   * would be overtaken by the write that is still on its way, leaving a
+   * session nobody can see.
+   */
+  const discardSession = useCallback(() => {
+    if (!openSession || openSession.id === undefined) return;
+    const at = Date.now();
+    const session = openSession;
+    const id = session.id!;
+    const removed = sets.filter((row) => row.sessionId === id);
+
+    setOpenSession(null);
+    setSessions((prev) => prev.filter((x) => x.id !== id));
+    setSets((prev) => prev.filter((row) => row.sessionId !== id));
+    // By the session index rather than the ids in memory, so a set whose id
+    // has not come back yet goes too: the delete is queued behind its write.
+    void db
+      .transaction('rw', db.sessions, db.sets, async () => {
+        await db.sets.where('sessionId').equals(id).delete();
+        await db.sessions.delete(id);
+      })
+      .catch(warn);
+    queue('sessions', 'delete', { id }, at);
+    for (const row of removed) if (row.id !== undefined) queue('sets', 'delete', { id: row.id }, at);
+
+    setRestEndsAt(null);
+    setRestKind(null);
+    setSegment(null);
+    patch({
+      tab: 'home',
+      restFull: false,
+      sessionMenuOpen: false,
+      finishGuardOpen: false,
+      sessionComplete: false,
+      justLogged: [],
+      catchUpLift: null,
+      rateSheet: null,
+    });
+    say('Workout discarded', { label: 'Undo', run: () => restoreSessionRef.current(session, removed) });
+  }, [openSession, sets, patch, say]);
+
+  /** Undo a discard: the session comes back open, with its sets and their ids. */
+  const restoreSession = useCallback(
+    (session: Session, rows: LoggedSet[]) => {
+      // One open session at a time. Starting another in the seconds since is
+      // rare, and the discarded one is not worth closing it for.
+      if (openSession) {
+        say('Finish or discard the workout that is open first.');
+        return;
+      }
+      const at = Date.now();
+      setOpenSession(session);
+      setSessions((prev) => [...prev.filter((x) => x.id !== session.id), session].sort((a, b) => a.startedAt - b.startedAt));
+      setSets((prev) => [...prev, ...rows.filter((row) => !prev.some((x) => x.id !== undefined && x.id === row.id))].sort((a, b) => a.at - b.at));
+      void db
+        .transaction('rw', db.sessions, db.sets, async () => {
+          await db.sessions.put(session);
+          await db.sets.bulkPut(rows.filter((row) => row.id !== undefined));
+        })
+        .catch(warn);
+      queue('sessions', 'put', session, at);
+      for (const row of rows) queue('sets', 'put', row, at);
+      patch({ tab: 'log', pushed: null, settingsOpen: false, summary: null });
+      say('Workout back. Carry on where you left off.');
+    },
+    [openSession, patch, say],
+  );
+
+  /** The current `restoreSession`, for the toast's Undo, which outlives the render that raised it. */
+  const restoreSessionRef = useRef(restoreSession);
+  useEffect(() => {
+    restoreSessionRef.current = restoreSession;
+  }, [restoreSession]);
+
+  /**
    * Finish from the session menu. With every planned lift trained it simply
    * finishes; with any lift not started it asks first, because finishing
    * counts the workout as done for the week.
@@ -3494,6 +3575,7 @@ function useBompaState() {
     rateSet,
     rateSets,
     finishSession,
+    discardSession,
     requestFinish,
     undoFinish,
     /** When the last finish happened, while it can still be undone; null otherwise. */

@@ -444,3 +444,48 @@ test.describe('the Train screen', () => {
     await expect(page.getByRole('button', { name: /^Edit set 1\b/ })).toBeVisible();
   });
 });
+
+test.describe('discarding a workout', () => {
+  const sessionMenu = (page: Page) => page.getByRole('dialog', { name: 'Session menu' });
+
+  test.beforeEach(async ({ page }) => {
+    await gotoApp(page);
+    await completeSetup(page, { workouts: [['Bench Press', 'Overhead Press']], names: ['Push A'] });
+  });
+
+  test('one opened by mistake goes in one tap, and the planned session is still there to start', async ({ page }) => {
+    await startSession(page);
+    await page.getByRole('button', { name: 'Session menu', exact: true }).click();
+    await sessionMenu(page).getByRole('button', { name: 'Discard workout' }).click();
+
+    // Back on Today, nothing asked, nothing summarised.
+    await expect(page.getByRole('dialog', { name: 'Session summary' })).toHaveCount(0);
+    await expect(page.getByText('Workout discarded')).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Start / })).toBeVisible();
+    await goToTab(page, 'History');
+    await expect(page.getByRole('button', { name: /^Show .* on / })).toHaveCount(0);
+  });
+
+  test('one with sets asks first, Keep training keeps it, and Undo brings a discarded one back', async ({ page }) => {
+    await startSession(page);
+    await page.getByRole('button', { name: /^Log set/ }).click();
+    await skipRest(page);
+
+    await page.getByRole('button', { name: 'Session menu', exact: true }).click();
+    await sessionMenu(page).getByRole('button', { name: 'Discard workout' }).click();
+    const confirm = page.getByRole('dialog', { name: /^Discard .+\?$/ });
+    await expect(confirm).toContainText("The set you logged goes with it. It won't count anywhere");
+    await confirm.getByRole('button', { name: 'Keep training' }).click();
+    await expect(confirm).toHaveCount(0);
+    await expect(page.getByRole('group', { name: /^1 of \d+ sets logged$/ })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Session menu', exact: true }).click();
+    await sessionMenu(page).getByRole('button', { name: 'Discard workout' }).click();
+    await page.getByRole('dialog', { name: /^Discard .+\?$/ }).getByRole('button', { name: 'Discard workout' }).click();
+    await expect(page.getByRole('button', { name: /^Start / })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Undo' }).click();
+    await expect(page.getByRole('group', { name: /^1 of \d+ sets logged$/ })).toBeVisible();
+  });
+});
+

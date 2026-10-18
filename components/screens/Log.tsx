@@ -34,7 +34,7 @@ import { C, HERO_SIZE, R, T, TOUCH, num, onAmber, onInk } from '@/lib/tokens';
 import { unratedSets, untrainedLifts } from '@/lib/train';
 import type { LoggedSet, SetPrescription, SetType } from '@/lib/types';
 import { TRAIN_HINTS_SESSIONS, useBompa } from '@/state/BompaContext';
-import { Btn, DarkSheet, EditableNumber, InkButton, InkSegmented, StepperTile, useLongPress } from '@/components/ui';
+import { Btn, ConfirmSheet, DarkSheet, EditableNumber, InkButton, InkSegmented, StepperTile, useLongPress } from '@/components/ui';
 import { sheetHairline } from '@/components/SheetParts';
 import { ExercisePicker } from '@/components/screens/ExercisePicker';
 import { BodyweightChip, WeightFigure, useBodyweight } from '@/components/WeightFigure';
@@ -650,18 +650,31 @@ function InlineRating({ asked, catchUp }: { asked: LoggedSet[]; catchUp: CatchUp
 
 /**
  * Everything about the session that is not logging a set: add a lift,
- * reorder, finish. In one menu so the header keeps one button, and Finish
- * sits a deliberate two taps away from a thumb reaching for Log.
+ * reorder, finish, discard. In one menu so the header keeps one button, and
+ * Finish sits a deliberate two taps away from a thumb reaching for Log.
  */
 function SessionMenu({ onAddLift }: { onAddLift: () => void }) {
   const b = useBompa();
   const [reordering, setReordering] = useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
   const open = b.s.sessionMenuOpen;
   const close = () => {
     setReordering(false);
     b.patch({ sessionMenuOpen: false });
   };
   if (!b.openSession) return null;
+
+  const logged = b.sessionSets.filter((row) => isSet(row)).length;
+  // Nothing logged means nothing to lose, so it goes in one tap; the Undo in
+  // the toast covers a slip. With sets logged it asks first.
+  const discard = () => {
+    if (logged === 0) {
+      b.discardSession();
+      return;
+    }
+    close();
+    setConfirmDiscard(true);
+  };
 
   const item = (label: string, icon: 'plus' | 'arrow-down', onClick: () => void) => (
     <Btn
@@ -676,24 +689,50 @@ function SessionMenu({ onAddLift }: { onAddLift: () => void }) {
   );
 
   return (
-    <DarkSheet open={open} onClose={close} eyebrow="This session" title={b.openSession.routineName} titleSize={22} label="Session menu" gap={4}>
-      {reordering ? (
-        <ReorderLifts onDone={() => setReordering(false)} />
-      ) : (
-        <>
-          {item('Add a lift', 'plus', () => {
-            close();
-            onAddLift();
-          })}
-          {item('Reorder lifts', 'arrow-down', () => setReordering(true))}
-          <div style={{ ...sheetHairline, marginTop: 8, paddingTop: 12 }}>
-            <InkButton onClick={b.requestFinish} width="100%" height={56} fontSize={T.lg}>
-              Finish session
-            </InkButton>
-          </div>
-        </>
-      )}
-    </DarkSheet>
+    <>
+      <DarkSheet open={open} onClose={close} eyebrow="This session" title={b.openSession.routineName} titleSize={22} label="Session menu" gap={4}>
+        {reordering ? (
+          <ReorderLifts onDone={() => setReordering(false)} />
+        ) : (
+          <>
+            {item('Add a lift', 'plus', () => {
+              close();
+              onAddLift();
+            })}
+            {item('Reorder lifts', 'arrow-down', () => setReordering(true))}
+            <div style={{ ...sheetHairline, marginTop: 8, paddingTop: 12 }}>
+              <InkButton onClick={b.requestFinish} width="100%" height={56} fontSize={T.lg}>
+                Finish session
+              </InkButton>
+            </div>
+            {/* Under Finish and in red, so the two are never confused. Waits for
+                the session's database id, for the same reason rating does. */}
+            <Btn
+              onClick={discard}
+              disabled={b.openSession.id === undefined}
+              style={{ minHeight: 52, marginTop: 4, display: 'flex', alignItems: 'center', gap: 12, fontSize: T.lg, fontWeight: 800, color: C.redLight, textAlign: 'left' }}
+            >
+              <span style={{ display: 'flex' }}>
+                <Icon name="close" size={20} />
+              </span>
+              Discard workout
+            </Btn>
+          </>
+        )}
+      </DarkSheet>
+      <ConfirmSheet
+        open={confirmDiscard}
+        title={`Discard ${b.openSession.routineName}?`}
+        body={`${logged === 1 ? 'The set you logged goes' : `The ${logged} sets you logged go`} with it. It won't count anywhere: not in History, your fatigue or next week's review. The planned session stays on your list.`}
+        confirmLabel="Discard workout"
+        cancelLabel="Keep training"
+        onCancel={() => setConfirmDiscard(false)}
+        onConfirm={() => {
+          setConfirmDiscard(false);
+          b.discardSession();
+        }}
+      />
+    </>
   );
 }
 
