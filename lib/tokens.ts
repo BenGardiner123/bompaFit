@@ -112,24 +112,36 @@ export const onInk = {
   muted: C.faint,
   /** Body copy — sentences in a hero or a sheet. 12.7:1. */
   body: C.lineStrong,
-  /** Hairlines, tracks and the raised fill of a card on ink. */
+  /** Hairlines inside a raised card, and the selected segment of a control on ink. */
   line: C.ink80,
-  /** Outline borders of controls, and the unselected dot. */
+  /** The unselected dot, and the grab handle of a sheet. */
   control: C.ink60,
   /**
-   * A card one step up from ink that is not a control: the just-logged set on
-   * the rest screen. Darker than `line`, so a hairline drawn in `line` still
-   * shows round its edge.
+   * One step up from ink: every control, card and settings group on a dark
+   * surface. Darker than `line`, so a hairline drawn in `line` still shows
+   * inside it.
    */
   raised: '#1F1F1A',
+  /**
+   * The edge of the chip track. `raised` alone melts into ink at arm's length,
+   * and `line` as an edge would read as an outlined control, which the design
+   * no longer uses.
+   */
+  hairline: '#2A2A24',
 } as const;
 
 /**
- * Marks drawn on an amber fill. The selected lift chip on Train is amber, and
- * its progress bar sits inside it: ink at 22% for the track, so the bar reads
- * as part of the chip rather than a stripe across it.
+ * Controls on an amber fill: the rest screen's last ten seconds. Ink at 12%
+ * gives a button that reads as part of the amber; an outline drew a box that
+ * pulled the eye away from the count.
  */
-export const onAmber = { track: 'rgba(20,20,16,.22)' } as const;
+export const onAmber = { fill: 'rgba(20,20,16,.12)' } as const;
+
+/**
+ * The lighter dim behind the notifications list. Enough to lift the list off
+ * Today, not so much that it reads as a sheet you have to dismiss.
+ */
+export const SCRIM_LIGHT = 'rgba(0,0,0,.25)';
 
 /** Background dimming behind every bottom sheet. Deeper than a light scrim so the ink sheet still stands off the dark Train screen. */
 export const SCRIM = 'rgba(0,0,0,.55)';
@@ -228,6 +240,22 @@ export const T = {
   figure: 48,
 } as const;
 
+/**
+ * Font weights. Four, each with one job, so weight says what a piece of text
+ * is: everything at 800 made a label shout as loud as the number it labelled.
+ * Nothing is set at 800 any more, and a test scans the components for it.
+ */
+export const W = {
+  /** Hero numerals, screen and card titles, key figures. */
+  title: 700,
+  /** Buttons, selected segments and chips, row titles in lists. */
+  button: 600,
+  /** Labels, captions, meta, unselected controls. */
+  label: 500,
+  /** Sentences: hero copy, notes. */
+  body: 400,
+} as const;
+
 export const FONT = 'var(--font-geist-sans), Geist, system-ui, sans-serif';
 
 /**
@@ -253,32 +281,38 @@ export const R = {
   swatch: 3,
   /** A thin progress bar, or a marker drawn on one. */
   bar: 2,
+  /** The top corners of a bottom sheet, and the figure tiles on Train. */
+  sheet: 26,
+  /** A card on ink that holds controls, such as the rest screen's just-logged set. */
+  raisedCard: 24,
+  /** Every button, chip, stepper and segmented control. */
   pill: 999,
 } as const;
 
 /**
  * Hero numeral sizes. One big number leads every screen, and the size says how
  * much that number matters on its screen — readiness is the loudest thing in
- * the app, a step counter in setup the quietest.
+ * the app, a step counter in setup the quietest. They used to run to 120, which
+ * left the header taking half the screen before anything you could act on.
  */
 export const HERO_SIZE = {
   /** Today's readiness. */
-  today: 120,
+  today: 76,
   /** Tomorrow's readiness on the finish summary. Smaller than Today's: it is a forecast, and the verdict above it leads. */
-  summary: 96,
+  summary: 64,
   /** Plan and History by session. */
-  screen: 112,
+  screen: 64,
   /** History by lift, the interval timer. */
-  detail: 104,
-  /** The Train weight. */
-  step: 96,
+  detail: 64,
+  /** The Train weight, inside its tile. */
+  step: 76,
   /** The rest screen's clock inside its ring. */
-  restClock: 72,
+  restClock: 68,
   /**
    * The rest screen's last ten seconds, when the count fills the screen. The
    * loudest number in the app on purpose: it is read from across the room.
    */
-  restFinal: 240,
+  restFinal: 230,
 } as const;
 
 /**
@@ -327,9 +361,15 @@ export const FRAME_BREAKPOINT = 492;
 export const SHADOW = {
   card: '0 1px 2px rgba(20,20,16,.04)',
   raised: '0 4px 16px rgba(20,20,16,.07)',
-  cta: '0 6px 18px rgba(245,158,11,.3)',
   toast: '0 10px 30px rgba(20,20,16,.25)',
   segment: '0 1px 2px rgba(20,20,16,.1)',
+  /** The selected chip in a chip track: lifts it off the dark track it sits in. */
+  chip: '0 1px 2px rgba(0,0,0,.3)',
+  /**
+   * A bottom sheet's top edge. A 1px line drawn as a shadow rather than a
+   * border, so it follows the rounded corners without adding to the height.
+   */
+  sheet: `0 -1px 0 ${C.ink80}`,
 } as const;
 
 /** Ring geometry, kept here because the dash arrays depend on the radii. */

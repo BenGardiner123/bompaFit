@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import { C, ON_PHASE, PH, PH_ON_INK, T, onInk } from './tokens';
+import { C, ON_PHASE, PH, PH_ON_INK, T, W, onInk } from './tokens';
 
 // WCAG relative luminance and contrast ratio, straight from the spec. Kept here
 // rather than pulled in as a dependency — it is nine lines.
@@ -20,9 +20,25 @@ function contrast(a: string, b: string): number {
 
 describe('contrast ratios', () => {
   it('the light segmented control reads on its grey track, on and off', () => {
-    // Off options are ink60; muted (2.9:1) and tertiary (4.3:1) both fail here.
-    expect(contrast(C.ink60, C.sunkenAlt)).toBeGreaterThanOrEqual(4.5);
+    // Off options are ink60; muted fails here.
+    expect(contrast(C.ink60, C.sunken)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(C.muted, C.sunken)).toBeLessThan(4.5);
     expect(contrast(C.ink, C.card)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  // Every control on ink is now filled `raised` rather than outlined, so the
+  // text inside it has to read on that fill as well as on ink.
+  it.each([
+    ['onInk.text', onInk.text],
+    ['onInk.muted', onInk.muted],
+    ['onInk.body', onInk.body],
+    ['amberLight', C.amberLight],
+  ])('%s passes AA on a raised control', (_name, colour) => {
+    expect(contrast(colour, onInk.raised)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('white passes AA on the selected segment on ink', () => {
+    expect(contrast(onInk.text, onInk.line)).toBeGreaterThanOrEqual(4.5);
   });
 
   it('sanity-checks the maths against known pairs', () => {
@@ -196,16 +212,7 @@ describe('type scale', () => {
   // Scans the source rather than the rendered page so a size nobody's test
   // happens to render still gets caught.
   it('no component sets text under 11px', () => {
-    const roots = ['components', 'app'];
-    const files: string[] = [];
-    const walk = (dir: string) => {
-      for (const entry of readdirSync(dir, { withFileTypes: true })) {
-        const path = join(dir, entry.name);
-        if (entry.isDirectory()) walk(path);
-        else if (/\.(tsx|ts|css)$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name)) files.push(path);
-      }
-    };
-    for (const root of roots) walk(join(process.cwd(), root));
+    const files = componentSources();
     expect(files.length).toBeGreaterThan(10);
 
     const offenders = files.flatMap((file) =>
@@ -214,6 +221,62 @@ describe('type scale', () => {
     expect(offenders).toEqual([]);
   });
 });
+
+describe('font weights', () => {
+  it('are four, heaviest first', () => {
+    expect([W.title, W.button, W.label, W.body]).toEqual([700, 600, 500, 400]);
+  });
+
+  it('the weight scanner catches every way of writing 800 or more', () => {
+    const heavy = (source: string) => heavyWeights(source).map((hit) => hit.weight);
+    expect(heavy('fontWeight: 800')).toEqual([800]);
+    expect(heavy("fontWeight: '800'")).toEqual([800]);
+    expect(heavy('fontWeight={900}')).toEqual([900]);
+    expect(heavy('font-weight: 800;')).toEqual([800]);
+    expect(heavy("font: '800 14px Inter'")).toEqual([800]);
+    expect(heavy('fontWeight: on ? 800 : 500')).toEqual([800]);
+    expect(heavy('fontWeight: 700')).toEqual([]);
+    expect(heavy('fontWeight: W.title')).toEqual([]);
+    expect(heavy('fontSize: 800')).toEqual([]);
+    expect(heavyWeights('a\nfontWeight: 800')).toEqual([{ line: 2, weight: 800 }]);
+  });
+
+  // At 800 a label shouted as loud as the number it labelled, which is why
+  // the scale stops at 700.
+  it('no component sets text heavier than 700', () => {
+    const offenders = componentSources().flatMap((file) =>
+      heavyWeights(readFileSync(file, 'utf8')).map((hit) => `${relative(process.cwd(), file)}:${hit.line} → ${hit.weight}`),
+    );
+    expect(offenders).toEqual([]);
+  });
+});
+
+/** Every component and app source file, tests left out. */
+function componentSources(): string[] {
+  const files: string[] = [];
+  const walk = (dir: string) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) walk(path);
+      else if (/\.(tsx|ts|css)$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name)) files.push(path);
+    }
+  };
+  for (const root of ['components', 'app']) walk(join(process.cwd(), root));
+  return files;
+}
+
+/** Weights of 800 or more written into source, in a style, a prop, a stylesheet or the `font:` shorthand. */
+function heavyWeights(source: string): { line: number; weight: number }[] {
+  const assignment = /(?<![.\w-])(fontWeight\s*(?::|=(?!=))|font-weight\s*:|font\s*:)([^,;}\n]*)/g;
+  const literal = /(?<![\w.])['"]?([89]00)(?![\w.%])/g;
+  const hits: { line: number; weight: number }[] = [];
+  for (const match of source.matchAll(assignment)) {
+    for (const value of match[2]!.matchAll(literal)) {
+      hits.push({ line: source.slice(0, match.index).split('\n').length, weight: Number(value[1]) });
+    }
+  }
+  return hits;
+}
 
 /**
  * Font sizes under the floor written into source: `fontSize: 9` in a style,

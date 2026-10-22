@@ -6,7 +6,7 @@
 // gets generated or says where a decision lives; nothing here is a tour.
 
 import { useState } from 'react';
-import { C, PH, R, T, TOUCH, num, onInk } from '@/lib/tokens';
+import { C, PH, R, T, TOUCH, W, num, onInk } from '@/lib/tokens';
 import type { Phase, Unit } from '@/lib/types';
 import { useBompa } from '@/state/BompaContext';
 import { Btn, Row, Section } from '@/components/ui';
@@ -79,11 +79,11 @@ export function Setup() {
               </span>{' '}
               · {current.name}
             </p>
-            <Btn onClick={b.skipSetup} style={{ height: TOUCH, minWidth: TOUCH, padding: '0 4px', marginRight: -4, fontSize: T.md, fontWeight: 800, color: C.ink60 }}>
+            <Btn onClick={b.skipSetup} style={{ height: TOUCH, minWidth: TOUCH, padding: '0 4px', marginRight: -4, fontSize: T.md, fontWeight: W.button, color: C.ink60 }}>
               Skip
             </Btn>
           </div>
-          <h1 style={{ margin: 0, fontSize: T.xxl, fontWeight: 800, lineHeight: 1.1, letterSpacing: '-0.02em' }}>{current.title}</h1>
+          <h1 style={{ margin: 0, fontSize: T.xxl, fontWeight: W.title, lineHeight: 1.1, letterSpacing: '-0.02em' }}>{current.title}</h1>
           <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.5, color: C.ink60 }}>{current.sub}</p>
           {/* Progress, so the flow states its own length rather than feeling
               endless. Hidden from screen readers: "Step 1 of 5" above says it. */}
@@ -114,7 +114,7 @@ export function Setup() {
         {step > 0 && (
           <Btn
             onClick={() => setStep(step - 1)}
-            style={{ width: 96, height: 54, flex: 'none', borderRadius: R.block, border: `1px solid ${C.lineStrong}`, color: C.ink80, fontSize: T.md, fontWeight: 800 }}
+            style={{ width: 96, height: 54, flex: 'none', borderRadius: R.block, border: `1px solid ${C.lineStrong}`, color: C.ink80, fontSize: T.md, fontWeight: W.button }}
           >
             Back
           </Btn>
@@ -122,7 +122,7 @@ export function Setup() {
         <Btn
           onClick={() => (step === LAST ? void finish() : setStep(step + 1))}
           disabled={busy || (step >= 2 && !hasWorkouts)}
-          style={{ flex: 1, height: 54, borderRadius: R.block, background: C.amber, color: C.ink, fontSize: T.lg, fontWeight: 800 }}
+          style={{ flex: 1, height: 54, borderRadius: R.block, background: C.amber, color: C.ink, fontSize: T.lg, fontWeight: W.button }}
         >
           {step === LAST ? 'Build my plan' : 'Next'}
         </Btn>
@@ -161,7 +161,7 @@ function UnitsStep() {
               gap: 6,
             }}
           >
-            <span style={{ fontSize: 44, fontWeight: 800, letterSpacing: '-0.03em' }}>{opt.label}</span>
+            <span style={{ fontSize: 44, fontWeight: W.title, letterSpacing: '-0.03em' }}>{opt.label}</span>
             <span style={{ fontSize: T.sm, fontWeight: 700, color: on ? onInk.muted : C.tertiary }}>{opt.word}</span>
           </Btn>
         );
@@ -202,7 +202,7 @@ function WorkoutsStep() {
               <Btn
                 onClick={() => b.patch({ editingRoutineId: routine.id })}
                 label={`Edit ${routine.name}`}
-                style={{ height: 44, padding: '0 6px', color: C.amberDark, fontSize: 13, fontWeight: 800 }}
+                style={{ height: 44, padding: '0 6px', color: C.amberDark, fontSize: 13, fontWeight: W.button }}
               >
                 Edit
               </Btn>
@@ -212,7 +212,7 @@ function WorkoutsStep() {
         <Btn
           onClick={create}
           disabled={busy}
-          style={{ height: 50, marginTop: 6, borderRadius: R.control, background: C.ink, color: C.white, fontSize: T.md, fontWeight: 800 }}
+          style={{ height: 50, marginTop: 6, borderRadius: R.control, background: C.ink, color: C.white, fontSize: T.md, fontWeight: W.button }}
         >
           + New workout
         </Btn>
@@ -229,7 +229,7 @@ function WorkoutsStep() {
               title={template.name}
               titleSize={14}
               lead={<PhaseSquare phase={template.phase} />}
-              right={<span style={{ fontSize: T.sm, fontWeight: 800, color: C.amberDark }}>Copy</span>}
+              right={<span style={{ fontSize: T.sm, fontWeight: W.button, color: C.amberDark }}>Copy</span>}
               label={`Copy ${template.name} into your workouts`}
               onClick={() => void b.copyTemplate(template.id)}
             />
@@ -287,7 +287,7 @@ function BlockStep({
               >
                 <PhaseSquare phase={type.id} size={10} />
                 <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  <span style={{ fontSize: 15, fontWeight: 800, color: C.ink }}>{type.label}</span>
+                  <span style={{ fontSize: 15, fontWeight: W.button, color: C.ink }}>{type.label}</span>
                   <span style={{ fontSize: 12, fontWeight: 600, color: C.tertiary }}>{type.sub}</span>
                 </span>
                 {/* A radio ring: filled ink with a screen-coloured inner ring when chosen. */}
@@ -331,7 +331,7 @@ function DoneStep() {
           to be working out what it means. */}
       <Btn
         onClick={() => b.patch({ rpeHelp: true })}
-        style={{ height: 48, borderRadius: R.control, border: `1px solid ${C.lineStrong}`, color: C.amberDark, fontSize: 13.5, fontWeight: 800 }}
+        style={{ height: 48, borderRadius: R.control, border: `1px solid ${C.lineStrong}`, color: C.amberDark, fontSize: 13.5, fontWeight: W.button }}
       >
         What is RPE, and why does it matter?
       </Btn>
@@ -343,7 +343,7 @@ function Signpost({ where, what }: { where: string; what: string }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 3, padding: '13px 0', borderTop: `1px solid ${C.line}` }}>
       {/* Ink, not amber: a signpost names a place, it is not something to tap. */}
-      <span style={{ fontSize: 13, fontWeight: 800, color: C.ink }}>{where}</span>
+      <span style={{ fontSize: 13, fontWeight: W.button, color: C.ink }}>{where}</span>
       <span style={{ fontSize: T.md, lineHeight: 1.5, color: C.ink80 }}>{what}</span>
     </div>
   );
@@ -379,7 +379,7 @@ function NumberPicker({
               height: 48,
               borderRadius: R.control,
               fontSize: 15,
-              fontWeight: 800,
+              fontWeight: W.button,
               background: on ? C.ink : 'transparent',
               border: `1px solid ${on ? C.ink : C.lineStrong}`,
               color: on ? C.white : C.ink60,

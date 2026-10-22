@@ -6,24 +6,21 @@
 // How-to, RPE and set-type explainers can't drift apart in how they label things.
 
 import type { CSSProperties, ReactNode } from 'react';
-import { C, T, num, onInk } from '@/lib/tokens';
+import { C, T, W, num, onInk } from '@/lib/tokens';
 
 /**
- * The small all-caps label over a block inside a sheet: EXECUTION, WHY I ASK.
+ * The small label over a block inside a sheet: Execution, Why I ask.
  *
  * A real heading, one level under the sheet's own title, so a screen reader can
- * jump between blocks. The text is written in normal case and shouted with CSS,
- * so a screen reader reads a word rather than spelling out capitals.
+ * jump between blocks.
  */
 export function SheetHeading({ children, color = onInk.muted, style }: { children: ReactNode; color?: string; style?: CSSProperties }) {
   return (
     <h3
       style={{
         margin: 0,
-        fontSize: T.xs,
-        fontWeight: 800,
-        letterSpacing: '.14em',
-        textTransform: 'uppercase',
+        fontSize: T.sm,
+        fontWeight: W.label,
         color,
         ...num,
         ...style,

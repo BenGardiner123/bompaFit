@@ -7,7 +7,7 @@
 
 import { useState } from 'react';
 import { applyEnvelope, parseEnvelope } from '@/lib/exchange';
-import { C, R, T, num, onInk } from '@/lib/tokens';
+import { C, R, T, W, num, onInk } from '@/lib/tokens';
 import { useBompa } from '@/state/BompaContext';
 import { Btn } from '@/components/ui';
 
@@ -75,7 +75,7 @@ export function ImportPreview({
         <div role="group" aria-label="Found in that file" style={{ display: 'flex', flexWrap: 'wrap', columnGap: 22, rowGap: 8, padding: '4px 0' }}>
           {found.map(([table, count]) => (
             <div key={table} style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ fontSize: T.count, fontWeight: 800, ...num }}>{count.toLocaleString('en-GB')}</span>
+              <span style={{ fontSize: T.count, fontWeight: W.title, ...num }}>{count.toLocaleString('en-GB')}</span>
               <span style={{ fontSize: T.xs, fontWeight: 700, color: quiet }}>{TABLE_LABEL[table] ?? table}</span>
             </div>
           ))}
@@ -87,13 +87,13 @@ export function ImportPreview({
         <Btn
           onClick={onCommit}
           disabled={found.length === 0}
-          style={{ flex: 1, height: 46, borderRadius: R.control, ...commit, fontSize: T.copy, fontWeight: 800 }}
+          style={{ flex: 1, height: 46, borderRadius: R.control, ...commit, fontSize: T.copy, fontWeight: W.button }}
         >
           Import it
         </Btn>
         <Btn
           onClick={onCancel}
-          style={{ flex: 1, height: 46, borderRadius: R.control, ...cancel, fontSize: T.copy, fontWeight: 800 }}
+          style={{ flex: 1, height: 46, borderRadius: R.control, ...cancel, fontSize: T.copy, fontWeight: W.button }}
         >
           Cancel
         </Btn>

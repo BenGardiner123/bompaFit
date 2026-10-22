@@ -15,7 +15,7 @@ import { toDisplay, toKg } from '@/lib/calc';
 import { db, isPersisted, warn } from '@/lib/db';
 import { buildEnvelope, saveEnvelope } from '@/lib/exchange';
 import { weightPrecision } from '@/lib/numberEntry';
-import { C, R, T, TOUCH, num, onInk } from '@/lib/tokens';
+import { C, R, T, TOUCH, W, num, onInk } from '@/lib/tokens';
 import type { Envelope, Unit } from '@/lib/types';
 import { useBompa, type PushedView } from '@/state/BompaContext';
 import { ImportPreview, useImport } from '@/components/ImportPreview';
@@ -38,10 +38,11 @@ export function SettingsSheet() {
         <Group title="You">
           <Bodyweight />
           <Line title="Units">
-            <div style={{ width: 160, display: 'flex' }}>
+            <div style={{ width: 150, display: 'flex' }}>
               <InkSegmented
                 value={b.s.unit}
                 label="Units"
+                track={C.ink}
                 options={[
                   { value: 'kg' as Unit, label: 'kg' },
                   { value: 'lb' as Unit, label: 'lb' },
@@ -51,10 +52,11 @@ export function SettingsSheet() {
             </div>
           </Line>
           <Line title="Week starts">
-            <div style={{ width: 160, display: 'flex' }}>
+            <div style={{ width: 150, display: 'flex' }}>
               <InkSegmented
                 value={b.s.weekStart}
                 label="Week starts"
+                track={C.ink}
                 options={[
                   { value: 'Mon' as const, label: 'Mon' },
                   { value: 'Sun' as const, label: 'Sun' },
@@ -66,7 +68,7 @@ export function SettingsSheet() {
         </Group>
 
         <Group title="Training">
-          <PushRow view="alerts" title="Timer alerts" sub="Sound, vibration, notifications, screen on" />
+          <PushRow view="alerts" title="Timer alerts" sub="Sound, vibration, notifications, screen on" first />
           <PushRow view="warmup" title="Default warm-up" sub="A checklist any workout can use" />
           <PushRow view="content" title="Exercise instructions" sub="Where How-to cues come from" />
         </Group>
@@ -75,14 +77,17 @@ export function SettingsSheet() {
 
         {/* Last, and pushed to the bottom when there is room: the two that
             start over are the ones least often wanted. */}
-        <section style={{ display: 'flex', flexDirection: 'column', marginTop: 'auto' }}>
-          <Btn onClick={b.restartSetup} style={{ ...bottomRow, color: onInk.text }}>
-            Run setup again
-          </Btn>
-          <Btn onClick={() => setConfirmErase(true)} style={{ ...bottomRow, color: C.redLight }}>
-            Erase everything…
-          </Btn>
-          <span style={{ fontSize: T.sm, lineHeight: 1.5, color: onInk.muted, paddingTop: 6 }}>
+        <section style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 'auto' }}>
+          <div style={CARD}>
+            <Btn onClick={b.restartSetup} style={{ ...bottomRow, color: onInk.text, justifyContent: 'space-between' }}>
+              Run setup again
+              <Icon name="chevron-right" size={16} style={{ color: onInk.muted }} />
+            </Btn>
+            <Btn onClick={() => setConfirmErase(true)} style={{ ...bottomRow, color: C.redLight, borderTop: `1px solid ${onInk.line}` }}>
+              Erase everything…
+            </Btn>
+          </div>
+          <span style={{ fontSize: T.sm, lineHeight: 1.5, color: onInk.muted, padding: '0 4px' }}>
             Running setup again replaces your plan. Workouts, logged sets and history all stay.
           </span>
         </section>
@@ -109,40 +114,46 @@ const bottomRow = {
   height: 52,
   display: 'flex',
   alignItems: 'center',
-  borderTop: `1px solid ${onInk.line}`,
   fontSize: T.title,
-  fontWeight: 800,
+  fontWeight: W.button,
   textAlign: 'left',
 } as const;
 
+/**
+ * A group of settings on one raised card, with hairlines between its rows.
+ * Grouped cards rather than a run of rows on the sheet: the groups read as
+ * groups without a heading having to do all the work.
+ */
+const CARD = { background: onInk.raised, borderRadius: R.card, padding: '0 14px', display: 'flex', flexDirection: 'column' } as const;
+
 function Group({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section style={{ display: 'flex', flexDirection: 'column' }}>
-      <h3 style={{ margin: 0, paddingBottom: 10, fontSize: T.xs, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase', color: onInk.muted }}>
+    <section style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <h3 style={{ margin: 0, paddingLeft: 4, fontSize: T.sm, fontWeight: W.label, color: onInk.muted }}>
         {title}
       </h3>
-      {children}
+      <div style={CARD}>{children}</div>
     </section>
   );
 }
 
-/** A setting's name on the left and its control on the right, over a hairline. */
-function Line({ title, sub, children }: { title: string; sub?: string; children: ReactNode }) {
+/** A setting's name on the left and its control on the right, under a hairline unless it opens its card. */
+function Line({ title, sub, first = false, children }: { title: string; sub?: string; first?: boolean; children: ReactNode }) {
   return (
     <div
       style={{
-        minHeight: 56,
+        minHeight: 58,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
         gap: 12,
-        borderTop: `1px solid ${onInk.line}`,
+        borderTop: first ? 'none' : `1px solid ${onInk.line}`,
         padding: '4px 0',
       }}
     >
-      <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-        <span style={{ fontSize: T.title, fontWeight: 800 }}>{title}</span>
-        {sub && <span style={{ fontSize: T.sm, color: onInk.muted, lineHeight: 1.4 }}>{sub}</span>}
+      <span style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
+        <span style={{ fontSize: T.title, fontWeight: W.button }}>{title}</span>
+        {sub && <span style={{ fontSize: T.sm, fontWeight: W.label, color: onInk.muted, lineHeight: 1.4 }}>{sub}</span>}
       </span>
       {children}
     </div>
@@ -150,25 +161,25 @@ function Line({ title, sub, children }: { title: string; sub?: string; children:
 }
 
 /** A row that opens a full screen of its own, and comes back here from it. */
-function PushRow({ view, title, sub }: { view: PushedView; title: string; sub: string }) {
+function PushRow({ view, title, sub, first = false }: { view: PushedView; title: string; sub: string; first?: boolean }) {
   const b = useBompa();
   return (
     <Btn
       onClick={() => b.openView(view, 'settings')}
       style={{
-        minHeight: 56,
+        minHeight: 58,
         display: 'flex',
         alignItems: 'center',
         gap: 12,
-        borderTop: `1px solid ${onInk.line}`,
+        borderTop: first ? 'none' : `1px solid ${onInk.line}`,
         padding: '4px 0',
         textAlign: 'left',
         color: onInk.text,
       }}
     >
-      <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-        <span style={{ fontSize: T.title, fontWeight: 800 }}>{title}</span>
-        <span style={{ fontSize: T.sm, color: onInk.muted }}>{sub}</span>
+      <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
+        <span style={{ fontSize: T.title, fontWeight: W.button }}>{title}</span>
+        <span style={{ fontSize: T.sm, fontWeight: W.label, color: onInk.muted }}>{sub}</span>
       </span>
       <Icon name="chevron-right" size={16} style={{ color: onInk.muted }} />
     </Btn>
@@ -186,7 +197,7 @@ function Bodyweight() {
   const { unit } = b.s;
   const kg = b.bodyweightKg;
   return (
-    <Line title="Bodyweight" sub="Used to cost bodyweight lifts in fatigue">
+    <Line title="Bodyweight" sub="Used to cost bodyweight lifts in fatigue" first>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, flex: 'none' }}>
         <EditableNumber
           label="Your bodyweight"
@@ -197,9 +208,9 @@ function Bodyweight() {
           precision={weightPrecision(unit)}
           onCommit={(next) => b.setBodyweightKg(next > 0 ? toKg(next, unit) : null)}
           {...(kg === null ? { display: '—', spoken: 'Your bodyweight not set', openEmpty: true } : {})}
-          style={{ fontSize: T.xl, fontWeight: 800 }}
+          style={{ fontSize: 20, fontWeight: W.title }}
         />
-        <span style={{ fontSize: T.sm, fontWeight: 700, color: onInk.muted }}>{unit}</span>
+        <span style={{ fontSize: T.sm, fontWeight: W.label, color: onInk.muted }}>{unit}</span>
       </div>
     </Line>
   );
@@ -244,24 +255,26 @@ function YourData() {
 
   const storage = storageState(b.s.storageOk, persisted);
 
-  const outline = {
+  const tonal = {
     flex: 1,
     height: 52,
-    borderRadius: R.control,
-    border: `1px solid ${onInk.control}`,
+    borderRadius: R.pill,
+    background: onInk.raised,
     color: onInk.text,
     fontSize: T.md,
-    fontWeight: 800,
+    fontWeight: W.button,
   } as const;
 
+  // Not a card: two buttons and two lines of status sit straight on the sheet.
   return (
-    <Group title="Your data · on this phone only">
+    <section style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <h3 style={{ margin: 0, paddingLeft: 4, fontSize: T.sm, fontWeight: W.label, color: onInk.muted }}>Your data · on this phone only</h3>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div style={{ display: 'flex', gap: 8 }}>
-          <Btn onClick={exportJson} style={outline}>
+          <Btn onClick={exportJson} style={tonal}>
             Export backup
           </Btn>
-          <Btn onClick={() => fileInput.current?.click()} style={outline}>
+          <Btn onClick={() => fileInput.current?.click()} style={tonal}>
             Restore
           </Btn>
           <input
@@ -279,8 +292,8 @@ function YourData() {
           />
         </div>
         {importer.preview && <ImportPreview dark preview={importer.preview} onCommit={importer.commit} onCancel={importer.cancel} />}
-        <span style={{ fontSize: T.sm, color: onInk.muted }}>{lastBackupPhrase(b.s.lastExportAt, Date.now())}</span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: T.sm, color: onInk.muted, ...num }}>
+        <span style={{ paddingLeft: 4, fontSize: T.sm, fontWeight: W.label, color: onInk.muted }}>{lastBackupPhrase(b.s.lastExportAt, Date.now())}</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 4, fontSize: T.sm, fontWeight: W.label, color: onInk.muted, ...num }}>
           {/* The dot answers the words beside it. Green only when storage works
               and the browser has promised to keep it; a green dot next to "not
               protected" read as all clear when it was not. */}
@@ -289,7 +302,7 @@ function YourData() {
           {persisted === null ? 'checking storage' : persisted ? 'protected from eviction' : 'not protected'}
         </span>
       </div>
-    </Group>
+    </section>
   );
 }
 

@@ -10,10 +10,17 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { Insight } from '@/lib/insights';
-import { C, R, SHADOW, T, TOUCH, Z, num, onInk } from '@/lib/tokens';
+import { C, R, SCRIM_LIGHT, SHADOW, T, TOUCH, W, Z, num, onInk } from '@/lib/tokens';
 import { useBompa } from '@/state/BompaContext';
 import { Btn, useEscapeKey } from '@/components/ui';
 import { Icon } from '@/components/icons';
+
+/**
+ * How far the list reaches past the bell's right edge: the gear beside it and
+ * the gap between them, less a little, so the list ends about 12px from the
+ * edge of the screen.
+ */
+const PANEL_OFFSET = 58;
 
 export function Notifications({ notes }: { notes: Insight[] }) {
   const [open, setOpen] = useState(false);
@@ -49,26 +56,39 @@ export function Notifications({ notes }: { notes: Insight[] }) {
         onClick={() => setOpen((was) => !was)}
         label={count > 0 ? `Notifications, ${count} new` : 'Notifications'}
         expanded={open}
-        style={{ position: 'relative', width: TOUCH, height: TOUCH, display: 'flex', alignItems: 'center', justifyContent: 'center', color: onInk.body }}
+        style={{
+          position: 'relative',
+          width: TOUCH,
+          height: TOUCH,
+          borderRadius: R.pill,
+          // A step lighter while its list is open, so you can see which button the list belongs to.
+          background: open ? onInk.line : onInk.raised,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: onInk.body,
+        }}
       >
-        <Icon name="bell" size={20} />
+        <Icon name="bell" size={20} strokeWidth={1.8} />
         {count > 0 && (
           <span
             aria-hidden
             style={{
               position: 'absolute',
-              top: 6,
-              right: 5,
-              minWidth: 16,
-              height: 16,
-              padding: '0 4px',
+              top: -2,
+              right: -2,
+              minWidth: 18,
+              height: 18,
+              padding: '0 5px',
               borderRadius: R.pill,
               background: C.amber,
               color: C.ink,
               fontSize: T.xs,
-              fontWeight: 800,
-              lineHeight: '16px',
+              fontWeight: W.title,
+              lineHeight: '18px',
               textAlign: 'center',
+              // A ring of the hero's own ink, so the badge sits clear of the circle's edge.
+              boxShadow: `0 0 0 2px ${C.ink}`,
               ...num,
             }}
           >
@@ -78,6 +98,11 @@ export function Notifications({ notes }: { notes: Insight[] }) {
       </Btn>
 
       {open && (
+        // A dim behind the list that every tap goes straight through, so a tap
+        // outside still lands where it was aimed as well as closing the list.
+        <span aria-hidden style={{ position: 'fixed', inset: 0, zIndex: Z.popover, background: SCRIM_LIGHT, pointerEvents: 'none' }} />
+      )}
+      {open && (
         <div
           ref={panel}
           role="dialog"
@@ -85,17 +110,18 @@ export function Notifications({ notes }: { notes: Insight[] }) {
           tabIndex={-1}
           style={{
             position: 'absolute',
-            top: '100%',
-            right: -10,
+            top: 'calc(100% + 10px)',
+            // Past the gear beside the bell, so the list's right edge sits near
+            // the screen's rather than under the bell.
+            right: -PANEL_OFFSET,
             zIndex: Z.popover,
             // Never wider than the phone less its gutters, so nothing runs off
             // the left edge on a narrow screen.
-            width: 'min(340px, calc(100vw - 32px))',
+            width: 'min(340px, calc(100vw - 24px))',
             background: onInk.raised,
-            border: `1px solid ${onInk.line}`,
-            borderRadius: R.card,
-            boxShadow: SHADOW.toast,
-            padding: '12px 6px 8px 14px',
+            borderRadius: R.raisedCard,
+            boxShadow: `${SHADOW.toast}, 0 0 0 1px ${onInk.line}`,
+            padding: '14px 6px 6px 16px',
             display: 'flex',
             flexDirection: 'column',
             gap: 4,
@@ -104,7 +130,24 @@ export function Notifications({ notes }: { notes: Insight[] }) {
             whiteSpace: 'normal',
           }}
         >
-          <span style={{ fontSize: T.xs, fontWeight: 800, letterSpacing: '.16em', textTransform: 'uppercase', color: onInk.muted }}>Notifications</span>
+          {/* The pointer to the bell the list came from. */}
+          <span
+            aria-hidden
+            style={{
+              position: 'absolute',
+              top: -6,
+              right: PANEL_OFFSET + TOUCH / 2 - 6,
+              width: 12,
+              height: 12,
+              background: onInk.raised,
+              transform: 'rotate(45deg)',
+              boxShadow: `-1px -1px 0 ${onInk.line}`,
+            }}
+          />
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, paddingRight: 10, paddingBottom: 4 }}>
+            <span style={{ fontSize: T.lg, fontWeight: W.title }}>Notifications</span>
+            {count > 0 && <span style={{ fontSize: T.sm, fontWeight: W.label, color: onInk.muted, ...num }}>{count} new</span>}
+          </div>
           {count === 0 && (
             <span style={{ padding: '6px 8px 10px 0', fontSize: T.sm, lineHeight: 1.45, color: onInk.body }}>
               Nothing new. When I change your plan, I&rsquo;ll say so here.
@@ -129,10 +172,10 @@ function Note({ note }: { note: Insight }) {
 
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 4, paddingTop: 6, borderTop: `1px solid ${onInk.line}` }}>
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', paddingTop: 6 }}>
-        <span style={{ fontSize: T.sm, lineHeight: 1.45, color: onInk.text }}>{note.text}</span>
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8, padding: '6px 0 8px' }}>
+        <span style={{ fontSize: T.copy, fontWeight: W.body, lineHeight: 1.45, color: onInk.text }}>{note.text}</span>
         {(adjustment || canTrim) && (
-          <div style={{ display: 'flex', gap: 14 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             {adjustment && (
               <NoteAction onClick={() => b.undoAdjustment(adjustment)} label={`Undo this change: ${note.text}`}>
                 Undo this change
@@ -158,7 +201,16 @@ function NoteAction({ onClick, children, label }: { onClick: () => void; childre
     <Btn
       onClick={onClick}
       label={label}
-      style={{ minHeight: TOUCH, padding: 0, fontSize: T.sm, fontWeight: 800, color: C.amberLight, whiteSpace: 'nowrap' }}
+      style={{
+        minHeight: TOUCH,
+        padding: '0 14px',
+        borderRadius: R.pill,
+        background: C.ink,
+        fontSize: T.note,
+        fontWeight: W.button,
+        color: C.amberLight,
+        whiteSpace: 'nowrap',
+      }}
     >
       {children}
     </Btn>

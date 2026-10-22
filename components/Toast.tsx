@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent } from 'react';
 import { Icon } from '@/components/icons';
 import { Btn } from '@/components/ui';
-import { C, R, SHADOW, T, TOUCH, Z, onInk } from '@/lib/tokens';
+import { C, R, SHADOW, T, TOUCH, W, Z, onInk } from '@/lib/tokens';
 import { useBompa, type Toast as ToastMessage } from '@/state/BompaContext';
 
 /** How long a toast with nothing to tap stays up. */
@@ -182,7 +182,7 @@ export function ToastView({
             {toast.text}
           </span>
           {toast.action && (
-            <Btn onClick={act} style={{ flex: 'none', height: TOUCH, minWidth: TOUCH, padding: '0 10px', fontSize: T.md, fontWeight: 800, color: C.amberLight }}>
+            <Btn onClick={act} style={{ flex: 'none', height: TOUCH, minWidth: TOUCH, padding: '0 10px', fontSize: T.md, fontWeight: W.button, color: C.amberLight }}>
               {toast.action.label}
             </Btn>
           )}

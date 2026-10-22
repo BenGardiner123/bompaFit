@@ -14,7 +14,7 @@ import type { ContentProvider, TestResult } from '@/lib/content/provider';
 import { loadProvider } from '@/lib/content/registry';
 import type { DownloadRun } from '@/lib/content/resolve';
 import type { MatchRun } from '@/lib/content/match';
-import { C, FONT, R, T, TOUCH, num } from '@/lib/tokens';
+import { C, FONT, R, T, TOUCH, W, num } from '@/lib/tokens';
 import { useBompa } from '@/state/BompaContext';
 import { Btn, Row, Section, Segmented, Tag } from '@/components/ui';
 import { LinkReviewSheet } from '@/components/LinkReviewSheet';
@@ -56,7 +56,7 @@ export function ContentProviders() {
                   CONNECTED
                 </Tag>
               ) : (
-                <span style={{ fontSize: T.sm, fontWeight: 800, color: C.amberDark }}>{expanded ? 'Close' : 'Connect'}</span>
+                <span style={{ fontSize: T.sm, fontWeight: W.button, color: C.amberDark }}>{expanded ? 'Close' : 'Connect'}</span>
               )
             }
           >
@@ -203,7 +203,7 @@ function ConnectPanel({ provider, onDone }: { provider: ContentProvider; onDone:
 
       {askCaching && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <span style={{ fontSize: 13, fontWeight: 800 }}>Does your plan allow saving content on this phone?</span>
+          <span style={{ fontSize: 13, fontWeight: W.button }}>Does your plan allow saving content on this phone?</span>
           <Segmented
             value={cachingAllowed ? 'yes' : 'no'}
             label="Does your plan allow saving content on this phone?"
@@ -305,7 +305,7 @@ function ConnectedPanel({ provider, connection }: { provider: ContentProvider; c
   return (
     <div style={panel}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <span style={{ fontSize: 13.5, fontWeight: 800, ...num }}>
+        <span style={{ fontSize: 13.5, fontWeight: W.button, ...num }}>
           Linked {linkedLifts} of {lifts.length} {lifts.length === 1 ? 'lift' : 'lifts'} in your workouts
         </span>
         <span style={{ fontSize: 12, fontWeight: 600, color: C.tertiary, ...num }}>
@@ -471,7 +471,7 @@ function useOnline(): boolean {
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, fontWeight: 800, color: C.tertiary }}>
+    <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, fontWeight: W.label, color: C.tertiary }}>
       {label}
       {children}
     </label>
@@ -508,7 +508,7 @@ const outline: CSSProperties = {
   background: 'transparent',
   color: C.ink,
   fontSize: 13,
-  fontWeight: 800,
+  fontWeight: W.button,
   ...num,
 };
 
@@ -520,6 +520,6 @@ const link: CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
   fontSize: T.sm,
-  fontWeight: 800,
+  fontWeight: W.button,
   color: C.amberDark,
 };

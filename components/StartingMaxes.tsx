@@ -8,7 +8,7 @@ import type { ReactNode } from 'react';
 import { toDisplay, toKg } from '@/lib/calc';
 import { startingMaxLifts } from '@/lib/maxes';
 import { weightMax, weightPrecision } from '@/lib/numberEntry';
-import { C, R, TOUCH } from '@/lib/tokens';
+import { C, R, TOUCH, W } from '@/lib/tokens';
 import { useBompa } from '@/state/BompaContext';
 import { Btn, EditableNumber, Row, Section } from '@/components/ui';
 import { Icon } from '@/components/icons';
@@ -68,7 +68,7 @@ export function StartingMaxes() {
                   precision={weightPrecision(s.unit)}
                   onCommit={(next) => b.setStartingMax(exercise.id, toKg(next, s.unit))}
                   {...(declared > 0 ? {} : { display: '—', spoken: `Starting max for ${exercise.name} not set`, openEmpty: true })}
-                  style={{ minWidth: 50, fontSize: 15, fontWeight: 800 }}
+                  style={{ minWidth: 50, fontSize: 15, fontWeight: W.title }}
                 />
                 <MaxStepper
                   onClick={() => b.setStartingMax(exercise.id, toKg(toDisplay(declared, s.unit) + step, s.unit))}
@@ -97,9 +97,8 @@ function MaxStepper({ onClick, label, children }: { onClick: () => void; label: 
       style={{
         width: TOUCH,
         height: TOUCH,
-        borderRadius: R.chip,
-        border: `1px solid ${C.lineStrong}`,
-        background: C.card,
+        borderRadius: R.pill,
+        background: C.sunken,
         color: C.ink,
         fontSize: 17,
       }}

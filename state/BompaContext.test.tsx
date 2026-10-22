@@ -2361,7 +2361,7 @@ describe('finishing', () => {
     } finally {
       clock.mockRestore();
     }
-    expect(screen.getByRole('button', { name: /^Undo finish/ }).textContent).toBe('Undo finish · 0:30');
+    expect(screen.getByRole('button', { name: /^Undo finish/ }).textContent).toBe('Undo · 0:30');
   });
 
   describe('the summary screen', () => {

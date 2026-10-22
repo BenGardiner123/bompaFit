@@ -11,7 +11,7 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { increments, isSet, segmentOf, toDisplay } from '@/lib/calc';
 import { REPS_MAX } from '@/lib/numberEntry';
-import { C, T, num, onInk } from '@/lib/tokens';
+import { C, T, W, num, onInk } from '@/lib/tokens';
 import type { SetType } from '@/lib/types';
 import { useBompa } from '@/state/BompaContext';
 import { DarkSheet, EditableNumber, InkButton, InkSegmented, StepperTile } from '@/components/ui';
@@ -123,7 +123,7 @@ export function EditSetSheet() {
             bodyweight={bodyweight.on}
             onCommit={setWeight}
             figure={figureType(64)}
-            unitStyle={{ fontSize: T.title, fontWeight: 800 }}
+            unitStyle={{ fontSize: T.title, fontWeight: W.label }}
           />
         </Figure>
         <StepperTile label="Increase weight" height={60} onClick={() => setWeight(round(draft.weight + step))}>
@@ -150,7 +150,7 @@ export function EditSetSheet() {
             onCommit={(reps) => setDraft({ ...draft, reps })}
             style={figureType(T.stat)}
           />
-          <span style={{ fontSize: T.md, fontWeight: 800, color: onInk.muted }}>reps</span>
+          <span style={{ fontSize: T.md, fontWeight: W.label, color: onInk.muted }}>reps</span>
         </Figure>
         <StepperTile label="Increase reps" onClick={() => setDraft({ ...draft, reps: draft.reps + 1 })}>
           <Icon name="plus" size={24} />
@@ -224,5 +224,5 @@ function Figure({ children }: { children: ReactNode }) {
 }
 
 function figureType(size: number): CSSProperties {
-  return { fontSize: size, fontWeight: 800, lineHeight: 1, letterSpacing: '-0.04em', color: onInk.text };
+  return { fontSize: size, fontWeight: W.title, lineHeight: 1, letterSpacing: '-0.04em', color: onInk.text };
 }

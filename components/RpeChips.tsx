@@ -7,18 +7,15 @@
 
 import { rpeChoices, toDisplay } from '@/lib/calc';
 import { weightShort } from '@/lib/bodyweight';
-import { C, R, T, TOUCH, num, onInk } from '@/lib/tokens';
+import { C, T, W, num, onInk } from '@/lib/tokens';
 import type { LoggedSet } from '@/lib/types';
 import { useBompa } from '@/state/BompaContext';
-import { Btn } from '@/components/ui';
-import { rpeColor } from '@/components/RpePicker';
+import { ChipTrack } from '@/components/ui';
 
 /**
- * One row of chips. The aim has a white outline and says "aim" under it,
- * because leaving the row alone logs the aim. A chosen value fills with its
- * effort colour. `compact` is the row used several to a screen: 44px, the
- * touch minimum, where the design drew 40, and without the "aim" label. The
- * full one is 48px.
+ * One row of chips, in a dark track inside the card it sits on. The aim is a
+ * step lighter with a dot under it, because leaving the row alone logs the
+ * aim; a chosen value turns white, the same as a chosen lift.
  *
  * Disabled until the set has its database id: rating goes by id, and the
  * optimistic row has none for the first moment.
@@ -28,9 +25,7 @@ export function RpeChipRow({
   value,
   onPick,
   label,
-  compact = false,
   disabled = false,
-  gap = 5,
 }: {
   target: number;
   /** The rating given, or null while the aim still stands in for one. */
@@ -38,51 +33,24 @@ export function RpeChipRow({
   onPick: (rpe: number) => void;
   /** Names the group for a screen reader, e.g. "RPE for Bench set 2". */
   label: string;
-  compact?: boolean;
   disabled?: boolean;
-  /** Between chips. The one-line row on Train closes it up to fit a name beside them. */
-  gap?: number;
 }) {
-  const height = compact ? TOUCH : 48;
   return (
-    <div role="group" aria-label={label} style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap }}>
-      {rpeChoices(target).map((rpe) => {
-        const on = value === rpe;
-        const aim = rpe === target;
-        return (
-          <Btn
-            key={rpe}
-            onClick={() => onPick(rpe)}
-            disabled={disabled}
-            pressed={on}
-            label={`RPE ${rpe}${aim ? ', your aim' : ''}`}
-            style={{
-              height,
-              borderRadius: R.chip,
-              border: on ? `1px solid ${rpeColor(rpe)}` : aim ? `1.5px solid ${C.white}` : `1px solid ${onInk.control}`,
-              background: on ? rpeColor(rpe) : 'transparent',
-              color: on || aim ? C.white : onInk.body,
-              fontSize: T.title,
-              fontWeight: 800,
-              lineHeight: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              opacity: 1,
-              ...num,
-            }}
-          >
-            {rpe}
-            {aim && !compact && (
-              <span aria-hidden style={{ fontSize: T.xs, fontWeight: 800, color: on ? C.white : onInk.muted, paddingTop: 3 }}>
-                aim
-              </span>
-            )}
-          </Btn>
-        );
-      })}
-    </div>
+    <ChipTrack
+      label={label}
+      fill
+      track={C.ink}
+      fontSize={T.title}
+      disabled={disabled}
+      value={value === null ? null : String(value)}
+      onChange={(next) => onPick(Number(next))}
+      items={rpeChoices(target).map((rpe) => ({
+        value: String(rpe),
+        label: rpe,
+        name: `RPE ${rpe}${rpe === target ? ', your aim' : ''}`,
+        suggested: rpe === target,
+      }))}
+    />
   );
 }
 
@@ -110,12 +78,11 @@ export function RateSetRow({
   const target = targetFor(b, row);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <span style={{ fontSize: T.sm, fontWeight: 700, color: onInk.body, ...num }}>
+      <span style={{ fontSize: T.sm, fontWeight: W.button, color: onInk.body, ...num }}>
         {prefix ?? `${name} `}
         {weight} × {row.reps}
       </span>
       <RpeChipRow
-        compact
         target={target}
         value={row.rpeEstimated ? null : row.rpe}
         onPick={(rpe) => {

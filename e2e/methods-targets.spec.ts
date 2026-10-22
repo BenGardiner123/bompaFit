@@ -31,7 +31,7 @@ async function startWorkout(page: Page, name: string) {
 
 /** The lift chip at this position in the row, the keyboard way to change lift. */
 async function pickLift(page: Page, index: number) {
-  await page.locator('[data-chip]').nth(index).getByRole('button').click();
+  await page.getByRole('group', { name: 'Lifts' }).getByRole('button').nth(index).click();
 }
 
 function logButton(page: Page) {
@@ -114,6 +114,7 @@ test('an AMRAP set shows its minimum as N+, needs no RPE target, and logs what w
   await expect(page.getByText('5+ · as many as you can')).toBeVisible();
   await expect(page.getByRole('button', { name: /^AMRAP/ })).toBeVisible();
 
+  await page.getByRole('button', { name: /^Select reps, now \d+$/ }).click();
   await page.getByRole('button', { name: 'Increase reps' }).click();
   await page.getByRole('button', { name: 'Increase reps' }).click();
   await expect(logButton(page)).toHaveText(/^Log AMRAP set.*× 7$/);

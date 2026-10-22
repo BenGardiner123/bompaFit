@@ -7,10 +7,10 @@ import { summariseSessions } from '@/lib/history';
 import { blockContaining, blockRotation, blocksUsing, mesocycleCurve } from '@/lib/plan';
 import { weekIsUserModified, weekSlots } from '@/lib/schedule';
 import { daysToMeet } from '@/lib/today';
-import { C, FONT, HERO_SIZE, ON_PHASE, PH, PHASE_ABBR, PHASE_LABEL, PH_ON_INK, R, T, TOUCH, num, onInk } from '@/lib/tokens';
+import { C, FONT, HERO_SIZE, ON_PHASE, PH, PHASE_ABBR, PHASE_LABEL, PH_ON_INK, R, ROW_COMPACT, T, TOUCH, W, num, onInk } from '@/lib/tokens';
 import type { Phase, PlannedSession, Routine } from '@/lib/types';
 import { useBompa } from '@/state/BompaContext';
-import { Btn, DarkSheet, Hero, HeroEyebrow, HeroNumeral, HeroText, InkButton, Row, Scroller, Section, Segmented, Sheet, Tag } from '@/components/ui';
+import { Btn, DarkSheet, Hero, HeroNumeral, HeroText, InkButton, Row, Scroller, Section, Segmented, Sheet } from '@/components/ui';
 import { browsableWeeks, macrocycle, nextBlockStart, weekAt, weekPosition } from './PlanMacrocycle';
 import { SessionRow } from './SessionHistory';
 import { Icon } from '@/components/icons';
@@ -44,10 +44,7 @@ export function Plan() {
 
   return (
     <div className="rise" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
-      {/* The hero leads with a number rather than a title, so the screen's name
-          is still announced for anyone navigating by heading. */}
-      <h1 className="sr-only">Plan</h1>
-      <Hero gap={12}>
+      <Hero gap={14}>
         <MacrocycleHero week={week} onPick={(target) => show(target, true)} />
       </Hero>
       <Sheet gap={20}>
@@ -57,7 +54,7 @@ export function Plan() {
         </div>
         <Meet onEdit={() => setEditingMeet(true)} />
         <PlanBlocks week={week} onPick={(target) => show(target, true)} />
-        <Btn onClick={() => setBuilding(true)} style={inkButton(52, R.block, 15)}>
+        <Btn onClick={() => setBuilding(true)} style={inkButton(52, R.pill, 15)}>
           <Icon name="plus" size={16} style={{ marginRight: 8 }} />
           Add a block
         </Btn>
@@ -89,7 +86,7 @@ function inkButton(height: number, radius: number, fontSize: number): CSSPropert
     background: C.ink,
     color: C.white,
     fontSize,
-    fontWeight: 800,
+    fontWeight: W.button,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -100,16 +97,26 @@ function inkButton(height: number, radius: number, fontSize: number): CSSPropert
 // The macrocycle
 // ─────────────────────────────────────────────────────────────
 
+/** The screen's title, with how long the whole plan is beside it. */
+function PlanTitle({ right }: { right?: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+      <h1 style={{ margin: 0, fontSize: 28, fontWeight: W.title, letterSpacing: '-0.03em' }}>Plan</h1>
+      {right && <span style={{ fontSize: T.sm, fontWeight: W.label, color: onInk.muted, ...num }}>{right}</span>}
+    </div>
+  );
+}
+
 function MacrocycleHero({ week: viewing, onPick }: { week: string; onPick: (week: string) => void }) {
   const b = useBompa();
   const macro = macrocycle(b.blocks, b.todayKey);
 
   if (!macro) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <HeroEyebrow>Macrocycle</HeroEyebrow>
+      <>
+        <PlanTitle />
         <HeroText>No blocks yet. Add one below.</HeroText>
-      </div>
+      </>
     );
   }
 
@@ -138,26 +145,27 @@ function MacrocycleHero({ week: viewing, onPick }: { week: string; onPick: (week
 
   return (
     <>
-      <HeroEyebrow>Plan · {totalWeeks}-week macrocycle</HeroEyebrow>
+      <PlanTitle right={`${totalWeeks}-week macrocycle`} />
       <HeroNumeral
         value={week}
         size={HERO_SIZE.screen}
         // White: amber is kept for things you can tap.
         color={onInk.text}
         label={`of ${totalWeeks} weeks`}
-        labelSize={T.lg}
+        labelSize={T.title}
+        labelWeight={W.button}
         sub={sub}
         subColor={subColor}
         ariaLabel={`Week ${week} of ${totalWeeks}. ${sub}.`}
       />
 
-      {/* The top padding is the room the today marker's dot pokes up into.
+      {/* The top padding is the room the today marker pokes up into.
           Tapping anywhere on the bar shows that week below. Touch and mouse
           only: the week arrows and the block list do the same from a
           keyboard, so the bar stays one picture to a screen reader. */}
       <div
         data-macrocycle-bar
-        style={{ position: 'relative', paddingTop: 10, cursor: 'pointer' }}
+        style={{ position: 'relative', paddingTop: 8, cursor: 'pointer' }}
         onClick={(event) => {
           const box = event.currentTarget.getBoundingClientRect();
           onPick(weekAt(macro, (event.clientX - box.left) / box.width));
@@ -168,7 +176,7 @@ function MacrocycleHero({ week: viewing, onPick }: { week: string; onPick: (week
           aria-label={`${macro.segments
             .map((seg) => `${PHASE_LABEL[seg.phase]} ${seg.weeks} ${seg.weeks === 1 ? 'week' : 'weeks'}${seg.done ? ', done' : ''}`)
             .join('; ')}. Tap the bar to see that week.`}
-          style={{ display: 'flex', gap: 3, height: 38 }}
+          style={{ display: 'flex', gap: 3, height: 28 }}
         >
           {macro.segments.map((seg, index) => {
             const first = index === 0;
@@ -184,12 +192,13 @@ function MacrocycleHero({ week: viewing, onPick }: { week: string; onPick: (week
                   minWidth: 0,
                   overflow: 'hidden',
                   background: PH[seg.phase],
-                  borderRadius: `${first ? R.tag : 0}px ${last ? R.tag : 0}px ${last ? R.tag : 0}px ${first ? R.tag : 0}px`,
+                  // Rounded only at the two ends, so the bar reads as one plan cut into blocks.
+                  borderRadius: `${first ? R.pill : 0}px ${last ? R.pill : 0}px ${last ? R.pill : 0}px ${first ? R.pill : 0}px`,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   fontSize: T.xs,
-                  fontWeight: 800,
+                  fontWeight: W.button,
                   whiteSpace: 'nowrap',
                   // Finished blocks are marked with a tick, never faded: fading
                   // the fill takes the ink label on it below a readable contrast.
@@ -208,8 +217,8 @@ function MacrocycleHero({ week: viewing, onPick }: { week: string; onPick: (week
             data-viewing-week
             style={{
               position: 'absolute',
-              top: 7,
-              height: 44,
+              top: 6,
+              height: 32,
               left: `${viewedAt * 100}%`,
               width: `${100 / totalWeeks}%`,
               boxSizing: 'border-box',
@@ -220,22 +229,16 @@ function MacrocycleHero({ week: viewing, onPick }: { week: string; onPick: (week
           />
         )}
         {macro.todayAt !== null && (
-          <>
-            <span
-              aria-hidden
-              style={{ position: 'absolute', top: 0, bottom: -6, left: `${macro.todayAt * 100}%`, width: 2, marginLeft: -1, background: onInk.text, borderRadius: 1 }}
-            />
-            <span
-              aria-hidden
-              style={{ position: 'absolute', top: -2, left: `${macro.todayAt * 100}%`, width: 10, height: 10, marginLeft: -5, borderRadius: '50%', background: onInk.text }}
-            />
-          </>
+          <span
+            aria-hidden
+            style={{ position: 'absolute', top: 2, bottom: -4, left: `${macro.todayAt * 100}%`, width: 2, marginLeft: -1, background: onInk.text, borderRadius: 1 }}
+          />
         )}
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: T.xs, fontWeight: 700, color: onInk.muted, ...num }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: T.xs, fontWeight: W.label, color: onInk.muted, ...num }}>
         <span>{fmtDayMonth(macro.start)}</span>
-        {macro.todayAt !== null && <span style={{ color: onInk.text }}>today · {fmtDayMonth(b.todayKey)}</span>}
+        {macro.todayAt !== null && <span style={{ color: onInk.text }}>Today · {fmtDayMonth(b.todayKey)}</span>}
         <span>{fmtDayMonth(macro.end)}</span>
       </div>
     </>
@@ -268,7 +271,6 @@ function ThisWeek() {
       {slots.map((slot, index) => {
         const routine = b.routineById(slot.routineId);
         const isNext = b.nextSlot?.id === slot.id;
-        const tag = statusTag(slot, isNext);
         // Done work is history; rearranging it would rewrite what happened.
         // A negative id is a slot just added whose write has not landed yet;
         // moving or dropping it before then would act on a row that is not
@@ -280,50 +282,37 @@ function ThisWeek() {
           <Row
             key={slot.id ?? index}
             compact
-            title={<span style={{ color: routine ? C.ink : C.tertiary }}>{routine?.name ?? 'Deleted workout'}</span>}
-            sub={detailFor(slot, routine)}
-            lead={
-              // Position in the week, not a weekday. Ink when next, so the
-              // list agrees with the NEXT tag without borrowing amber for it.
-              <span style={{ width: 18, flex: 'none', fontSize: T.sm, fontWeight: 800, color: isNext ? C.ink : C.tertiary, ...num }}>
-                {index + 1}
-              </span>
-            }
+            title={<SlotTitle routine={routine} slot={slot} isNext={isNext} />}
+            sub={detailFor(slot, routine, isNext)}
+            lead={<StatusCircle slot={slot} index={index} isNext={isNext} />}
             right={
-              <>
-                <Tag bg={tag.bg} fg={tag.fg}>
-                  {tag.label}
-                </Tag>
-                {/* The column is kept even when empty so every tag lines up. */}
-                <span style={{ width: TOUCH, flex: 'none', display: 'flex' }}>
-                  {editable && (
-                    <Btn
-                      onClick={() => {
-                        setOpen(isOpen ? null : slot.id!);
-                        setScope('week');
-                      }}
-                      label={isOpen ? 'Close options' : `Options for ${routine?.name ?? 'this slot'}`}
-                      style={{
-                        width: TOUCH,
-                        height: TOUCH,
-                        borderRadius: R.chip,
-                        border: `1px solid ${isOpen ? C.ink : C.lineStrong}`,
-                        background: 'transparent',
-                        color: C.ink60,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <Icon name={isOpen ? 'close' : 'more'} size={16} />
-                    </Btn>
-                  )}
-                </span>
-              </>
+              // Kept even when empty, so every row lines up.
+              <span style={{ width: TOUCH, flex: 'none', display: 'flex', marginRight: -10 }}>
+                {editable && (
+                  <Btn
+                    onClick={() => {
+                      setOpen(isOpen ? null : slot.id!);
+                      setScope('week');
+                    }}
+                    label={isOpen ? 'Close options' : `Options for ${routine?.name ?? 'this slot'}`}
+                    expanded={isOpen}
+                    style={{
+                      width: TOUCH,
+                      height: TOUCH,
+                      color: isOpen ? C.ink : C.tertiary,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Icon name={isOpen ? 'close' : 'more'} size={18} />
+                  </Btn>
+                )}
+              </span>
             }
           >
             {isOpen && (
-              <div className="rise" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '0 0 14px 28px' }}>
+              <div className="rise" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '0 0 14px 38px' }}>
                 <div style={{ display: 'flex', gap: 6 }}>
                   <SlotBtn onClick={() => void b.moveSession(slot.id!, index - 1)} disabled={index === 0}>
                     <Icon name="arrow-up" size={14} style={{ marginRight: 6 }} />
@@ -375,13 +364,12 @@ function ThisWeek() {
                           style={{
                             flex: 'none',
                             height: TOUCH,
-                            padding: '0 12px',
-                            borderRadius: R.small,
-                            border: `1px solid ${C.lineStrong}`,
-                            background: 'transparent',
-                            color: C.ink60,
-                            fontSize: T.xs,
-                            fontWeight: 800,
+                            padding: '0 14px',
+                            borderRadius: R.pill,
+                            background: C.sunken,
+                            color: C.ink80,
+                            fontSize: T.caption,
+                            fontWeight: W.button,
                             whiteSpace: 'nowrap',
                           }}
                         >
@@ -427,15 +415,15 @@ function WeekNav({ week, onPick }: { week: string; onPick: (week: string) => voi
     <div role="group" aria-label="Week" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
       <WeekArrow icon="chevron-left" label="Previous week" disabled={week <= first} onClick={() => onPick(addDays(week, -7))} />
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, textAlign: 'center' }}>
-        <span style={{ fontSize: T.title, fontWeight: 800, color: C.ink, ...num }}>
+        <span style={{ fontSize: T.title, fontWeight: W.button, color: C.ink, ...num }}>
           {fmtDayMonth(week)} – {fmtDayMonth(addDays(week, 6))}
         </span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: T.caption, fontWeight: 700, color: C.tertiary }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: T.caption, fontWeight: W.label, color: C.tertiary }}>
           {at && <span aria-hidden style={{ width: 8, height: 8, flex: 'none', borderRadius: R.swatch, background: PH[at.deload ? 'deload' : at.phase] }} />}
           {where}
         </span>
         {week !== b.currentWeek && (
-          <Btn onClick={() => onPick(b.currentWeek)} style={{ minHeight: TOUCH, padding: '0 8px', fontSize: T.sm, fontWeight: 800, color: C.amberDark }}>
+          <Btn onClick={() => onPick(b.currentWeek)} style={{ minHeight: TOUCH, padding: '0 8px', fontSize: T.sm, fontWeight: W.button, color: C.amberDark }}>
             Back to this week
           </Btn>
         )}
@@ -455,8 +443,8 @@ function WeekArrow({ icon, label, disabled, onClick }: { icon: 'chevron-left' | 
         width: TOUCH,
         height: TOUCH,
         flex: 'none',
-        borderRadius: R.chip,
-        border: `1px solid ${C.lineStrong}`,
+        borderRadius: R.pill,
+        background: C.sunken,
         color: C.ink,
         display: 'flex',
         alignItems: 'center',
@@ -511,7 +499,7 @@ function OtherWeek({ week }: { week: string }) {
       })}
       {extras.length > 0 && (
         <>
-          <span style={{ paddingTop: 10, fontSize: T.xs, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: C.tertiary }}>
+          <span style={{ paddingTop: 10, fontSize: T.sm, fontWeight: W.label, color: C.tertiary }}>
             Also trained
           </span>
           {extras.map((summary) => {
@@ -543,29 +531,25 @@ function PlannedRow({ slot, index, expanded, onToggle }: { slot: PlannedSession;
   const b = useBompa();
   const panelId = useId();
   const routine = b.routineById(slot.routineId);
-  const tag = statusTag(slot, false);
   const name = routine?.name ?? 'Deleted workout';
   const canOpen = Boolean(routine) && slot.status !== 'skip';
 
   const head = (
     <>
-      <span style={{ width: 18, flex: 'none', fontSize: T.sm, fontWeight: 800, color: C.tertiary, ...num }}>{index + 1}</span>
+      <StatusCircle slot={slot} index={index} isNext={false} />
       <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <span style={{ fontSize: T.title, fontWeight: 800, color: routine ? C.ink : C.tertiary }}>{name}</span>
-        <span style={{ fontSize: T.caption, fontWeight: 600, color: C.tertiary, ...num }}>{detailFor(slot, routine)}</span>
+        <SlotTitle routine={routine} slot={slot} isNext={false} />
+        <span style={{ fontSize: T.sm, fontWeight: W.label, color: C.tertiary, ...num }}>{detailFor(slot, routine, false)}</span>
       </span>
-      <Tag bg={tag.bg} fg={tag.fg}>
-        {tag.label}
-      </Tag>
       <span style={{ width: 16, flex: 'none', display: 'flex', color: C.tertiary }}>
         {canOpen && <Icon name={expanded ? 'chevron-up' : 'chevron-down'} size={14} />}
       </span>
     </>
   );
-  const line = { display: 'flex', alignItems: 'center', gap: 10, width: '100%', minHeight: TOUCH, padding: '10px 0', textAlign: 'left', color: C.ink } as const;
+  const line = { display: 'flex', alignItems: 'center', gap: 10, width: '100%', minHeight: ROW_COMPACT, padding: '6px 0', textAlign: 'left', color: C.ink } as const;
 
   return (
-    <div style={{ borderTop: `1px solid ${C.line}`, display: 'flex', flexDirection: 'column' }}>
+    <div style={{ borderTop: `1px solid ${C.lineSoft}`, display: 'flex', flexDirection: 'column' }}>
       {canOpen ? (
         // A plain button rather than Row, because a row that opens has to say
         // whether it is open, and that needs aria-expanded.
@@ -583,7 +567,7 @@ function PlannedRow({ slot, index, expanded, onToggle }: { slot: PlannedSession;
         <div style={line}>{head}</div>
       )}
       {expanded && routine && (
-        <ul id={panelId} className="rise" style={{ listStyle: 'none', margin: 0, padding: '0 0 12px 28px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <ul id={panelId} className="rise" style={{ listStyle: 'none', margin: 0, padding: '0 0 12px 38px', display: 'flex', flexDirection: 'column', gap: 6 }}>
           {routine.slots.map((lift) => {
             const exercise = b.exerciseById.get(lift.exerciseId);
             const reps = lift.repsMax ? `${lift.reps}–${lift.repsMax}` : `${lift.reps}`;
@@ -596,7 +580,7 @@ function PlannedRow({ slot, index, expanded, onToggle }: { slot: PlannedSession;
             return (
               <li key={`${lift.exerciseId}-${lift.order}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: T.note, color: C.ink80 }}>
                 <span style={{ minWidth: 0 }}>
-                  {lift.supersetGroup && <span style={{ fontWeight: 800, color: C.tertiary }}>{lift.supersetGroup} · </span>}
+                  {lift.supersetGroup && <span style={{ fontWeight: W.button, color: C.tertiary }}>{lift.supersetGroup} · </span>}
                   {exercise?.name ?? lift.exerciseId}
                 </span>
                 <span style={{ flex: 'none', fontWeight: 700, ...num }}>
@@ -643,12 +627,13 @@ function AddWorkout() {
         pressed={open}
         style={{
           height: TOUCH,
-          borderRadius: R.chip,
+          borderRadius: R.pill,
+          // Dashed: a slot to fill, not a choice already made.
           border: `1px dashed ${open ? C.ink : C.lineStrong}`,
           background: 'transparent',
           color: C.ink60,
           fontSize: T.note,
-          fontWeight: 800,
+          fontWeight: W.button,
         }}
       >
         + Add a workout
@@ -780,12 +765,11 @@ function SlotBtn({
       style={{
         flex: 1,
         height: TOUCH,
-        borderRadius: R.chip,
-        border: `1px solid ${danger ? C.redBd : C.lineStrong}`,
-        background: danger ? C.redBg : C.card,
+        borderRadius: R.pill,
+        background: danger ? C.redBg : C.sunken,
         color: danger ? C.redDark : C.ink80,
         fontSize: T.caption,
-        fontWeight: 800,
+        fontWeight: W.button,
       }}
     >
       {children}
@@ -794,34 +778,63 @@ function SlotBtn({
 }
 
 /**
- * The tag at the end of a slot's row. Status colours only for state: green
- * for done. NEXT is ink rather than amber, because amber means something to
- * tap, and ADJUSTED is neutral rather than blue, because blue was a fourth
- * colour for the eye to learn with nothing to act on.
+ * The circle that leads a slot's row, in place of a tag at its end: a tick
+ * when done, otherwise the slot's place in the week, filled ink when it is
+ * next. Ink rather than amber, because amber means something to tap. The
+ * status itself is said in words on the line under the name.
  */
-function statusTag(slot: PlannedSession, isNext: boolean): { label: string; bg: string; fg: string } {
-  if (slot.status === 'done') return { label: 'DONE', bg: C.greenBg, fg: C.greenDark };
-  if (slot.status === 'skip') return { label: 'SKIPPED', bg: C.tagBg, fg: C.tertiary };
-  if (isNext) return { label: 'NEXT', bg: C.ink, fg: C.white };
-  // ADJUSTED reads the flag that always meant it, rather than a status that
-  // duplicated the flag.
-  if (slot.adjustedByBompa) return { label: 'ADJUSTED', bg: C.tagBg, fg: C.ink80 };
-  return { label: 'PLANNED', bg: C.tagBg, fg: C.ink60 };
+function StatusCircle({ slot, index, isNext }: { slot: PlannedSession; index: number; isNext: boolean }) {
+  const done = slot.status === 'done';
+  const look = done
+    ? { background: C.greenBg, color: C.greenDark }
+    : isNext
+      ? { background: C.ink, color: C.white }
+      : { background: C.sunken, color: C.ink60 };
+  return (
+    <span
+      data-slot-status={done ? 'done' : isNext ? 'next' : slot.status === 'skip' ? 'skip' : 'planned'}
+      style={{
+        width: 28,
+        height: 28,
+        flex: 'none',
+        borderRadius: R.pill,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: T.sm,
+        fontWeight: W.button,
+        ...look,
+        ...num,
+      }}
+    >
+      {done ? <Icon name="check" size={14} /> : index + 1}
+    </span>
+  );
 }
 
-/** The line under a slot's name. When I changed it, it says what and says it was me. */
-function detailFor(slot: PlannedSession, routine: Routine | undefined): string {
-  if (slot.status === 'done') return slot.date ? `Logged ${fmtDayMonth(slot.date)}` : 'Logged';
-  if (slot.status === 'skip') return 'Week rolled over before this one happened';
+/** The workout's name: quieter once done, firmer when it is next, grey when its workout is gone. */
+function SlotTitle({ routine, slot, isNext }: { routine: Routine | undefined; slot: PlannedSession; isNext: boolean }) {
+  const color = !routine ? C.tertiary : slot.status === 'done' ? C.ink60 : C.ink;
+  return <span style={{ fontSize: T.title, fontWeight: isNext ? W.title : W.button, color }}>{routine?.name ?? 'Deleted workout'}</span>;
+}
+
+/**
+ * The line under a slot's name, led by its status in words. When I changed
+ * it, it says what and says it was me.
+ */
+function detailFor(slot: PlannedSession, routine: Routine | undefined, isNext: boolean): string {
   const count = routine?.slots.length ?? 0;
   const lifts = `${count} ${count === 1 ? 'lift' : 'lifts'}`;
+  if (slot.status === 'done') return slot.date ? `Done ${fmtDayMonth(slot.date)} · ${lifts}` : `Done · ${lifts}`;
+  if (slot.status === 'skip') return 'Skipped · the week rolled over before this one happened';
   const pct = Math.round(slot.volumeFactor * 100);
+  let rest: string;
   if (slot.adjustedByBompa) {
     const verb = pct < 100 ? 'I trimmed it' : pct > 100 ? 'I added to it' : 'I changed it';
-    return `${lifts} · ${pct}% volume, ${verb}`;
-  }
-  if (pct !== 100) return `${lifts} · ${pct}% volume`;
-  return routine ? `${lifts} · ~${routine.estMinutes} min` : lifts;
+    rest = `Adjusted · ${lifts} · ${pct}% volume, ${verb}`;
+  } else if (pct !== 100) rest = `${lifts} · ${pct}% volume`;
+  else rest = routine ? `${lifts} · ~${routine.estMinutes} min` : lifts;
+  return isNext ? `Next · ${rest}` : rest;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -859,28 +872,29 @@ function Meet({ onEdit }: { onEdit: () => void }) {
     }
   }
 
+  // The whole row opens the meet, so the countdown is the thing the eye lands on
+  // rather than an Edit button beside it.
   return (
     <Section title="Meet">
       <Row
-        title={meet && days !== null ? `${meet.name} · ${days} ${days === 1 ? 'day' : 'days'}` : 'No meet set'}
+        compact
+        onClick={onEdit}
+        label={meet ? 'Edit meet' : 'Set a meet'}
+        title={<span style={{ fontWeight: W.title }}>{meet ? meet.name : 'No meet set'}</span>}
         sub={sub}
         right={
-          <Btn
-            onClick={onEdit}
-            label={meet ? 'Edit meet' : 'Set a meet'}
-            style={{
-              flex: 'none',
-              height: TOUCH,
-              padding: '0 14px',
-              borderRadius: R.chip,
-              border: `1px solid ${C.lineStrong}`,
-              color: C.ink,
-              fontSize: T.sm,
-              fontWeight: 800,
-            }}
-          >
-            {meet ? 'Edit' : 'Set'}
-          </Btn>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 'none' }}>
+            {meet && days !== null && (
+              <span style={{ display: 'flex', alignItems: 'baseline', gap: 3, ...num }}>
+                <span style={{ fontSize: T.count, fontWeight: W.title, letterSpacing: '-0.03em' }}>{days}</span>
+                <span style={{ fontSize: T.sm, fontWeight: W.label, color: C.tertiary }}>{days === 1 ? 'day' : 'days'}</span>
+              </span>
+            )}
+            {!meet && <span style={{ fontSize: T.note, fontWeight: W.button, color: C.amberDark }}>Set</span>}
+            <span style={{ display: 'flex', color: C.tertiary }}>
+              <Icon name="chevron-right" size={18} />
+            </span>
+          </span>
         }
       />
     </Section>
@@ -928,10 +942,10 @@ function MeetForm() {
             >
               <span aria-hidden style={{ width: 10, height: 10, borderRadius: R.swatch, background: PH[phase.phase], marginTop: 5 }} />
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-                <span style={{ fontSize: T.title, fontWeight: 800 }}>{phase.name}</span>
+                <span style={{ fontSize: T.title, fontWeight: W.button }}>{phase.name}</span>
                 <span style={{ fontSize: T.caption, fontWeight: 600, color: onInk.muted, ...num }}>{phase.detail}</span>
               </div>
-              <span style={{ fontSize: T.caption, fontWeight: 800, color: onInk.body, textAlign: 'right', ...num }}>
+              <span style={{ fontSize: T.caption, fontWeight: W.label, color: onInk.body, textAlign: 'right', ...num }}>
                 {fmtDayMonth(phase.startDate)}–{fmtDayMonth(phase.endDate)}
               </span>
             </div>
@@ -1042,7 +1056,7 @@ function PlanBlocks({ week, onPick }: { week: string; onPick: (week: string) => 
               >
                 <span aria-hidden style={{ width: 10, height: 10, borderRadius: R.swatch, background: PH[block.phase], marginTop: 5 }} />
                 <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-                  <span style={{ fontSize: T.title, fontWeight: 800 }}>{PHASE_LABEL[block.phase]} block</span>
+                  <span style={{ fontSize: T.title, fontWeight: W.button }}>{PHASE_LABEL[block.phase]} block</span>
                   <span style={{ fontSize: T.caption, fontWeight: 700, color: C.ink80, ...num }}>
                     {fmtDayMonth(block.startDate)} – {fmtDayMonth(ends)} · {length}
                   </span>
@@ -1073,7 +1087,7 @@ function BlockBuilder({ open, onClose }: { open: boolean; onClose: () => void })
   return (
     <DarkSheet open={open} onClose={onClose} eyebrow="New block" title="Add a block" gap={20}>
       <p style={{ margin: 0, fontSize: T.md, lineHeight: 1.45, color: onInk.body, ...num }}>
-        <span style={{ display: 'block', fontWeight: 800, color: onInk.text }}>
+        <span style={{ display: 'block', fontWeight: W.button, color: onInk.text }}>
           New {type.label.toLowerCase()} block, {weeks} weeks plus a deload week. {type.sub}.
         </span>
         {b.blocks.length > 0
@@ -1103,7 +1117,7 @@ function BlockBuilder({ open, onClose }: { open: boolean; onClose: () => void })
               >
                 <span aria-hidden style={{ width: 10, height: 10, borderRadius: R.swatch, background: PH[option.id] }} />
                 <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  <span style={{ fontSize: T.title, fontWeight: 800, color: onInk.text }}>{option.label}</span>
+                  <span style={{ fontSize: T.title, fontWeight: W.button, color: onInk.text }}>{option.label}</span>
                   <span style={{ fontSize: T.caption, fontWeight: 600, color: onInk.muted, ...num }}>{option.sub}</span>
                 </span>
                 {/* A radio ring: filled white with an ink inner ring when picked. */}
@@ -1136,11 +1150,10 @@ function BlockBuilder({ open, onClose }: { open: boolean; onClose: () => void })
                 style={{
                   flex: 1,
                   height: 48,
-                  borderRadius: R.control,
+                  borderRadius: R.pill,
                   fontSize: T.title,
-                  fontWeight: 800,
-                  background: on ? C.white : 'transparent',
-                  border: `1px solid ${on ? C.white : onInk.control}`,
+                  fontWeight: W.button,
+                  background: on ? C.white : onInk.raised,
                   color: on ? C.ink : onInk.text,
                   ...num,
                 }}
@@ -1165,13 +1178,13 @@ function BlockBuilder({ open, onClose }: { open: boolean; onClose: () => void })
         <div style={{ display: 'flex', gap: 9, alignItems: 'flex-end', height: 140, paddingTop: 4 }}>
           {curve.map((week) => (
             <div key={week.label} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, height: '100%', justifyContent: 'flex-end' }}>
-              <span style={{ fontSize: T.xs, fontWeight: 800, color: onInk.muted, ...num }}>{Math.round(week.intensity * 100)}%</span>
+              <span style={{ fontSize: T.xs, fontWeight: W.label, color: onInk.muted, ...num }}>{Math.round(week.intensity * 100)}%</span>
               <div style={{ width: '100%', display: 'flex', gap: 2, alignItems: 'flex-end', height: `${Math.round(week.volume * 100)}%` }}>
                 <span style={{ flex: 1, height: '100%', borderRadius: `${R.swatch}px ${R.swatch}px 0 0`, background: week.isDeload ? PH.deload : PH[phase] }} />
                 {/* Light grey, not amber: amber is kept for things you can tap. */}
                 <span style={{ flex: 1, height: `${Math.round(week.intensity * 100)}%`, borderRadius: `${R.swatch}px ${R.swatch}px 0 0`, background: onInk.body }} />
               </div>
-              <span style={{ fontSize: T.xs, fontWeight: 800, color: onInk.muted, ...num }}>{week.label}</span>
+              <span style={{ fontSize: T.xs, fontWeight: W.label, color: onInk.muted, ...num }}>{week.label}</span>
             </div>
           ))}
         </div>
@@ -1226,7 +1239,7 @@ function BlockWorkouts() {
             dark
             title={routine.name}
             lead={
-              <span style={{ width: 24, flex: 'none', fontSize: T.caption, fontWeight: 800, color: onInk.muted, ...num }}>{on ? at + 1 : ''}</span>
+              <span style={{ width: 24, flex: 'none', fontSize: T.caption, fontWeight: W.label, color: onInk.muted, ...num }}>{on ? at + 1 : ''}</span>
             }
             right={
               <span style={{ display: 'flex', gap: 6 }}>
@@ -1247,9 +1260,8 @@ function BlockWorkouts() {
                   style={{
                     width: TOUCH,
                     height: TOUCH,
-                    borderRadius: R.chip,
-                    border: `1px solid ${on ? C.white : onInk.control}`,
-                    background: on ? C.white : 'transparent',
+                    borderRadius: R.pill,
+                    background: on ? C.white : onInk.raised,
                     color: on ? C.ink : onInk.body,
                     display: 'flex',
                     alignItems: 'center',
@@ -1281,9 +1293,8 @@ function OrderBtn({ children, label, disabled, onClick }: { children: ReactNode;
       style={{
         width: TOUCH,
         height: TOUCH,
-        borderRadius: R.chip,
-        border: `1px solid ${onInk.control}`,
-        background: 'transparent',
+        borderRadius: R.pill,
+        background: onInk.raised,
         color: onInk.body,
         display: 'flex',
         alignItems: 'center',

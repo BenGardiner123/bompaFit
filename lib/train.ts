@@ -6,9 +6,35 @@
 // lives in lib/adapt.ts). Keeping the resolution out of here is what lets these
 // rules be tested with plain rows.
 
-import { countsAsWork, isSet } from './calc';
+import { countsAsWork, isSet, toDisplay } from './calc';
 import { workingSetCount } from './supersets';
-import type { LoggedSet } from './types';
+import type { LoggedSet, Unit } from './types';
+
+/**
+ * The newest working set of a lift from any session but the open one: what the
+ * lifter did last time, to aim at this time. Warm-ups and back-offs are left
+ * out because neither is the weight being progressed, and so are the later
+ * pieces of a drop or cluster set, which are lighter by design.
+ */
+export function lastWorkingSet(sets: LoggedSet[], exerciseId: string, openSessionId: number | undefined): LoggedSet | null {
+  let last: LoggedSet | null = null;
+  for (const row of sets) {
+    if (row.exerciseId !== exerciseId || row.sessionId === openSessionId || row.type !== 'working' || !isSet(row)) continue;
+    if (last === null || row.at > last.at) last = row;
+  }
+  return last;
+}
+
+/**
+ * "Last time 80 × 8 · RPE 7.5", in the same shape as the Log button so the two
+ * can be compared at a glance. The RPE only appears when the lifter gave it:
+ * an aim that stood in for a missing rating is not something they said.
+ */
+export function lastTimeText(row: LoggedSet, unit: Unit, bodyweight: boolean): string {
+  const weight = toDisplay(row.weightKg, unit);
+  const load = weight === 0 ? 'BW' : bodyweight ? `BW + ${weight}` : String(weight);
+  return `Last time ${load} × ${row.reps}${row.rpeEstimated ? '' : ` · RPE ${row.rpe}`}`;
+}
 
 /** One lift of the session's plan, in session order. */
 export type LiftPlan = { exerciseId: string; planned: number };

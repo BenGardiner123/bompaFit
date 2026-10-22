@@ -12,7 +12,7 @@
 import { useState, type CSSProperties, type ReactNode } from 'react';
 import { moveKey, warmupProgress } from '@/lib/warmupList';
 import { WARMUP_MOVES } from '@/lib/warmupMoves';
-import { C, FONT, R, T, TOUCH, num, onInk } from '@/lib/tokens';
+import { C, FONT, R, T, TOUCH, W, num, onInk } from '@/lib/tokens';
 import type { WarmupItem } from '@/lib/types';
 import { Icon } from '@/components/icons';
 
@@ -33,7 +33,7 @@ export function WarmupCard({ items, done, onToggle }: { items: readonly WarmupIt
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
-          <h2 style={{ margin: 0, fontSize: T.xs, fontWeight: 800, letterSpacing: '.16em', textTransform: 'uppercase', color: C.amberLight }}>Warm-up</h2>
+          <h2 style={{ margin: 0, fontSize: T.sm, fontWeight: W.label, color: C.amberLight }}>Warm-up</h2>
           <span data-testid="warmup-progress" style={{ fontSize: 12, fontWeight: 700, color: onInk.body, ...num }}>
             {progress.done} of {progress.total} done
           </span>
@@ -43,7 +43,7 @@ export function WarmupCard({ items, done, onToggle }: { items: readonly WarmupIt
           aria-expanded={open}
           aria-label={open ? 'Hide warm-up' : 'Show warm-up'}
           onClick={() => setOpen(!open)}
-          style={{ ...plain, minWidth: TOUCH, height: TOUCH, padding: '0 4px', color: C.amberLight, fontSize: T.sm, fontWeight: 800 }}
+          style={{ ...plain, minWidth: TOUCH, height: TOUCH, padding: '0 4px', color: C.amberLight, fontSize: T.sm, fontWeight: W.button }}
         >
           {open ? 'Hide' : 'Show'}
         </button>
@@ -77,7 +77,7 @@ export function WarmupCard({ items, done, onToggle }: { items: readonly WarmupIt
                       background: isDone ? C.amber : 'transparent',
                       color: C.ink,
                       fontSize: 20,
-                      fontWeight: 800,
+                      fontWeight: W.button,
                     }}
                   >
                     {isDone && <Icon name="check" size={20} />}
@@ -110,7 +110,7 @@ export function WarmupCard({ items, done, onToggle }: { items: readonly WarmupIt
 function ItemText({ name, dose, done, hasCue }: { name: string; dose?: string; done: boolean; hasCue: boolean }): ReactNode {
   return (
     <>
-      <span style={{ fontSize: T.md, fontWeight: 800, color: done ? onInk.body : onInk.text, textDecoration: done ? 'line-through' : 'none' }}>
+      <span style={{ fontSize: T.md, fontWeight: W.button, color: done ? onInk.body : onInk.text, textDecoration: done ? 'line-through' : 'none' }}>
         {name}
         {/* A quiet mark that the name opens a cue — without it nobody finds it. */}
         {hasCue && (

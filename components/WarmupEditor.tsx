@@ -13,7 +13,7 @@
 import { useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import { WARMUP_LIMITS, moveKey, moveWarmupItem, newWarmupItem } from '@/lib/warmupList';
 import { WARMUP_MOVES } from '@/lib/warmupMoves';
-import { C, FONT, R, T, TOUCH, num } from '@/lib/tokens';
+import { C, FONT, R, T, TOUCH, W, num } from '@/lib/tokens';
 import type { Routine, WarmupItem } from '@/lib/types';
 import { Icon } from '@/components/icons';
 
@@ -40,7 +40,7 @@ export function RoutineWarmup({
       style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: R.block, padding: '12px 13px', display: 'flex', flexDirection: 'column', gap: 8 }}
     >
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
-        <h3 style={{ margin: 0, fontSize: 13.5, fontWeight: 800 }}>Warm-up</h3>
+        <h3 style={{ margin: 0, fontSize: 13.5, fontWeight: W.title }}>Warm-up</h3>
         <span style={{ fontSize: 11.5, fontWeight: 700, color: C.tertiary }}>a checklist, not logged</span>
       </div>
 
@@ -62,7 +62,7 @@ export function RoutineWarmup({
             background: usesDefault ? C.ink : C.card,
             color: C.white,
             fontSize: 13,
-            fontWeight: 800,
+            fontWeight: W.button,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -70,7 +70,7 @@ export function RoutineWarmup({
         >
           {usesDefault && <Icon name="check" size={14} />}
         </span>
-        <span style={{ fontSize: 13, fontWeight: 800 }}>Use my default warm-up</span>
+        <span style={{ fontSize: 13, fontWeight: W.button }}>Use my default warm-up</span>
       </button>
 
       {usesDefault ? (
@@ -124,7 +124,7 @@ export function WarmupListEditor({ items, onChange, empty }: { items: WarmupItem
             <li key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 0', borderTop: index ? `1px solid ${C.lineSoft}` : 'none' }}>
               {/* minWidth 0 lets a long name wrap instead of pushing the buttons off the edge. */}
               <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflowWrap: 'anywhere' }}>
-                <span style={{ fontSize: 13, fontWeight: 800 }}>{item.name}</span>
+                <span style={{ fontSize: 13, fontWeight: W.button }}>{item.name}</span>
                 {item.dose && <span style={{ fontSize: 12, fontWeight: 700, color: C.tertiary, ...num }}>{item.dose}</span>}
               </span>
               <Square label={`Move ${item.name} up`} disabled={index === 0} onClick={() => onChange(moveWarmupItem(items, index, -1))}>
@@ -165,7 +165,7 @@ export function WarmupListEditor({ items, onChange, empty }: { items: WarmupItem
         type="button"
         aria-expanded={picking}
         onClick={() => setPicking(!picking)}
-        style={{ ...plain, height: TOUCH, borderRadius: R.chip, border: `1px dashed ${C.lineStrong}`, color: C.ink60, fontSize: T.sm, fontWeight: 800 }}
+        style={{ ...plain, height: TOUCH, borderRadius: R.chip, border: `1px dashed ${C.lineStrong}`, color: C.ink60, fontSize: T.sm, fontWeight: W.button }}
       >
         {picking ? 'Done adding common moves' : '+ Add from common moves'}
       </button>
@@ -192,7 +192,7 @@ export function WarmupListEditor({ items, onChange, empty }: { items: WarmupItem
                   background: added ? C.ink : C.card,
                   color: added ? C.white : C.ink80,
                   fontSize: T.sm,
-                  fontWeight: 800,
+                  fontWeight: W.button,
                   // Added reads as done rather than unavailable, so no fade.
                   cursor: added ? 'default' : 'pointer',
                 }}
@@ -241,7 +241,7 @@ function Square({ children, onClick, label, disabled, danger }: { children: Reac
         background: danger ? C.redBg : C.card,
         color: danger ? C.redDark : C.ink60,
         fontSize: T.md,
-        fontWeight: 800,
+        fontWeight: W.button,
         opacity: disabled ? 0.45 : 1,
         cursor: disabled ? 'not-allowed' : 'pointer',
       }}

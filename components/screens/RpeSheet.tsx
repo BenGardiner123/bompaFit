@@ -7,7 +7,7 @@
 // guess at the thing the model is most sensitive to.
 
 import { RPE_SCALE } from '@/lib/data';
-import { C, T, num, onInk } from '@/lib/tokens';
+import { C, T, W, num, onInk } from '@/lib/tokens';
 import { useBompa } from '@/state/BompaContext';
 import { DarkSheet } from '@/components/ui';
 import { SheetHeading, sheetHairline } from '@/components/SheetParts';
@@ -47,7 +47,7 @@ export function RpeSheet() {
             style={{ display: 'grid', gridTemplateColumns: '56px 1fr', gap: 10, alignItems: 'center', padding: '10px 0', ...sheetHairline }}
           >
             {/* Read as "RPE 9" rather than a bare "9" that could be anything. */}
-            <span style={{ fontSize: 40, fontWeight: 800, lineHeight: 1, letterSpacing: '-0.03em', color: effortColor(row.rpe), ...num }}>
+            <span style={{ fontSize: 40, fontWeight: W.title, lineHeight: 1, letterSpacing: '-0.03em', color: effortColor(row.rpe), ...num }}>
               <span className="sr-only">RPE </span>
               {row.rpe}
             </span>

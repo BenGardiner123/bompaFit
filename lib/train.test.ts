@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { moveLift, nextLift, planDone, roundSets, unratedSets, untrainedLifts, type LiftPlan } from './train';
+import { lastTimeText, lastWorkingSet, moveLift, nextLift, planDone, roundSets, unratedSets, untrainedLifts, type LiftPlan } from './train';
 import type { LoggedSet } from './types';
 
 let clock = 1_000;
@@ -136,5 +136,47 @@ describe('moving a lift within the session', () => {
     expect(moveLift(['a', 'x', 'y', 'b'], 2, -1, letter)).toEqual(['x', 'y', 'a', 'b']);
     // Moving b up steps over the whole group, not into the middle of it.
     expect(moveLift(['a', 'x', 'y', 'b'], 3, -1, letter)).toEqual(['a', 'b', 'x', 'y']);
+  });
+});
+
+describe('last time', () => {
+  it('is the newest working set of the lift from an earlier session', () => {
+    const older = set({ sessionId: 1, weightKg: 75 });
+    const newer = set({ sessionId: 2, weightKg: 80 });
+    expect(lastWorkingSet([older, newer], 'bench', 3)).toBe(newer);
+  });
+
+  it('leaves out the session still open, which the dots already show', () => {
+    const before = set({ sessionId: 1, weightKg: 75 });
+    const now = set({ sessionId: 2, weightKg: 80 });
+    expect(lastWorkingSet([before, now], 'bench', 2)).toBe(before);
+  });
+
+  it('skips warm-ups, back-offs and the later pieces of a set', () => {
+    const working = set({ sessionId: 1, weightKg: 80 });
+    const rows = [
+      working,
+      set({ sessionId: 1, type: 'backoff', weightKg: 60 }),
+      set({ sessionId: 1, segment: 1, weightKg: 65 }),
+      set({ sessionId: 1, type: 'warmup', weightKg: 40 }),
+    ];
+    expect(lastWorkingSet(rows, 'bench', 9)).toBe(working);
+  });
+
+  it('only looks at the lift asked about, and is null when it has nothing', () => {
+    expect(lastWorkingSet([set({ exerciseId: 'ohp', sessionId: 1 })], 'bench', 9)).toBeNull();
+    expect(lastWorkingSet([], 'bench', undefined)).toBeNull();
+  });
+
+  it('reads like the Log button, with the RPE only when the lifter gave it', () => {
+    expect(lastTimeText(set({ weightKg: 80, reps: 8, rpe: 7.5, rpeEstimated: false }), 'kg', false)).toBe('Last time 80 × 8 · RPE 7.5');
+    // The aim stood in for a rating nobody gave, so it is not repeated as if they had.
+    expect(lastTimeText(set({ weightKg: 80, reps: 8, rpe: 7, rpeEstimated: true }), 'kg', false)).toBe('Last time 80 × 8');
+  });
+
+  it('shows the weight in the display unit, and bodyweight in words', () => {
+    expect(lastTimeText(set({ weightKg: 100, reps: 5, rpeEstimated: true }), 'lb', false)).toBe('Last time 220.5 × 5');
+    expect(lastTimeText(set({ weightKg: 0, reps: 12, rpeEstimated: true }), 'kg', true)).toBe('Last time BW × 12');
+    expect(lastTimeText(set({ weightKg: 10, reps: 6, rpeEstimated: true }), 'kg', true)).toBe('Last time BW + 10 × 6');
   });
 });

@@ -43,6 +43,7 @@ test.describe('logging sets', () => {
     await expect(page.getByRole('button', { name: 'Log set 35 × 8' })).toBeVisible();
 
     await page.getByRole('button', { name: 'Increase weight' }).click();
+    await page.getByRole('button', { name: /^Select reps, now \d+$/ }).click();
     await page.getByRole('button', { name: 'Increase reps' }).click();
     await expect(page.getByRole('button', { name: 'Log set 37.5 × 9' })).toBeVisible();
     await page.getByRole('button', { name: 'Log set' }).click();

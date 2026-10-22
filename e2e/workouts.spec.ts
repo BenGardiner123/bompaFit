@@ -118,7 +118,7 @@ test.describe('the list', () => {
   test('opens the workout the week is waiting on, with Start and Edit', async ({ page }) => {
     const row = page.getByRole('button', { name: /^Push A( |$)/ });
     await expect(row).toHaveAttribute('aria-expanded', 'true');
-    await expect(row).toContainText('NEXT');
+    await expect(row).toContainText('Next up');
     await expect(page.getByRole('button', { name: 'Start Push A', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Edit Push A', exact: true })).toBeVisible();
   });
@@ -126,7 +126,7 @@ test.describe('the list', () => {
   test("an open workout's lifts sit on one line, cut short with an ellipsis rather than wrapping", async ({ page }) => {
     // Templates hold five or six lifts, which is more than one line at phone width.
     await page.getByRole('button', { name: 'Templates', exact: true }).click();
-    const line = page.locator('p', { hasText: /~\d+ min/ }).first();
+    const line = page.locator('[data-lift-line]').first();
     await expect(line).toBeVisible();
     await expect(line).toHaveCSS('white-space', 'nowrap');
     await expect(line).toHaveCSS('text-overflow', 'ellipsis');

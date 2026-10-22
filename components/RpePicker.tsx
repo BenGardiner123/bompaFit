@@ -13,7 +13,7 @@
 
 import type { ReactNode } from 'react';
 import { RPE_MEANING, RPE_SCALE } from '@/lib/data';
-import { C, R, num, onInk } from '@/lib/tokens';
+import { C, R, W, num, onInk } from '@/lib/tokens';
 import { Btn } from '@/components/ui';
 
 /** Green below 8, amber through the 8s, red at 9 and above. */
@@ -58,7 +58,7 @@ export function RpePicker({
                 height: 48,
                 borderRadius: R.chip,
                 fontSize: 15,
-                fontWeight: 800,
+                fontWeight: W.button,
                 background: on ? rpeColor(entry.rpe) : dark ? 'transparent' : C.screen,
                 border: `1px solid ${on ? rpeColor(entry.rpe) : dark ? onInk.control : C.line}`,
                 color: on ? C.white : dark ? onInk.body : C.ink60,

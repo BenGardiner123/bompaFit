@@ -8,7 +8,7 @@
 // for records and left out of the chip count, and nothing on screen ever
 // says so.
 
-import { C, T, onInk } from '@/lib/tokens';
+import { C, T, W, onInk } from '@/lib/tokens';
 import { useBompa } from '@/state/BompaContext';
 import { DarkSheet } from '@/components/ui';
 import { sheetHairline } from '@/components/SheetParts';
@@ -52,7 +52,7 @@ export function SetTypeSheet() {
       <div style={{ display: 'flex', flexDirection: 'column' }}>
         {TYPES.map((type) => (
           <section key={type.label} style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '14px 0', ...sheetHairline }}>
-            <h3 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: type.color }}>{type.label}</h3>
+            <h3 style={{ margin: 0, fontSize: 20, fontWeight: W.title, color: type.color }}>{type.label}</h3>
             <span style={{ fontSize: T.md, lineHeight: 1.5, color: onInk.text }}>{type.what}</span>
             <span style={{ fontSize: 13, lineHeight: 1.5, color: onInk.muted }}>{type.costs}</span>
           </section>

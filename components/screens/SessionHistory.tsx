@@ -19,7 +19,7 @@ import {
   weekdayShort,
   type SessionSummary,
 } from '@/lib/history';
-import { C, FONT, HERO_SIZE, T, TOUCH, num, onInk } from '@/lib/tokens';
+import { C, FONT, HERO_SIZE, T, TOUCH, W, num, onInk } from '@/lib/tokens';
 import type { LoggedSet, Unit } from '@/lib/types';
 import { weightShort } from '@/lib/bodyweight';
 import { useBompa } from '@/state/BompaContext';
@@ -28,7 +28,7 @@ import { pieceNoun } from '@/components/screens/SegmentControls';
 import { Icon } from '@/components/icons';
 
 /** The By session view: the last seven days in the hero, every finished session below. */
-export function SessionHistory({ tabs }: { tabs: ReactNode }) {
+export function SessionHistory({ header }: { header: ReactNode }) {
   const b = useBompa();
   const { s } = b;
   const summaries = summariseSessions(b.sessions, b.sets);
@@ -37,7 +37,7 @@ export function SessionHistory({ tabs }: { tabs: ReactNode }) {
   return (
     <>
       <Hero gap={14} style={{ paddingTop: 4 }}>
-        {tabs}
+        {header}
         <LastSevenDays />
       </Hero>
 
@@ -134,7 +134,7 @@ function LastSevenDays() {
         </div>
         <div aria-hidden style={{ display: 'flex', gap: 4 }}>
           {days.map((d) => (
-            <span key={d.key} style={{ flex: 1, textAlign: 'center', fontSize: T.xs, fontWeight: 700, color: onInk.muted }}>
+            <span key={d.key} style={{ flex: 1, textAlign: 'center', fontSize: T.xs, fontWeight: W.label, color: onInk.muted }}>
               {weekdayShort(d.key)}
             </span>
           ))}
@@ -143,10 +143,10 @@ function LastSevenDays() {
 
       {/* A description list, so the figure is read with its name. */}
       <dl style={{ margin: 0, paddingTop: 10, display: 'flex', flexDirection: 'column-reverse', gap: 1 }}>
-        <dt style={{ fontSize: T.xs, fontWeight: 700, color: onInk.muted }}>7-day intensity</dt>
+        <dt style={{ fontSize: T.xs, fontWeight: W.label, color: onInk.muted }}>7-day intensity</dt>
         <dd style={{ margin: 0, display: 'flex', alignItems: 'baseline', gap: 2 }}>
-          <span style={{ fontSize: T.xl, fontWeight: 800, color: onInk.text, ...num }}>{intensity === null ? '—' : Math.round(intensity * 100)}</span>
-          {intensity !== null && <span style={{ fontSize: T.sm, fontWeight: 700, color: onInk.muted }}>% of your max</span>}
+          <span style={{ fontSize: T.xl, fontWeight: W.title, color: onInk.text, ...num }}>{intensity === null ? '—' : Math.round(intensity * 100)}</span>
+          {intensity !== null && <span style={{ fontSize: T.sm, fontWeight: W.label, color: onInk.muted }}>% of your max</span>}
         </dd>
       </dl>
     </div>
@@ -179,17 +179,17 @@ export function SessionRow({
       <span style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, width: '100%' }}>
         {/* The snapshot, not a live lookup: renaming a routine must not
             rewrite what you did under its old name. */}
-        <span style={{ fontSize: 15, fontWeight: 800, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <span style={{ fontSize: 15, fontWeight: W.button, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {session.routineName}
         </span>
-        <span style={{ fontSize: 12, fontWeight: 700, color: C.tertiary, flex: 'none', ...num }}>
+        <span style={{ fontSize: 12, fontWeight: W.label, color: C.tertiary, flex: 'none', ...num }}>
           {day}
           {!empty && <Icon name={expanded ? 'chevron-up' : 'chevron-down'} size={14} style={{ marginLeft: 4, verticalAlign: '-2px' }} />}
         </span>
       </span>
 
       {empty ? (
-        <span style={{ fontSize: 12, fontWeight: 600, color: C.tertiary }}>Started and finished with nothing logged.</span>
+        <span style={{ fontSize: 12, fontWeight: W.label, color: C.tertiary }}>Started and finished with nothing logged.</span>
       ) : (
         <span style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
           <Figure value={String(workingSets)} label="sets" />
@@ -200,7 +200,7 @@ export function SessionRow({
       )}
 
       {session.autoClosed && (
-        <span style={{ fontSize: T.xs, fontWeight: 700, color: C.amberDark }}>Closed automatically — four hours passed with nothing logged.</span>
+        <span style={{ fontSize: T.xs, fontWeight: W.label, color: C.amberDark }}>Closed automatically — four hours passed with nothing logged.</span>
       )}
     </>
   );
@@ -242,7 +242,7 @@ export function SessionRow({
             <div key={lift.exerciseId} style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
               {/* Custom and archived lifts are in the same lookup, so a
                   retired movement still shows its name. */}
-              <h3 style={{ margin: 0, fontSize: T.xs, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: C.tertiary }}>
+              <h3 style={{ margin: 0, fontSize: T.sm, fontWeight: W.label, color: C.tertiary }}>
                 {b.exerciseById.get(lift.exerciseId)?.name ?? lift.exerciseId}
               </h3>
               {withPieces(lift.sets).map(({ row, pieces }, i) =>
@@ -299,7 +299,7 @@ function PiecesLine({ row, pieces, unit }: { row: LoggedSet; pieces: LoggedSet[]
       label={`Edit ${name}: ${toDisplay(x.weightKg, unit)} ${unit} × ${x.reps}`}
       disabled={x.id === undefined}
       onClick={x.id === undefined ? undefined : () => b.patch({ editingSetId: x.id! })}
-      style={{ minHeight: TOUCH, fontSize: 13.5, fontWeight: 700, color: C.ink, opacity: 1, ...num }}
+      style={{ minHeight: TOUCH, fontSize: 13.5, fontWeight: W.button, color: C.ink, opacity: 1, ...num }}
     >
       {toDisplay(x.weightKg, unit)} × {x.reps}
     </Btn>
@@ -320,7 +320,7 @@ function PiecesLine({ row, pieces, unit }: { row: LoggedSet; pieces: LoggedSet[]
         opacity: warm ? WARMUP_OPACITY : 1,
       }}
     >
-      <span style={{ fontSize: 11.5, fontWeight: 800, color: label, ...num }}>
+      <span style={{ fontSize: 11.5, fontWeight: W.button, color: label, ...num }}>
         {warm ? 'W' : row.type === 'backoff' ? 'B' : row.setNo}
       </span>
       {/* Wraps rather than scrolls: a long rest-pause set runs to several
@@ -329,15 +329,15 @@ function PiecesLine({ row, pieces, unit }: { row: LoggedSet; pieces: LoggedSet[]
         {figure(row, `set ${row.setNo}`)}
         {pieces.map((x) => (
           <span key={x.id ?? x.at} style={{ display: 'inline-flex', alignItems: 'center', columnGap: 6 }}>
-            <span aria-hidden style={{ color: C.tertiary, fontWeight: 700 }}>
+            <span aria-hidden style={{ color: C.tertiary, fontWeight: W.label }}>
               →
             </span>
             {figure(x, `${pieceNoun(x.segmentStyle).toLowerCase()} ${segmentOf(x)} of set ${row.setNo}`)}
           </span>
         ))}
-        <span style={{ fontWeight: 700, color: C.tertiary }}>{unit}</span>
+        <span style={{ fontWeight: W.label, color: C.tertiary }}>{unit}</span>
       </span>
-      <span style={{ fontSize: 12, fontWeight: 800, color: label, ...num }}>@{row.rpe}</span>
+      <span style={{ fontSize: 12, fontWeight: W.button, color: label, ...num }}>@{row.rpe}</span>
     </div>
   );
 }
@@ -359,14 +359,14 @@ function SetLine({ row, unit }: { row: SessionSummary['lifts'][number]['sets'][n
         opacity: warm ? WARMUP_OPACITY : 1,
       }}
     >
-      <span style={{ fontSize: 11.5, fontWeight: 800, color: label, ...num }}>
+      <span style={{ fontSize: 11.5, fontWeight: W.button, color: label, ...num }}>
         {warm ? 'W' : row.type === 'backoff' ? 'B' : row.setNo}
       </span>
-      <span style={{ fontWeight: 700, ...num }}>
+      <span style={{ fontWeight: W.button, ...num }}>
         {weightShort(toDisplay(row.weightKg, unit), unit)}
       </span>
-      <span style={{ fontWeight: 700, ...num }}>{row.reps} reps</span>
-      <span style={{ fontSize: 12, fontWeight: 800, color: label, ...num }}>@{row.rpe}</span>
+      <span style={{ fontWeight: W.button, ...num }}>{row.reps} reps</span>
+      <span style={{ fontSize: 12, fontWeight: W.button, color: label, ...num }}>@{row.rpe}</span>
     </div>
   );
 }
@@ -374,8 +374,8 @@ function SetLine({ row, unit }: { row: SessionSummary['lifts'][number]['sets'][n
 function Figure({ value, label }: { value: string; label: string }) {
   return (
     <span style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-      <span style={{ fontSize: 17, fontWeight: 800, ...num }}>{value}</span>
-      <span style={{ fontSize: 11.5, fontWeight: 700, color: C.tertiary }}>{label}</span>
+      <span style={{ fontSize: 17, fontWeight: W.title, ...num }}>{value}</span>
+      <span style={{ fontSize: 11.5, fontWeight: W.label, color: C.tertiary }}>{label}</span>
     </span>
   );
 }

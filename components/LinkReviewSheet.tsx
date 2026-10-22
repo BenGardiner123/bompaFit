@@ -11,7 +11,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import type { ExternalMatch } from '@/lib/content/provider';
-import { C, FONT, R, T, TOUCH, num, onInk } from '@/lib/tokens';
+import { C, FONT, R, T, TOUCH, W, num, onInk } from '@/lib/tokens';
 import { useBompa } from '@/state/BompaContext';
 import { DarkSheet, InkButton, Row } from '@/components/ui';
 import { sheetHairline } from '@/components/SheetParts';
@@ -79,7 +79,7 @@ export function LinkReviewSheet({
           return (
             <li key={link.exerciseId} aria-label={name} style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '12px 0', ...sheetHairline }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <span style={{ fontSize: 15, fontWeight: 800 }}>{name}</span>
+                <span style={{ fontSize: 15, fontWeight: W.button }}>{name}</span>
                 <span style={{ fontSize: T.sm, fontWeight: 600, color: onInk.muted }}>
                   {providerName}: {link.externalName ?? link.externalId}
                 </span>

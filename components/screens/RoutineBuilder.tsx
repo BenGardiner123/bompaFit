@@ -11,7 +11,7 @@ import { REPS_MAX, SETS_MAX, weightMax, weightPrecision } from '@/lib/numberEntr
 import { describeMethod } from '@/lib/methodPresets';
 import { blocksUsing } from '@/lib/plan';
 import { normaliseRoutine } from '@/lib/supersets';
-import { C, PHASE_LABEL, R, T, TOUCH, num } from '@/lib/tokens';
+import { C, PHASE_LABEL, R, T, TOUCH, W, num } from '@/lib/tokens';
 import type { Routine, RoutineSlot } from '@/lib/types';
 import { useBompa } from '@/state/BompaContext';
 import { Btn, ConfirmSheet, EditableNumber, Empty, Eyebrow, Pill } from '@/components/ui';
@@ -171,7 +171,7 @@ export function RoutineBuilder({ routineId, onClose }: { routineId: string; onCl
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-          <span style={{ fontSize: 20, fontWeight: 800 }}>Edit workout</span>
+          <span style={{ fontSize: 20, fontWeight: W.title }}>Edit workout</span>
           <Btn
             onClick={onClose}
             label="Close"
@@ -184,7 +184,7 @@ export function RoutineBuilder({ routineId, onClose }: { routineId: string; onCl
               background: C.card,
               color: C.ink60,
               fontSize: 15,
-              fontWeight: 800,
+              fontWeight: W.button,
             }}
           >
             <Icon name="close" size={16} />
@@ -194,7 +194,7 @@ export function RoutineBuilder({ routineId, onClose }: { routineId: string; onCl
         {reach && <span style={{ fontSize: T.sm, lineHeight: 1.45, color: C.ink60, marginTop: -6 }}>{reach}</span>}
 
         <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <Eyebrow style={{ letterSpacing: '.12em' }}>Name</Eyebrow>
+          <Eyebrow>Name</Eyebrow>
           <input
             value={draft.name}
             onChange={(event) => setDraft({ ...draft, name: event.target.value })}
@@ -205,7 +205,7 @@ export function RoutineBuilder({ routineId, onClose }: { routineId: string; onCl
               background: C.card,
               padding: '0 12px',
               fontSize: 15,
-              fontWeight: 800,
+              fontWeight: W.button,
               color: C.ink,
               fontFamily: 'inherit',
               width: '100%',
@@ -253,14 +253,14 @@ export function RoutineBuilder({ routineId, onClose }: { routineId: string; onCl
               >
                 {startsGroup && letter !== null && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                    <span style={{ fontSize: T.xs, fontWeight: 800, letterSpacing: '.14em', color: C.amberDark }}>
+                    <span style={{ fontSize: T.sm, fontWeight: W.label, color: C.amberDark }}>
                       {groupNoun(groupSize(letter)).toUpperCase()} {letter} ·{' '}
                       {groupRest(letter) === 0 ? 'NO REST BETWEEN THESE' : `${groupRest(letter)}S BETWEEN THESE`}
                     </span>
                     {/* The gap belongs to the group, not to a lift, so it is set
                         once on the header rather than repeated on every member. */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <Eyebrow style={{ letterSpacing: '.12em', flex: 'none' }}>Gap</Eyebrow>
+                      <Eyebrow style={{ flex: 'none' }}>Gap</Eyebrow>
                       {SUPERSET_GAPS.map((sec) => (
                         <Btn key={sec} onClick={() => setGroupRest(letter, sec)} style={groupStyle(groupRest(letter) === sec)}>
                           {sec === 0 ? 'None' : `${sec}s`}
@@ -270,7 +270,7 @@ export function RoutineBuilder({ routineId, onClose }: { routineId: string; onCl
                   </div>
                 )}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                  <span style={{ fontSize: 13.5, fontWeight: 800, minWidth: 0 }}>{exercise?.name ?? slot.exerciseId}</span>
+                  <span style={{ fontSize: 13.5, fontWeight: W.button, minWidth: 0 }}>{exercise?.name ?? slot.exerciseId}</span>
                   <div style={{ display: 'flex', gap: 4, flex: 'none' }}>
                     <MiniBtn onClick={() => move(index, -1)} label="Move up" disabled={index === 0}>
                       <Icon name="arrow-up" size={15} />
@@ -314,7 +314,7 @@ export function RoutineBuilder({ routineId, onClose }: { routineId: string; onCl
                       background: C.screen,
                       color: C.ink60,
                       fontSize: T.xs,
-                      fontWeight: 800,
+                      fontWeight: W.button,
                       flex: 'none',
                     }}
                   >
@@ -355,7 +355,7 @@ export function RoutineBuilder({ routineId, onClose }: { routineId: string; onCl
                     textAlign: 'left',
                   }}
                 >
-                  <Eyebrow style={{ letterSpacing: '.12em', flex: 'none' }}>Method</Eyebrow>
+                  <Eyebrow style={{ flex: 'none' }}>Method</Eyebrow>
                   <span data-testid="method-row-summary" style={{ flex: 1, minWidth: 0, fontSize: T.sm, fontWeight: 700, color: C.ink80, ...num }}>
                     {describeMethod(slot)}
                   </span>
@@ -365,7 +365,7 @@ export function RoutineBuilder({ routineId, onClose }: { routineId: string; onCl
                 </Btn>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Eyebrow style={{ letterSpacing: '.12em', flex: 'none' }}>Superset</Eyebrow>
+                  <Eyebrow style={{ flex: 'none' }}>Superset</Eyebrow>
                   <Btn
                     onClick={() => setSlot(index, { supersetGroup: null })}
                     style={groupStyle(letter === null)}
@@ -392,7 +392,7 @@ export function RoutineBuilder({ routineId, onClose }: { routineId: string; onCl
             background: 'transparent',
             color: C.ink60,
             fontSize: 13,
-            fontWeight: 800,
+            fontWeight: W.button,
           }}
         >
           + Add a lift
@@ -402,7 +402,7 @@ export function RoutineBuilder({ routineId, onClose }: { routineId: string; onCl
           <Btn
             onClick={save}
             disabled={draft.slots.length === 0}
-            style={{ flex: 1, height: 48, borderRadius: R.chip, background: C.ink, color: C.white, fontSize: T.md, fontWeight: 800 }}
+            style={{ flex: 1, height: 48, borderRadius: R.chip, background: C.ink, color: C.white, fontSize: T.md, fontWeight: W.button }}
           >
             {dirty ? 'Save workout' : 'Done'}
           </Btn>
@@ -418,7 +418,7 @@ export function RoutineBuilder({ routineId, onClose }: { routineId: string; onCl
                 background: C.redBg,
                 color: C.redDark,
                 fontSize: 13,
-                fontWeight: 800,
+                fontWeight: W.button,
               }}
             >
               Delete
@@ -492,7 +492,7 @@ function groupStyle(on: boolean) {
     background: on ? C.ink : C.screen,
     color: on ? C.white : C.muted,
     fontSize: T.xs,
-    fontWeight: 800,
+    fontWeight: W.button,
   } as const;
 }
 
@@ -522,7 +522,7 @@ function MiniBtn({
         background: danger ? C.redBg : C.card,
         color: danger ? C.redDark : C.ink60,
         fontSize: 12,
-        fontWeight: 800,
+        fontWeight: W.button,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -557,7 +557,7 @@ function Field({
 }) {
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
-      <Eyebrow style={{ letterSpacing: '.1em' }}>{label}</Eyebrow>
+      <Eyebrow>{label}</Eyebrow>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
         <MiniBtn onClick={() => onChange(value - step)} label={`Decrease ${label}`}>
           <Icon name="minus" size={16} />
@@ -571,7 +571,7 @@ function Field({
           display={display}
           spoken={spoken}
           onCommit={onChange}
-          style={{ flex: 1, fontSize: T.md, fontWeight: 800 }}
+          style={{ flex: 1, fontSize: T.md, fontWeight: W.button }}
         />
         <MiniBtn onClick={() => onChange(value + step)} label={`Increase ${label}`}>
           <Icon name="plus" size={16} />

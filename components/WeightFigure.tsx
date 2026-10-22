@@ -26,6 +26,7 @@ export function WeightFigure({
   onCommit,
   figure,
   unitStyle,
+  stacked = false,
 }: {
   weight: number;
   unit: Unit;
@@ -36,6 +37,8 @@ export function WeightFigure({
   figure: CSSProperties;
   /** The small unit label's type. */
   unitStyle: CSSProperties;
+  /** The unit on its own line under the figure, for a tile too narrow for "BW +" beside a big number. */
+  stacked?: boolean;
 }) {
   const size = typeof figure.fontSize === 'number' ? figure.fontSize : 0;
   const common = {
@@ -50,6 +53,20 @@ export function WeightFigure({
     spoken: bodyweight ? weightSpoken(weight, unit, true) : undefined,
   };
 
+  if (stacked) {
+    const below = weightUnitLine(weight, unit, bodyweight);
+    return (
+      <>
+        {weight === 0 ? (
+          <EditableNumber {...common} display="Bodyweight" style={{ ...figure, fontSize: Math.round(size * BODYWEIGHT_WORD_IN_TILE), letterSpacing: '-0.02em' }} />
+        ) : (
+          <EditableNumber {...common} style={figure} />
+        )}
+        {below && <span style={{ ...unitStyle, color: onInk.muted }}>{below}</span>}
+      </>
+    );
+  }
+
   if (weight === 0) {
     // The word at full figure size would run off a phone; at under half it
     // still reads from arm's length.
@@ -63,6 +80,22 @@ export function WeightFigure({
       <span style={{ ...unitStyle, color: onInk.muted }}>{unit}</span>
     </>
   );
+}
+
+/**
+ * "Bodyweight" as a fraction of the figure size, inside a tile. Narrower than
+ * a full row, so smaller than the 0.42 used beside the steppers.
+ */
+export const BODYWEIGHT_WORD_IN_TILE = 0.3;
+
+/**
+ * The line under a stacked weight: the unit, or the unit and what it is added
+ * to on a bodyweight lift. Nothing at zero, where the figure already says
+ * "Bodyweight".
+ */
+export function weightUnitLine(weight: number, unit: Unit, bodyweight: boolean): string | null {
+  if (weight === 0) return null;
+  return bodyweight ? `${unit} + bodyweight` : unit;
 }
 
 /**

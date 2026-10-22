@@ -63,7 +63,7 @@ test('a week behind shows what was trained, set by set', async ({ page }) => {
   await expect(page.getByRole('button', { name: /^Hide (Push A|Legs A) on / })).toHaveAttribute('aria-expanded', 'true');
   await expect(page.getByRole('heading', { level: 3 }).first()).toBeVisible();
   // The weeks that rolled over without being trained say so.
-  await expect(page.getByText('SKIPPED').first()).toBeVisible();
+  await expect(page.getByText(/^Skipped · /).first()).toBeVisible();
 });
 
 test('tapping a block shows its first week', async ({ page }) => {

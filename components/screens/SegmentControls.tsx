@@ -12,7 +12,7 @@
 import { useEffect } from 'react';
 import { countsAsWork, fmtClock } from '@/lib/calc';
 import { weightShort } from '@/lib/bodyweight';
-import { C, R, T, TOUCH, num, onInk } from '@/lib/tokens';
+import { C, R, T, TOUCH, W, num, onInk } from '@/lib/tokens';
 import type { LoggedSet, SegmentStyle } from '@/lib/types';
 import { useBompa, type SegmentState } from '@/state/BompaContext';
 import { InkButton } from '@/components/ui';
@@ -88,7 +88,7 @@ function InProgress({ segment }: { segment: SegmentState }) {
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
-          <span style={{ fontSize: T.lg, fontWeight: 800, color: onInk.text, ...num }}>{heading}</span>
+          <span style={{ fontSize: T.lg, fontWeight: W.title, color: onInk.text, ...num }}>{heading}</span>
           <span style={{ fontSize: T.note, fontWeight: 700, color: C.amberLight, ...num }}>
             {weightShort(s.entryWeight, s.unit)} · {reps}
           </span>
@@ -116,10 +116,10 @@ function InProgress({ segment }: { segment: SegmentState }) {
           aria-label={`${pauseNoun(segment)} in ${fmtClock(pauseLeft)}`}
           style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 8, paddingTop: 2 }}
         >
-          <span aria-hidden style={{ fontSize: T.note, fontWeight: 800, color: onInk.body }}>
+          <span aria-hidden style={{ fontSize: T.note, fontWeight: W.label, color: onInk.body }}>
             {pauseNoun(segment)} in
           </span>
-          <span aria-hidden style={{ fontSize: T.stat, fontWeight: 800, lineHeight: 1, letterSpacing: '-0.04em', color: C.amberLight, ...num }}>
+          <span aria-hidden style={{ fontSize: T.stat, fontWeight: W.title, lineHeight: 1, letterSpacing: '-0.04em', color: C.amberLight, ...num }}>
             {fmtClock(pauseLeft)}
           </span>
         </div>

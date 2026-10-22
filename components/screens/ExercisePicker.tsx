@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { C, FONT, R, T, onInk } from '@/lib/tokens';
+import { C, FONT, R, T, W, onInk } from '@/lib/tokens';
 import { useBompa } from '@/state/BompaContext';
 import { DarkSheet, Row } from '@/components/ui';
 import { sheetHairline } from '@/components/SheetParts';
@@ -124,7 +124,7 @@ export function ExercisePicker({
             sub={`${exercise.muscle} · ${exercise.equipment}`}
             right={
               taken.has(exercise.id) && (
-                <span style={{ flex: 'none', fontSize: T.xs, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: C.amberLight }}>
+                <span style={{ flex: 'none', fontSize: T.sm, fontWeight: W.label, color: C.amberLight }}>
                   Added
                 </span>
               )

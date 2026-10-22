@@ -13,6 +13,7 @@
 import type { CSSProperties } from 'react';
 import {
   ArrowDown,
+  ArrowRight,
   ArrowUp,
   Bell,
   Calculator,
@@ -51,6 +52,7 @@ const GLYPHS = {
   'chevron-left': { draw: ChevronLeft },
   'arrow-up': { draw: ArrowUp },
   'arrow-down': { draw: ArrowDown },
+  'arrow-right': { draw: ArrowRight },
   edit: { draw: Pencil },
   help: { draw: CircleQuestionMark },
   plus: { draw: Plus },

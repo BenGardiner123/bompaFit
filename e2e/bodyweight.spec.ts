@@ -126,7 +126,7 @@ test.describe('a lift marked as bodyweight', () => {
     await expect(page.getByRole('button', { name: /^Edit set 1: \+10 kg × / })).toBeVisible();
     await typeInto(page, weightFigure(page), '10');
     await expect(page.getByRole('button', { name: 'Bodyweight plus 10 kilograms, tap to type' })).toBeVisible();
-    await expect(page.getByText('BW +', { exact: true })).toBeVisible();
+    await expect(page.getByText('kg + bodyweight', { exact: true })).toBeVisible();
 
     // With plates on, the chip takes the mark back off and leaves the weight.
     await page.getByRole('button', { name: 'Bodyweight', exact: true }).click();

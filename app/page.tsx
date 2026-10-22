@@ -23,7 +23,7 @@ import { Workouts } from '@/components/screens/Workouts';
 import { SettingsSheet } from '@/components/SettingsSheet';
 import { useThemeColor } from '@/components/useThemeColor';
 import { TimerAlerts } from '@/components/TimerAlerts';
-import { C } from '@/lib/tokens';
+import { C, W } from '@/lib/tokens';
 import { BompaProvider, useBompa } from '@/state/BompaContext';
 
 export default function Page() {
@@ -138,7 +138,7 @@ function Screen() {
 function Booting() {
   return (
     <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40 }}>
-      <span className="pulse" style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.18em', color: C.muted }}>
+      <span className="pulse" style={{ fontSize: 12, fontWeight: W.title, letterSpacing: '.18em', color: C.muted }}>
         BOMPA
       </span>
     </div>

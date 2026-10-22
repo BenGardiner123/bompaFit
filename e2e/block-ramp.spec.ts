@@ -50,7 +50,7 @@ test('the week shapes what Train asks for: lighter and fewer sets early, the wri
 
 test("Today's preview agrees with Train", async ({ page }) => {
   await goToTab(page, 'Today');
-  await expect(page.getByText(/^2 × 8 @ 35$/)).toBeVisible();
+  await expect(page.getByText(/^2 × 8 · 35 kg$/)).toBeVisible();
   await startPushA(page);
   await expect(targetLine(page)).toHaveText(/^Set 1 of 2 · 8 reps @ 35 kg/);
 });

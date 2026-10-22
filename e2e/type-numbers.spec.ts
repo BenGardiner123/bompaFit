@@ -78,6 +78,8 @@ test.describe('on Train', () => {
 
   test('typed reps are logged', async ({ page }) => {
     await startTraining(page);
+    // Weight is the tile the steppers start on; the reps tile is selected first.
+    await page.getByRole('button', { name: /^Select reps, now \d+$/ }).click();
     await typeInto(page, page.getByRole('button', { name: /^Reps \d+, tap to type$/ }), '11');
     await page.getByRole('button', { name: /^Log set/ }).click();
     await expect.poll(async () => (await lastSet(page))?.reps).toBe(11);
@@ -120,7 +122,7 @@ test.describe('on Train', () => {
 
     await page.getByRole('button', { name: 'Increase weight' }).click();
     await expect(page.getByRole('button', { name: 'Bodyweight plus 2.5 kilograms, tap to type' })).toBeVisible();
-    await expect(page.getByText('BW +', { exact: true })).toBeVisible();
+    await expect(page.getByText('kg + bodyweight', { exact: true })).toBeVisible();
 
     await page.getByRole('button', { name: /^Log set/ }).click();
     await expect.poll(async () => (await lastSet(page))?.weightKg).toBe(2.5);

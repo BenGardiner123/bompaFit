@@ -13,7 +13,7 @@ import {
   type ReactNode,
 } from 'react';
 import { parseEntry } from '@/lib/numberEntry';
-import { C, FONT, R, ROW_COMPACT, SCRIM, SHADOW, T, TOUCH, Z, num, onInk } from '@/lib/tokens';
+import { C, FONT, R, ROW_COMPACT, SCRIM, SHADOW, T, TOUCH, W, Z, num, onInk } from '@/lib/tokens';
 import { Icon } from './icons';
 
 export function Card({
@@ -46,19 +46,19 @@ export function Card({
   );
 }
 
-/** The small all-caps label that heads a section or a metric. */
-export function Eyebrow({ children, color = C.muted, style }: { children: ReactNode; color?: string; style?: CSSProperties }) {
-  return (
-    <span style={{ fontSize: T.xs, fontWeight: 800, letterSpacing: '.16em', color, textTransform: 'uppercase', ...style }}>
-      {children}
-    </span>
-  );
+/**
+ * The small label that heads a section or a metric. Sentence case with no
+ * tracking: spaced-out capitals at 11px were the loudest thing on many cards,
+ * and they only ever named what sat under them.
+ */
+export function Eyebrow({ children, color = C.tertiary, style }: { children: ReactNode; color?: string; style?: CSSProperties }) {
+  return <span style={{ fontSize: T.sm, fontWeight: W.label, color, ...style }}>{children}</span>;
 }
 
 export function ScreenTitle({ children, right }: { children: ReactNode; right?: ReactNode }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-      <h1 style={{ fontSize: T.xl, fontWeight: 800, margin: 0, letterSpacing: '-0.02em' }}>{children}</h1>
+      <h1 style={{ fontSize: T.xl, fontWeight: W.title, margin: 0, letterSpacing: '-0.02em' }}>{children}</h1>
       {right}
     </div>
   );
@@ -69,10 +69,9 @@ export function Tag({ children, bg, fg }: { children: ReactNode; bg: string; fg:
     <span
       style={{
         fontSize: T.xs,
-        fontWeight: 800,
-        letterSpacing: '.08em',
-        padding: '4px 7px',
-        borderRadius: 6,
+        fontWeight: W.button,
+        padding: '4px 8px',
+        borderRadius: R.pill,
         background: bg,
         color: fg,
         flex: 'none',
@@ -126,7 +125,10 @@ export function Btn({ onClick, children, style, label, disabled, type = 'button'
   );
 }
 
-/** A selectable chip. `on` drives the dark-fill treatment from the design. */
+/**
+ * A selectable chip on a light surface. Off is a grey fill with no outline;
+ * on is filled ink, so the choice reads without a border to tell it apart.
+ */
 export function Pill({
   on,
   onClick,
@@ -148,11 +150,10 @@ export function Pill({
         flex: 'none',
         height: 38,
         padding: '0 14px',
-        borderRadius: R.chip,
+        borderRadius: R.pill,
         fontSize: T.sm,
-        fontWeight: 800,
-        background: on ? C.ink : C.card,
-        border: `1px solid ${on ? C.ink : C.lineStrong}`,
+        fontWeight: on ? W.button : W.label,
+        background: on ? C.ink : C.sunken,
         color: on ? C.white : C.ink60,
         ...style,
       }}
@@ -188,7 +189,7 @@ export function Segmented<V extends string>({
     <div
       role="group"
       aria-label={label}
-      style={{ display: 'flex', gap: 4, background: C.sunkenAlt, borderRadius: R.small, padding: 3 }}
+      style={{ display: 'flex', gap: 2, background: C.sunken, borderRadius: R.pill, padding: 3 }}
     >
       {options.map((opt) => {
         const on = opt.value === value;
@@ -201,12 +202,12 @@ export function Segmented<V extends string>({
               width: itemWidth,
               flex: itemWidth ? 'none' : 1,
               height: TOUCH,
-              borderRadius: 8,
-              fontSize: T.sm,
-              fontWeight: 800,
+              borderRadius: R.pill,
+              fontSize: T.note,
+              fontWeight: on ? W.button : W.label,
               background: on ? C.card : 'transparent',
-              // ink60, not muted or tertiary: those read at 2.9:1 and 4.3:1 on
-              // this grey track, under the 4.5:1 that 12.5px text needs.
+              // ink60, not muted or tertiary: those fall under the 4.5:1 that
+              // 13px text needs on this grey track.
               color: on ? C.ink : C.ink60,
               boxShadow: on ? SHADOW.segment : 'none',
             }}
@@ -219,18 +220,19 @@ export function Segmented<V extends string>({
   );
 }
 
-/** A big number with its unit, used across Today and History. */
+/** A figure with its unit and a label under it, on a grey tile with no outline. */
 export function Metric({
   label,
   value,
   unit,
   sub,
   color = C.ink,
-  subColor = C.muted,
+  subColor = C.greenDark,
 }: {
   label: string;
   value: ReactNode;
   unit?: string;
+  /** A word after the unit, such as "ok", in its own colour. */
   sub?: ReactNode;
   color?: string;
   subColor?: string;
@@ -238,22 +240,21 @@ export function Metric({
   return (
     <div
       style={{
-        background: C.card,
-        border: `1px solid ${C.line}`,
-        borderRadius: R.control,
-        padding: '12px 11px',
+        background: C.screen,
+        borderRadius: R.block,
+        padding: '10px 12px',
         display: 'flex',
         flexDirection: 'column',
-        gap: 3,
+        gap: 1,
         minWidth: 0,
       }}
     >
-      <Eyebrow style={{ letterSpacing: '.12em' }}>{label}</Eyebrow>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 2 }}>
-        <span style={{ fontSize: 25, fontWeight: 800, lineHeight: 1.05, color, ...num }}>{value}</span>
-        {unit && <span style={{ fontSize: T.xs, fontWeight: 700, color: C.tertiary }}>{unit}</span>}
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 3, whiteSpace: 'nowrap' }}>
+        <span style={{ fontSize: 20, fontWeight: W.title, letterSpacing: '-0.02em', color, ...num }}>{value}</span>
+        {unit && <span style={{ fontSize: T.sm, fontWeight: W.label, color: C.tertiary }}>{unit}</span>}
+        {sub !== undefined && <span style={{ fontSize: T.caption, fontWeight: W.button, color: subColor, paddingLeft: 2 }}>{sub}</span>}
       </div>
-      <span style={{ fontSize: T.xs, fontWeight: 600, color: subColor }}>{sub ?? ' '}</span>
+      <span style={{ fontSize: T.caption, fontWeight: W.label, color: C.tertiary }}>{label}</span>
     </div>
   );
 }
@@ -269,7 +270,7 @@ export function Empty({ children }: { children: ReactNode }) {
         textAlign: 'center',
         fontSize: T.sm,
         color: C.tertiary,
-        fontWeight: 700,
+        fontWeight: W.label,
         lineHeight: 1.5,
       }}
     >
@@ -343,14 +344,11 @@ export function Ring({
 // Ink hero and light sheet
 //
 // Every screen opens the same way: a dark block leading with one big number,
-// then a light sheet that slides up over its bottom edge and holds the detail.
+// then a white sheet under it, meeting it at a straight edge, that holds the
+// detail.
 // ─────────────────────────────────────────────────────────────
 
-/**
- * The dark header block. The 46px bottom padding is not wasted space: the
- * `Sheet` below pulls itself up 24px into it, so the hero's last content must
- * stop short of that overlap.
- */
+/** The dark header block. Short, so what you can act on starts high on the screen. */
 export function Hero({
   children,
   urgent = false,
@@ -368,7 +366,7 @@ export function Hero({
       style={{
         background: urgent ? C.ink80 : C.ink,
         color: onInk.text,
-        padding: '14px 22px 46px',
+        padding: '6px 20px 18px',
         display: 'flex',
         flexDirection: 'column',
         gap,
@@ -394,9 +392,9 @@ export function HeroEyebrow({
 }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
-      <span style={{ fontSize: T.xs, fontWeight: 800, letterSpacing: '.16em', textTransform: 'uppercase', color }}>{children}</span>
+      <span style={{ fontSize: T.sm, fontWeight: W.label, color }}>{children}</span>
       {right !== undefined && (
-        <span style={{ fontSize: 11.5, fontWeight: 700, color: onInk.muted, whiteSpace: 'nowrap', ...num }}>{right}</span>
+        <span style={{ fontSize: T.sm, fontWeight: W.label, color: onInk.muted, whiteSpace: 'nowrap', ...num }}>{right}</span>
       )}
     </div>
   );
@@ -416,6 +414,7 @@ export function HeroNumeral({
   label,
   labelColor = onInk.text,
   labelSize = 17,
+  labelWeight = W.title,
   sub,
   subColor = onInk.muted,
   ariaLabel,
@@ -429,24 +428,27 @@ export function HeroNumeral({
   labelColor?: string;
   /** Larger where the label is a state word that has to be read at a glance, such as Today's readiness band. */
   labelSize?: number;
+  /** Lighter where the label is a plain count, such as "of 16 weeks", rather than a state word. */
+  labelWeight?: number;
   /** Line two, smaller: context such as "fatigue 41" or "↑ 9% on last week". */
   sub?: ReactNode;
   subColor?: string;
   /** Required. The whole thing as a sentence, e.g. "Readiness 78 out of 100, primed". */
   ariaLabel: string;
 }) {
-  const big = size >= 120;
   return (
     <div>
       <span className="sr-only">{ariaLabel}</span>
-      <div aria-hidden style={{ display: 'flex', alignItems: 'flex-end', gap: big ? 12 : 10 }}>
-        <span style={{ fontSize: size, fontWeight: 800, lineHeight: 0.82, letterSpacing: '-0.05em', color, ...num }}>{value}</span>
+      <div aria-hidden style={{ display: 'flex', alignItems: 'flex-end', gap: 12 }}>
+        <span style={{ fontSize: size, fontWeight: W.title, lineHeight: 0.82, letterSpacing: '-0.045em', color, ...num }}>{value}</span>
         {(label !== undefined || sub !== undefined) && (
           // The bottom padding lines the label up with the numeral's baseline
           // rather than the bottom of its box, which the tight line-height leaves lower.
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 3, paddingBottom: big ? 8 : 6, whiteSpace: 'nowrap' }}>
-            {label !== undefined && <span style={{ fontSize: labelSize, fontWeight: 800, color: labelColor, ...num }}>{label}</span>}
-            {sub !== undefined && <span style={{ fontSize: T.sm, fontWeight: 700, color: subColor, ...num }}>{sub}</span>}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, paddingBottom: 4, whiteSpace: 'nowrap' }}>
+            {label !== undefined && (
+              <span style={{ fontSize: labelSize, fontWeight: labelWeight, letterSpacing: '-0.01em', color: labelColor, ...num }}>{label}</span>
+            )}
+            {sub !== undefined && <span style={{ fontSize: T.sm, fontWeight: W.label, color: subColor, ...num }}>{sub}</span>}
           </div>
         )}
       </div>
@@ -490,7 +492,7 @@ export function HeroTabs<V extends string>({
             style={{
               height: TOUCH,
               fontSize: 13.5,
-              fontWeight: 800,
+              fontWeight: on ? W.button : W.label,
               color: on ? onInk.text : onInk.muted,
               // An inset shadow rather than a bottom border, so the underline
               // never fights the `border: none` reset on the base button.
@@ -507,21 +509,18 @@ export function HeroTabs<V extends string>({
 }
 
 /**
- * The light body under a hero. Pulls itself 24px up into the hero's bottom
- * padding so its rounded corners sit on the dark block.
+ * The white body under a hero. It meets the hero at a straight edge rather
+ * than overlapping it with rounded corners: the overlap cost the hero 24px of
+ * padding that held nothing.
  */
-export function Sheet({ children, gap = 22, style }: { children: ReactNode; gap?: number; style?: CSSProperties }) {
+export function Sheet({ children, gap = 18, style }: { children: ReactNode; gap?: number; style?: CSSProperties }) {
   return (
     <div
       style={{
-        // Positioned so it paints above the hero it overlaps. Without it, any
-        // positioned marker inside the hero would draw on top of the sheet.
         position: 'relative',
-        marginTop: -24,
-        background: C.screen,
+        background: C.card,
         color: C.ink,
-        borderRadius: `${R.hero}px ${R.hero}px 0 0`,
-        padding: '22px 18px 24px',
+        padding: 16,
         display: 'flex',
         flexDirection: 'column',
         gap,
@@ -536,7 +535,7 @@ export function Sheet({ children, gap = 22, style }: { children: ReactNode; gap?
 
 /**
  * A titled group of rows on the light sheet. The title is a real heading
- * styled as an eyebrow, so a screen reader can jump from section to section.
+ * styled as a quiet label, so a screen reader can jump from section to section.
  */
 export function Section({
   title,
@@ -552,11 +551,9 @@ export function Section({
 }) {
   return (
     <section style={{ display: 'flex', flexDirection: 'column' }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, paddingBottom: 8 }}>
-        <h2 style={{ margin: 0, fontSize: T.xs, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase', color: titleColor, ...num }}>
-          {title}
-        </h2>
-        {right !== undefined && <span style={{ fontSize: T.hint, fontWeight: 700, color: C.tertiary, ...num }}>{right}</span>}
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, paddingBottom: 6 }}>
+        <h2 style={{ margin: 0, fontSize: T.sm, fontWeight: W.label, color: titleColor, ...num }}>{title}</h2>
+        {right !== undefined && <span style={{ fontSize: T.sm, fontWeight: W.label, color: C.tertiary, ...num }}>{right}</span>}
       </div>
       {children}
     </section>
@@ -621,15 +618,15 @@ export function Row({
       {lead}
       {/* minWidth 0 lets a long title shrink and wrap; a flex child otherwise refuses to go narrower than its text. */}
       <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <span style={{ fontSize: titleSize, fontWeight: 800 }}>{title}</span>
-        {sub !== undefined && <span style={{ fontSize: 12, fontWeight: 600, color: dark ? onInk.muted : C.tertiary, ...num }}>{sub}</span>}
+        <span style={{ fontSize: titleSize, fontWeight: W.button }}>{title}</span>
+        {sub !== undefined && <span style={{ fontSize: T.sm, fontWeight: W.label, color: dark ? onInk.muted : C.tertiary, ...num }}>{sub}</span>}
       </span>
       {right}
     </>
   );
 
   return (
-    <div style={{ borderTop: `1px solid ${dark ? onInk.line : C.line}`, display: 'flex', flexDirection: 'column', ...style }}>
+    <div style={{ borderTop: `1px solid ${dark ? onInk.line : C.lineSoft}`, display: 'flex', flexDirection: 'column', ...style }}>
       {onClick ? (
         <Btn onClick={onClick} label={label} style={line}>
           {body}
@@ -647,12 +644,16 @@ export function Row({
 //
 // Train and every bottom sheet are dark. These are the light controls
 // re-coloured, so nothing on ink uses a grey that was tuned for white.
+//
+// Every control is a pill filled one step up from ink, with no outline. A
+// screen full of outlined boxes read as a form; filled pills let the one amber
+// action stand out because nothing else is drawn with a line.
 // ─────────────────────────────────────────────────────────────
 
-export type InkButtonVariant = 'outline' | 'amber' | 'white' | 'ghost';
+export type InkButtonVariant = 'tonal' | 'amber' | 'white' | 'ghost';
 
 const INK_BUTTON: Record<InkButtonVariant, CSSProperties> = {
-  outline: { background: 'transparent', border: `1px solid ${onInk.control}`, color: onInk.text },
+  tonal: { background: onInk.raised, border: 'none', color: onInk.text },
   amber: { background: C.amber, border: 'none', color: C.ink },
   white: { background: C.white, border: 'none', color: C.ink },
   ghost: { background: 'transparent', border: 'none', color: C.amberLight },
@@ -661,7 +662,7 @@ const INK_BUTTON: Record<InkButtonVariant, CSSProperties> = {
 /**
  * A button for dark surfaces.
  *
- * - `outline`, the default: a thin border and white text.
+ * - `tonal`, the default: a raised fill and white text.
  * - `amber`: the one main action on a screen. Ink text, because white on amber
  *   can't be read.
  * - `white`: the strongest second action, e.g. "Skip rest".
@@ -673,10 +674,10 @@ const INK_BUTTON: Record<InkButtonVariant, CSSProperties> = {
 export function InkButton({
   children,
   onClick,
-  variant = 'outline',
+  variant = 'tonal',
   height = 56,
   width,
-  shape = 'rounded',
+  shape = 'pill',
   color,
   fontSize,
   label,
@@ -690,8 +691,8 @@ export function InkButton({
   /** The design uses 44, 56, 58, 60 and 64. */
   height?: number;
   width?: number | string;
-  /** `pill` for header actions like "Finish" and "Minimise"; `circle` for a lone icon such as ✕. */
-  shape?: 'rounded' | 'pill' | 'circle';
+  /** `circle` for a lone icon such as ✕. */
+  shape?: 'pill' | 'circle';
   /** Override the text colour, e.g. `C.redLight` for "Delete". */
   color?: string;
   fontSize?: number;
@@ -701,7 +702,6 @@ export function InkButton({
   style?: CSSProperties;
 }) {
   const h = Math.max(TOUCH, height);
-  const radius = shape === 'rounded' ? (h >= 56 ? R.block : R.chip) : R.pill;
   return (
     <Btn
       onClick={onClick}
@@ -716,9 +716,9 @@ export function InkButton({
         minWidth: TOUCH,
         flex: 'none',
         padding: shape === 'circle' || variant === 'ghost' ? '0 4px' : '0 16px',
-        borderRadius: radius,
+        borderRadius: R.pill,
         fontSize: fontSize ?? (h >= 58 ? 16 : h >= 50 ? 15 : 13),
-        fontWeight: 800,
+        fontWeight: W.button,
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -734,10 +734,12 @@ export function InkButton({
 }
 
 /**
- * A selectable chip on ink: lift chips, dark filter rows, RPE values.
+ * A selectable chip on ink: dark filter rows, and anywhere a few chips sit
+ * loose rather than in a `ChipTrack`.
  *
- * Selected is amber with ink text unless `selectedBg` / `selectedFg` say
- * otherwise; the RPE grid fills with the colour for that effort level.
+ * Selected is white with ink text unless `selectedBg` / `selectedFg` say
+ * otherwise. It used to be amber, which put amber on every screen several
+ * times over; amber is kept for the one action a screen leads with.
  * `dashed` is the "+" add chip at the end of a row.
  */
 export function InkChip({
@@ -747,7 +749,7 @@ export function InkChip({
   meta,
   label,
   dashed = false,
-  selectedBg = C.amber,
+  selectedBg = C.white,
   selectedFg = C.ink,
   height = TOUCH,
   style,
@@ -773,18 +775,19 @@ export function InkChip({
         flex: 'none',
         height: Math.max(TOUCH, height),
         minWidth: TOUCH,
-        padding: '0 13px',
-        borderRadius: R.chip,
-        fontSize: T.sm,
-        fontWeight: 800,
+        padding: '0 14px',
+        borderRadius: R.pill,
+        fontSize: T.note,
+        fontWeight: on ? W.button : W.label,
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
         gap: 7,
         whiteSpace: 'nowrap',
-        background: on ? selectedBg : 'transparent',
-        border: `1px ${dashed ? 'dashed' : 'solid'} ${on ? selectedBg : onInk.control}`,
-        color: on ? selectedFg : onInk.body,
+        background: on ? selectedBg : dashed ? 'transparent' : onInk.raised,
+        // The add chip keeps its dashed edge: it is a slot to fill, not a choice.
+        border: dashed ? `1px dashed ${onInk.control}` : 'none',
+        color: on ? selectedFg : onInk.muted,
         ...num,
         ...style,
       }}
@@ -801,15 +804,21 @@ export function InkSegmented<V extends string>({
   options,
   onChange,
   label,
+  track = onInk.raised,
+  fit = false,
 }: {
   value: V;
   options: { value: V; label: string }[];
   onChange: (value: V) => void;
   /** Names the group for a screen reader, e.g. "Set type". */
   label: string;
+  /** `C.ink` when the control sits inside a raised card, so the track still shows against it. */
+  track?: string;
+  /** As wide as its labels rather than the row, for a switch that shares a line with a title. */
+  fit?: boolean;
 }) {
   return (
-    <div role="group" aria-label={label} style={{ flex: 1, display: 'flex', gap: 3, background: onInk.line, borderRadius: R.chip, padding: 3 }}>
+    <div role="group" aria-label={label} style={{ flex: fit ? 'none' : 1, display: 'flex', gap: 2, background: track, borderRadius: R.pill, padding: 3 }}>
       {options.map((opt) => {
         const on = opt.value === value;
         return (
@@ -818,19 +827,184 @@ export function InkSegmented<V extends string>({
             onClick={() => onChange(opt.value)}
             pressed={on}
             style={{
-              flex: 1,
+              flex: fit ? 'none' : 1,
+              padding: fit ? '0 12px' : 0,
+              whiteSpace: 'nowrap',
               height: TOUCH,
-              borderRadius: 9,
-              fontSize: T.sm,
-              fontWeight: 800,
-              background: on ? C.white : 'transparent',
-              color: on ? C.ink : onInk.body,
+              borderRadius: R.pill,
+              fontSize: T.note,
+              fontWeight: on ? W.button : W.label,
+              // A lighter step of the same dark, not white: on a dark screen a
+              // white segment was as loud as the Log button under it.
+              background: on ? onInk.line : 'transparent',
+              color: on ? onInk.text : onInk.muted,
             }}
           >
             {opt.label}
           </Btn>
         );
       })}
+    </div>
+  );
+}
+
+export type ChipTrackItem<V extends string> = {
+  value: V;
+  label: ReactNode;
+  /** The accessible name, when the visible label alone would not say enough. */
+  name?: string;
+  /** Drawn after the label: a superset letter, or the set dots on the selected lift. */
+  trail?: ReactNode;
+  /** The value that is suggested, such as the RPE aimed for: a step lighter, with a dot under it. */
+  suggested?: boolean;
+};
+
+/**
+ * One dark track holding a row of chips: the lifts on Train and History, and
+ * the RPE picker. A single shape for all three, so picking a lift and rating a
+ * set feel like the same kind of choice.
+ *
+ * A row too long for the screen scrolls sideways, with a fade at the right
+ * edge while there is more to see, so a lift past the edge does not look like
+ * the row ends. `fill` shares the width equally instead and never scrolls,
+ * for a short fixed set like RPE 6 to 10.
+ */
+export function ChipTrack<V extends string>({
+  value,
+  items,
+  onChange,
+  label,
+  fill = false,
+  track = onInk.raised,
+  fontSize = T.note,
+  disabled = false,
+}: {
+  value: V | null;
+  items: ChipTrackItem<V>[];
+  onChange: (value: V) => void;
+  /** Names the group for a screen reader, e.g. "Lifts". */
+  label: string;
+  fill?: boolean;
+  /** `C.ink` when the track sits inside a raised card, so it still shows against it. */
+  track?: string;
+  /** Larger for a row of bare numbers, such as RPE, which has room to spare. */
+  fontSize?: number;
+  /** Until there is something to write the choice to, such as a set still waiting for its database id. */
+  disabled?: boolean;
+}) {
+  const scroller = useRef<HTMLDivElement>(null);
+  const [more, setMore] = useState(false);
+
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el || fill) return;
+    // One pixel of slack: a fractional width can leave scrollLeft a hair
+    // short of the end, which would keep the fade on forever.
+    const update = () => setMore(el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+    update();
+    el.addEventListener('scroll', update, { passive: true });
+    // Missing in the unit-test DOM; a phone turning sideways is the only thing it catches.
+    const resize = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(update);
+    resize?.observe(el);
+    return () => {
+      el.removeEventListener('scroll', update);
+      resize?.disconnect();
+    };
+  }, [fill, items.length]);
+
+  // Keep the chosen chip in view whenever it changes — by a tap, a swipe
+  // elsewhere on the screen, or a chip being added at the far end.
+  useEffect(() => {
+    const el = scroller.current;
+    const chip = el?.querySelector<HTMLElement>('[aria-pressed="true"]');
+    if (!el || !chip || fill || typeof el.scrollTo !== 'function') return;
+    const still = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    el.scrollTo({ left: Math.max(0, chip.offsetLeft - el.clientWidth / 2 + chip.offsetWidth / 2), behavior: still ? 'auto' : 'smooth' });
+  }, [value, fill, items.length]);
+
+  return (
+    <div
+      style={{
+        position: 'relative',
+        borderRadius: R.pill,
+        background: track,
+        boxShadow: `inset 0 0 0 1px ${onInk.hairline}`,
+        overflow: 'hidden',
+      }}
+    >
+      <div
+        ref={scroller}
+        role="group"
+        aria-label={label}
+        className="no-scrollbar"
+        // Positioned, so each chip's offsetLeft is measured from the track itself.
+        style={{ position: 'relative', display: 'flex', gap: 2, padding: 4, overflowX: fill ? 'visible' : 'auto' }}
+      >
+        {items.map((item) => {
+          const on = item.value === value;
+          return (
+            <Btn
+              key={item.value}
+              onClick={() => onChange(item.value)}
+              pressed={on}
+              label={item.name}
+              disabled={disabled}
+              style={{
+                position: 'relative',
+                flex: fill ? 1 : 'none',
+                height: TOUCH,
+                minWidth: TOUCH,
+                // Shared widths are already set by the track; padding would only push the text off-centre.
+                padding: fill ? 0 : '0 14px',
+                borderRadius: R.pill,
+                fontSize,
+                fontWeight: on ? W.button : W.label,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                whiteSpace: 'nowrap',
+                background: on ? C.white : item.suggested ? onInk.line : 'transparent',
+                color: on ? C.ink : item.suggested ? onInk.text : onInk.muted,
+                boxShadow: on ? SHADOW.chip : 'none',
+                ...num,
+              }}
+            >
+              {item.label}
+              {item.trail}
+              {item.suggested && (
+                <span
+                  aria-hidden
+                  style={{
+                    position: 'absolute',
+                    bottom: 6,
+                    left: '50%',
+                    width: 4,
+                    height: 4,
+                    marginLeft: -2,
+                    borderRadius: R.pill,
+                    background: on ? C.ink : C.white,
+                  }}
+                />
+              )}
+            </Btn>
+          );
+        })}
+      </div>
+      {more && (
+        <span
+          aria-hidden
+          style={{
+            position: 'absolute',
+            top: 0,
+            right: 0,
+            bottom: 0,
+            width: 48,
+            pointerEvents: 'none',
+            background: `linear-gradient(90deg, transparent, ${track} 70%)`,
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -866,12 +1040,12 @@ export function StepperTile({
         flex: width === 'flex' ? 1 : 'none',
         width: width === 'flex' ? undefined : Math.max(TOUCH, width),
         height: Math.max(TOUCH, height),
-        borderRadius: R.block,
-        border: `1px solid ${onInk.control}`,
-        background: 'transparent',
+        borderRadius: R.pill,
+        border: 'none',
+        background: onInk.raised,
         color: onInk.text,
         fontSize: T.xxl,
-        fontWeight: 600,
+        fontWeight: W.label,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -1169,7 +1343,7 @@ export function DarkSheet({
   eyebrow,
   sub,
   label,
-  titleSize = 26,
+  titleSize = 24,
   closeText,
   gap = 18,
   top,
@@ -1225,9 +1399,9 @@ export function DarkSheet({
           overflowY: 'auto',
           background: C.ink,
           color: onInk.text,
-          borderTop: `1px solid ${onInk.line}`,
-          borderRadius: `${R.hero}px ${R.hero}px 0 0`,
-          padding: '10px 18px 26px',
+          boxShadow: SHADOW.sheet,
+          borderRadius: `${R.sheet}px ${R.sheet}px 0 0`,
+          padding: '10px 16px 24px',
           display: 'flex',
           flexDirection: 'column',
           gap,
@@ -1239,14 +1413,10 @@ export function DarkSheet({
         <span aria-hidden style={{ alignSelf: 'center', width: 36, height: 4, borderRadius: 2, background: onInk.control, flex: 'none' }} />
 
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
-            {eyebrow !== undefined && (
-              <span style={{ fontSize: T.xs, fontWeight: 800, letterSpacing: '.16em', textTransform: 'uppercase', color: onInk.muted, ...num }}>
-                {eyebrow}
-              </span>
-            )}
-            <h2 style={{ margin: 0, fontSize: titleSize, fontWeight: 800, letterSpacing: '-0.02em' }}>{title}</h2>
-            {sub !== undefined && <span style={{ fontSize: T.sm, fontWeight: 600, color: onInk.muted }}>{sub}</span>}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
+            {eyebrow !== undefined && <span style={{ fontSize: T.sm, fontWeight: W.label, color: onInk.muted, ...num }}>{eyebrow}</span>}
+            <h2 style={{ margin: 0, fontSize: titleSize, fontWeight: W.title, letterSpacing: '-0.025em' }}>{title}</h2>
+            {sub !== undefined && <span style={{ fontSize: T.sm, fontWeight: W.label, color: onInk.muted, ...num }}>{sub}</span>}
           </div>
           {closeText ? (
             <InkButton variant="ghost" height={TOUCH} color={onInk.muted} fontSize={T.md} onClick={onClose}>

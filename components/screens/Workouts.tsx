@@ -2,11 +2,11 @@
 
 import { useRef, useState } from 'react';
 import { blocksUsing } from '@/lib/plan';
-import { C, PH, R, T, TOUCH, num } from '@/lib/tokens';
+import { C, PH, PHASE_LABEL, R, T, TOUCH, W, num, onInk } from '@/lib/tokens';
 import type { Routine } from '@/lib/types';
 import { useBompa } from '@/state/BompaContext';
 import { ImportPreview, useImport } from '@/components/ImportPreview';
-import { Btn, Segmented } from '@/components/ui';
+import { Btn, InkButton, Segmented } from '@/components/ui';
 import { Icon, type IconName } from '@/components/icons';
 
 type Filter = 'mine' | 'import' | 'template';
@@ -51,9 +51,9 @@ export function Workouts() {
   else if (picked !== undefined && visible.some((r) => r.id === picked)) expanded = picked;
 
   return (
-    <div className="rise" style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 16, padding: '10px 18px 24px' }}>
+    <div className="rise" style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 14, padding: '4px 16px 16px', background: C.card }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-        <h1 style={{ margin: 0, fontSize: T.xxl, fontWeight: 800, letterSpacing: '-0.02em' }}>Workouts</h1>
+        <h1 style={{ margin: 0, fontSize: 28, fontWeight: W.title, letterSpacing: '-0.03em' }}>Workouts</h1>
         {/* Building one from nothing has to be reachable here, not only during
             first-run setup. Hidden on Templates, because templates are copied,
             never added to. */}
@@ -64,14 +64,14 @@ export function Workouts() {
             style={{
               height: TOUCH,
               padding: '0 16px',
-              borderRadius: R.chip,
+              borderRadius: R.pill,
               background: C.ink,
               color: C.white,
               display: 'flex',
               alignItems: 'center',
               gap: 6,
               fontSize: T.md,
-              fontWeight: 800,
+              fontWeight: W.button,
             }}
           >
             <Icon name="plus" size={14} strokeWidth={2.5} />
@@ -105,7 +105,7 @@ export function Workouts() {
           />
         ))}
         {visible.length === 0 && (
-          <p style={{ margin: 0, padding: '14px 0', borderTop: `1px solid ${C.line}`, fontSize: T.copy, lineHeight: 1.5, color: C.tertiary }}>
+          <p style={{ margin: 0, padding: '14px 0', borderTop: `1px solid ${C.lineSoft}`, fontSize: T.copy, lineHeight: 1.5, color: C.tertiary }}>
             {EMPTY[filter]}
           </p>
         )}
@@ -138,107 +138,83 @@ function RoutineRow({ routine, open, onToggle }: { routine: Routine; open: boole
   // Editing a workout changes every block that runs it; say so before the pencil is tapped.
   const blocks = isTemplate ? 0 : blocksUsing(routine.id, b.blocks, b.planned, b.plan).length;
   const sub = `${lifts} ${lifts === 1 ? 'lift' : 'lifts'} · ~${routine.estMinutes} min${blocks > 1 ? ` · used in ${blocks} blocks` : ''}`;
-  const tag = running ? 'IN PROGRESS' : isNext ? 'NEXT' : null;
 
-  return (
-    <div style={{ borderTop: `1px solid ${C.line}`, display: 'flex', flexDirection: 'column', gap: open ? 4 : 0, paddingBottom: open ? 14 : 0 }}>
+  if (!open) {
+    return (
       <Btn
         onClick={onToggle}
-        expanded={open}
+        expanded={false}
+        style={{ minHeight: 56, display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left', color: C.ink, borderTop: `1px solid ${C.lineSoft}` }}
+      >
+        <span aria-hidden style={{ width: 10, height: 10, borderRadius: R.swatch, background: PH[routine.phase], flex: 'none' }} />
+        <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
+          <span style={{ fontSize: T.title, fontWeight: W.button }}>{routine.name}</span>
+          <span style={{ fontSize: T.sm, fontWeight: W.label, color: C.tertiary, ...num }}>{sub}</span>
+        </span>
+        <Icon name="chevron-right" size={16} style={{ color: C.tertiary }} />
+      </Btn>
+    );
+  }
+
+  // Open, the workout is the same ink card Today leads with, so starting a
+  // workout looks the same wherever it is done from.
+  const status = running ? 'In progress' : isNext ? 'Next up' : null;
+  const head = [status, PHASE_LABEL[routine.phase]].filter(Boolean).join(' · ');
+  return (
+    <div style={{ background: C.ink, color: onInk.text, borderRadius: R.hero, padding: 16, margin: '4px 0 10px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <Btn
+        onClick={onToggle}
+        expanded
+        // The name leads what is said, as it does on a closed row.
+        label={`${routine.name} (${head})`}
+        style={{ display: 'flex', flexDirection: 'column', gap: 4, textAlign: 'left', color: onInk.text, minHeight: TOUCH }}
+      >
+        <span style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, width: '100%', fontSize: T.sm, fontWeight: W.label, color: onInk.muted, ...num }}>
+          <span>{head}</span>
+          <span>~{routine.estMinutes} min</span>
+        </span>
+        <span style={{ fontSize: T.xl, fontWeight: W.title, letterSpacing: '-0.02em' }}>{routine.name}</span>
+      </Btn>
+      {/* One line, cut with an ellipsis: a six-lift workout wrapped to three
+          lines and pushed Start down the screen. The full list is still in
+          the text a screen reader reads, and Edit shows every lift. */}
+      <p
+        data-lift-line
         style={{
-          // Open, the name line only needs a thumb's height; closed, it is the whole row.
-          minHeight: open ? TOUCH : 56,
-          paddingTop: open ? 6 : 0,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-          textAlign: 'left',
-          color: C.ink,
+          margin: 0,
+          fontSize: T.note,
+          lineHeight: 1.45,
+          color: onInk.body,
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          ...num,
         }}
       >
-        <span aria-hidden style={{ width: 12, height: 12, borderRadius: R.swatch, background: PH[routine.phase], flex: 'none' }} />
-        <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-          <span style={{ fontSize: T.lg, fontWeight: 800 }}>{routine.name}</span>
-          {!open && <span style={{ fontSize: T.sm, fontWeight: 600, color: C.tertiary, ...num }}>{sub}</span>}
-        </span>
-        {open && tag && (
-          <span
-            style={{
-              fontSize: T.xs,
-              fontWeight: 800,
-              letterSpacing: '.06em',
-              padding: '4px 7px',
-              borderRadius: R.tag,
-              background: C.ink,
-              color: C.white,
-              flex: 'none',
-            }}
-          >
-            {tag}
-          </span>
+        {liftLine(routine, (id) => b.exerciseById.get(id)?.name ?? id)}
+        {blocks > 1 ? ` · used in ${blocks} blocks` : ''}
+      </p>
+      <div style={{ display: 'flex', gap: 8, paddingTop: 4 }}>
+        <PrimaryAction routine={routine} running={running} isTemplate={isTemplate} />
+        {!isTemplate && (
+          <InkButton shape="circle" height={48} label={`Edit ${routine.name}`} onClick={() => b.patch({ editingRoutineId: routine.id })}>
+            <Icon name="edit" size={18} />
+          </InkButton>
         )}
-        {!open && <Icon name="chevron-right" size={16} style={{ color: C.tertiary }} />}
-      </Btn>
-
-      {open && (
-        // Indented to the name, past the phase square, so the lifts and the
-        // buttons read as belonging to this workout.
-        <div className="rise" style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingLeft: 22 }}>
-          {/* One line, cut with an ellipsis: a six-lift workout wrapped to three
-              lines and pushed Start down the screen. The full list is still in
-              the text a screen reader reads, and Edit shows every lift. */}
-          <p
-            style={{
-              margin: 0,
-              fontSize: T.sm,
-              lineHeight: 1.45,
-              color: C.ink60,
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              ...num,
-            }}
-          >
-            {liftLine(routine, (id) => b.exerciseById.get(id)?.name ?? id)} · ~{routine.estMinutes} min
-            {blocks > 1 ? ` · used in ${blocks} blocks` : ''}
-          </p>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <PrimaryAction routine={routine} running={running} isTemplate={isTemplate} />
-            {!isTemplate && (
-              <Btn
-                onClick={() => b.patch({ editingRoutineId: routine.id })}
-                label={`Edit ${routine.name}`}
-                style={{
-                  width: TOUCH,
-                  height: TOUCH,
-                  flex: 'none',
-                  borderRadius: R.chip,
-                  border: `1px solid ${C.lineStrong}`,
-                  color: C.ink,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Icon name="edit" size={17} />
-              </Btn>
-            )}
-          </div>
-        </div>
-      )}
+      </div>
     </div>
   );
 }
 
 function PrimaryAction({ routine, running, isTemplate }: { routine: Routine; running: boolean; isTemplate: boolean }) {
   const b = useBompa();
-  const base = { flex: 1, height: TOUCH, borderRadius: R.chip, fontSize: T.md, fontWeight: 800 } as const;
+  const base = { flex: 1, height: 48, borderRadius: R.pill, fontSize: T.title, fontWeight: W.button } as const;
 
   // A template is never trained directly. Copying it first is what makes the
   // routine yours to edit, and stops the app scheduling a programme you never chose.
   if (isTemplate) {
     return (
-      <Btn onClick={() => void b.copyTemplate(routine.id)} style={{ ...base, background: C.ink, color: C.white }}>
+      <Btn onClick={() => void b.copyTemplate(routine.id)} style={{ ...base, background: C.white, color: C.ink }}>
         Copy to my workouts
       </Btn>
     );
@@ -256,7 +232,7 @@ function PrimaryAction({ routine, running, isTemplate }: { routine: Routine; run
   // quietly takes you to the session you already have open.
   if (b.openSession) {
     return (
-      <Btn disabled style={{ ...base, border: `1px solid ${C.lineStrong}`, color: C.ink60 }}>
+      <Btn disabled style={{ ...base, background: onInk.raised, color: onInk.body }}>
         Start after you finish
       </Btn>
     );
@@ -279,7 +255,7 @@ function ToolsSection() {
 
   return (
     <section style={{ display: 'flex', flexDirection: 'column' }}>
-      <h2 style={{ margin: 0, paddingBottom: 8, fontSize: T.xs, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase', color: C.tertiary }}>
+      <h2 style={{ margin: 0, paddingBottom: 6, fontSize: T.sm, fontWeight: W.label, color: C.tertiary }}>
         Tools
       </h2>
       <ToolRow icon="timer" title="Interval timer" sub="Stopwatch · AMRAP · EMOM" onClick={() => b.openView('timer')} />
@@ -321,15 +297,15 @@ function ToolRow({ icon, title, sub, onClick }: { icon: IconName; title: string;
         display: 'flex',
         alignItems: 'center',
         gap: 12,
-        borderTop: `1px solid ${C.line}`,
+        borderTop: `1px solid ${C.lineSoft}`,
         textAlign: 'left',
         color: C.ink,
       }}
     >
-      <Icon name={icon} size={20} />
-      <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-        <span style={{ fontSize: T.title, fontWeight: 800 }}>{title}</span>
-        <span style={{ fontSize: T.sm, fontWeight: 600, color: C.tertiary }}>{sub}</span>
+      <Icon name={icon} size={20} strokeWidth={1.8} />
+      <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
+        <span style={{ fontSize: T.title, fontWeight: W.button }}>{title}</span>
+        <span style={{ fontSize: T.sm, fontWeight: W.label, color: C.tertiary }}>{sub}</span>
       </span>
       <Icon name="chevron-right" size={16} style={{ color: C.tertiary }} />
     </Btn>

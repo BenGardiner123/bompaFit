@@ -10,7 +10,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { brzycki, epley, fmtClock } from '@/lib/calc';
 import { EXERCISE_SOURCES } from '@/lib/data';
 import { weightMax, weightPrecision } from '@/lib/numberEntry';
-import { C, HERO_SIZE, R, T, num, onInk } from '@/lib/tokens';
+import { C, HERO_SIZE, R, T, W, num, onInk } from '@/lib/tokens';
 import { useBompa, type PushedView, type Tab } from '@/state/BompaContext';
 import { AlertSettings } from '@/components/AlertSettings';
 import { ContentProviders } from '@/components/ContentProviders';
@@ -52,14 +52,14 @@ export function PushedScreen() {
             alignItems: 'center',
             gap: 2,
             fontSize: T.md,
-            fontWeight: 800,
+            fontWeight: W.button,
             color: C.ink60,
           }}
         >
           <Icon name="chevron-left" size={20} />
           {back}
         </Btn>
-        <h1 style={{ margin: 0, fontSize: T.xxl, fontWeight: 800, letterSpacing: '-0.02em' }}>{TITLE[pushed.view]}</h1>
+        <h1 style={{ margin: 0, fontSize: T.xxl, fontWeight: W.title, letterSpacing: '-0.02em' }}>{TITLE[pushed.view]}</h1>
       </header>
       {pushed.view === 'timer' ? <IntervalTimers /> : <Body view={pushed.view} />}
     </div>
@@ -210,7 +210,7 @@ function IntervalTimers() {
       />
 
       <div role="timer" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '8px 0 4px' }}>
-        <span aria-hidden style={{ fontSize: T.xs, fontWeight: 800, letterSpacing: '.16em', textTransform: 'uppercase', color: small, ...num }}>
+        <span aria-hidden style={{ fontSize: T.sm, fontWeight: W.label, color: small, ...num }}>
           {caption}
         </span>
         <HeroNumeral value={clock} size={HERO_SIZE.detail} color={clockColor} ariaLabel={spoken} />
@@ -301,7 +301,7 @@ function OneRepMax() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <ResultLabel color={C.ink}>Epley</ResultLabel>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 3 }}>
-            <span style={{ fontSize: T.stat, fontWeight: 800, lineHeight: 1, letterSpacing: '-0.03em', ...num }}>
+            <span style={{ fontSize: T.stat, fontWeight: W.title, lineHeight: 1, letterSpacing: '-0.03em', ...num }}>
               {epley(s.calcWeight, s.calcReps).toFixed(1)}
             </span>
             <UnitLabel>{s.unit}</UnitLabel>
@@ -310,7 +310,7 @@ function OneRepMax() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-end' }}>
           <ResultLabel color={C.tertiary}>Brzycki</ResultLabel>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 3 }}>
-            <span style={{ fontSize: T.xl, fontWeight: 800, color: C.ink60, ...num }}>{brzycki(s.calcWeight, s.calcReps).toFixed(1)}</span>
+            <span style={{ fontSize: T.xl, fontWeight: W.title, color: C.ink60, ...num }}>{brzycki(s.calcWeight, s.calcReps).toFixed(1)}</span>
             <UnitLabel>{s.unit}</UnitLabel>
           </div>
         </div>
@@ -363,9 +363,9 @@ function CalcStepper({
           max={max}
           precision={precision}
           onCommit={onSet}
-          style={{ fontSize: T.entry, fontWeight: 800 }}
+          style={{ fontSize: T.entry, fontWeight: W.title }}
         />
-        <span style={{ fontSize: T.note, fontWeight: 800, color: C.tertiary }}>{unit}</span>
+        <span style={{ fontSize: T.note, fontWeight: W.label, color: C.tertiary }}>{unit}</span>
       </div>
       <RoundBtn onClick={onUp} label={`Increase ${label}`}>
         <Icon name="plus" />
@@ -396,9 +396,7 @@ function RoundBtn({ children, onClick, label }: { children: ReactNode; onClick: 
 }
 
 function ResultLabel({ children, color }: { children: ReactNode; color: string }) {
-  // Typed in title case and upper-cased by CSS, so the text a screen reader
-  // (and a test) finds is the word, not an acronym-looking shout.
-  return <span style={{ fontSize: T.xs, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color }}>{children}</span>;
+  return <span style={{ fontSize: T.sm, fontWeight: W.label, color }}>{children}</span>;
 }
 
 function UnitLabel({ children }: { children: ReactNode }) {

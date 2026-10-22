@@ -205,7 +205,8 @@ test.describe('one view', () => {
   });
 
   test('the hero leads with where you are in the macrocycle', async ({ page }) => {
-    await expect(page.getByText(/^Plan · \d+-week macrocycle$/)).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Plan', level: 1 })).toBeVisible();
+    await expect(page.getByText(/^\d+-week macrocycle$/)).toBeVisible();
     // The big number is hidden from screen readers; its label says what it means.
     await expect(page.getByText(/^Week \d+ of \d+\./)).toBeAttached();
     await expect(page.getByRole('img', { name: /\d+ weeks?/ })).toBeVisible();
@@ -220,10 +221,12 @@ test.describe('one view', () => {
     await expect(page.getByRole('heading', { name: 'What I changed' })).toHaveCount(0);
   });
 
-  test('the next slot is tagged in ink, not amber, because amber means something to tap', async ({ page }) => {
-    const next = page.getByText('NEXT', { exact: true });
+  test('the next slot is marked in ink, not amber, because amber means something to tap', async ({ page }) => {
+    const next = page.locator('[data-slot-status="next"]');
     await expect(next).toHaveCount(1);
     await expect(next).toHaveCSS('background-color', 'rgb(20, 20, 16)');
+    // The status is said in words too, not only by the circle's colour.
+    await expect(page.getByText(/^Next · /)).toHaveCount(1);
   });
 });
 
@@ -262,15 +265,15 @@ test.describe('the block builder', () => {
   });
 
   test('adding a block closes the sheet and lengthens the macrocycle', async ({ page }) => {
-    const eyebrow = page.getByText(/^Plan · \d+-week macrocycle$/);
-    const before = Number((await eyebrow.textContent())!.match(/\d+/)![0]);
+    const length = page.getByText(/^\d+-week macrocycle$/);
+    const before = Number((await length.textContent())!.match(/\d+/)![0]);
 
     await page.getByRole('group', { name: 'Block length in weeks' }).getByRole('button', { name: '3', exact: true }).click();
     await page.getByRole('button', { name: 'Add block to calendar' }).click();
 
     await expect(page.getByRole('dialog', { name: 'Add a block' })).toHaveCount(0);
     // Three weeks and a deload longer.
-    await expect(page.getByText(`Plan · ${before + 4}-week macrocycle`, { exact: true })).toBeVisible();
+    await expect(page.getByText(`${before + 4}-week macrocycle`, { exact: true })).toBeVisible();
   });
 });
 
@@ -302,11 +305,13 @@ test.describe('the meet', () => {
     await expect(saved.getByRole('heading', { name: 'Reverse taper' })).toBeVisible();
 
     await saved.getByRole('button', { name: 'Close' }).click();
-    await expect(page.getByText('Spring Classic · 30 days', { exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Edit meet' })).toBeVisible();
+    const meetRow = page.getByRole('button', { name: 'Edit meet' });
+    await expect(meetRow).toBeVisible();
+    await expect(meetRow.getByText('Spring Classic', { exact: true })).toBeVisible();
+    await expect(meetRow).toContainText('30days');
 
     await goToTab(page, 'Today');
-    await expect(page.getByRole('term').filter({ hasText: /^to meet$/ }).locator('xpath=following-sibling::dd')).toHaveText('30days');
+    await expect(page.getByRole('term').filter({ hasText: /^To meet$/ }).locator('xpath=following-sibling::dd')).toHaveText('30days');
   });
 });
 

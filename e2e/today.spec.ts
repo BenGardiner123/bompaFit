@@ -25,7 +25,7 @@ test.describe("this week's slots", () => {
     await second.click();
 
     // The card below now describes slot 2 rather than what is next...
-    await expect(page.getByText(/^#2 · /)).toBeVisible();
+    await expect(page.getByText('Slot 2', { exact: true })).toBeVisible();
     // ...and nothing has begun: still an invitation to start, not to resume.
     await expect(page.getByRole('button', { name: /^Start / })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Resume workout' })).toHaveCount(0);
@@ -46,10 +46,10 @@ test.describe("this week's slots", () => {
 
   test('going back to the next one is just another tap', async ({ page }) => {
     await page.getByRole('button', { name: /^Show .*, slot 2$/ }).click();
-    await expect(page.getByText(/^#2 · /)).toBeVisible();
+    await expect(page.getByText('Slot 2', { exact: true })).toBeVisible();
 
     await page.getByRole('button', { name: /^Show .*, slot 1$/ }).click();
-    await expect(page.getByText(/^Next up · /)).toBeVisible();
+    await expect(page.getByText('Next up', { exact: true })).toBeVisible();
   });
 
   test('the row says which slot the card is showing', async ({ page }) => {
@@ -71,7 +71,8 @@ test.describe("this week's slots", () => {
 
     await expect(page.getByRole('button', { name: /^Show .*, slot 1$/ })).toHaveCount(0);
     await expect(page.getByText(/, slot 1, done$/)).toHaveCount(1);
-    await expect(page.getByText(/^Next up · 1 of \d+ done$/)).toBeVisible();
+    await expect(page.getByText('Next up', { exact: true })).toBeVisible();
+    await expect(page.getByText(/^1 of \d+ done$/)).toBeVisible();
   });
 });
 
@@ -149,8 +150,8 @@ test.describe('readiness hero', () => {
 test.describe('the sheet', () => {
   test('lists the lifts of the workout on offer', async ({ page }) => {
     await expect(page.getByText(/^\d+ lifts · ~\d+ min$/)).toBeVisible();
-    await expect(page.getByText('01', { exact: true })).toBeVisible();
-    await expect(page.getByText('02', { exact: true })).toBeVisible();
+    await expect(page.getByText('Bench Press', { exact: true })).toBeVisible();
+    await expect(page.getByText('Overhead Press', { exact: true })).toBeVisible();
   });
 
   test('"Other workouts" under Start opens the Workouts tab', async ({ page }) => {
@@ -167,7 +168,7 @@ test.describe('the sheet', () => {
 
   test('three figures, each named, and all of them on screen at once', async ({ page }) => {
     const terms = page.getByRole('term');
-    await expect(terms).toHaveText(['load vs usual', 'since rest', 'to meet']);
+    await expect(terms).toHaveText(['Load vs usual', 'Since rest', 'To meet']);
     // Volume and intensity are a look back, and live on History now.
     await expect(page.getByRole('term').filter({ hasText: /^(7-day volume|intensity|to peak)$/ })).toHaveCount(0);
     await expect(page.getByText(/Acute:chr/)).toHaveCount(0);
@@ -181,12 +182,12 @@ test.describe('the sheet', () => {
   });
 
   test('with nothing logged, days since rest is a dash rather than "0 days"', async ({ page }) => {
-    const figure = page.getByRole('term').filter({ hasText: /^since rest$/ }).locator('xpath=following-sibling::dd');
+    const figure = page.getByRole('term').filter({ hasText: /^Since rest$/ }).locator('xpath=following-sibling::dd');
     await expect(figure).toHaveText('—');
   });
 
   test('with no meet set, the days to meet say so rather than showing a number', async ({ page }) => {
-    const toMeet = page.getByRole('term').filter({ hasText: /^to meet$/ }).locator('xpath=following-sibling::dd');
+    const toMeet = page.getByRole('term').filter({ hasText: /^To meet$/ }).locator('xpath=following-sibling::dd');
     await expect(toMeet).toHaveText('—');
   });
 });

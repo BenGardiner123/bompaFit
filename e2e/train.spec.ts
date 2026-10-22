@@ -139,7 +139,7 @@ test.describe('the Train screen', () => {
       await expect(page.getByRole('button', { name: /^Rest, / })).toBeVisible();
     });
 
-    test('with the rest minimised, the toast sits above the Log button rather than over it', async ({ page }) => {
+    test('with the rest minimised, the toast sits above the set type and the Log button rather than over them', async ({ page }) => {
       await startSession(page);
       await page.getByRole('button', { name: 'Log set' }).click();
       await page.keyboard.press('Escape');
@@ -150,8 +150,8 @@ test.describe('the Train screen', () => {
       // Polled, because the toast slides up into place as it arrives.
       const gap = async () => {
         const box = (await toast.boundingBox())!;
-        const log = (await page.getByRole('button', { name: /^Log set/ }).boundingBox())!;
-        return Math.round(log.y - (box.y + box.height));
+        const types = (await page.getByRole('group', { name: 'Set type' }).boundingBox())!;
+        return Math.round(types.y - (box.y + box.height));
       };
       await expect.poll(gap).toBe(10);
     });
@@ -253,7 +253,7 @@ test.describe('the Train screen', () => {
       await expect(summary.getByText('Still learning', { exact: true })).toBeVisible();
       // The same grey as on Today, not amber: amber is kept for things you can tap.
       await expect(summary.getByText('Still learning', { exact: true })).toHaveCSS('color', 'rgb(163, 163, 153)');
-      await expect(summary.getByText(/^1 of \d+ done/)).toBeVisible();
+      await expect(summary.getByText(/^This week · 1 of \d+ done$/)).toBeVisible();
 
       await summary.getByRole('button', { name: 'Done', exact: true }).click();
       await expect(summary).toBeHidden();
@@ -305,6 +305,7 @@ test.describe('the Train screen', () => {
       await expect(page.getByRole('dialog')).toHaveCount(0);
 
       // And a plain tap still works after all that.
+      await page.getByRole('button', { name: /^Select reps, now \d+$/ }).click();
       await page.getByRole('button', { name: 'Increase reps' }).click();
       await expect(page.getByRole('button', { name: /^Log set .* × 9$/ })).toBeVisible();
     });
@@ -404,7 +405,7 @@ test.describe('the Train screen', () => {
 
       const summary = page.getByRole('dialog', { name: 'Session summary' });
       const undo = summary.getByRole('button', { name: /^Undo finish, \d+ seconds left$/ });
-      await expect(undo).toContainText(/^Undo finish · 0:[0-3]\d$/);
+      await expect(undo).toContainText(/^Undo · 0:[0-3]\d$/);
       await undo.click();
 
       await expect(summary).toBeHidden();

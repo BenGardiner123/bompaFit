@@ -21,7 +21,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { countsAsWork, fmtClock, isSet, toDisplay } from '@/lib/calc';
 import { weightShort } from '@/lib/bodyweight';
 import { unratedSets } from '@/lib/train';
-import { C, HERO_SIZE, R, T, TOUCH, Z, num, onInk } from '@/lib/tokens';
+import { C, HERO_SIZE, R, T, TOUCH, W, Z, num, onAmber, onInk } from '@/lib/tokens';
 import type { LoggedSet } from '@/lib/types';
 import { useBompa } from '@/state/BompaContext';
 import { Btn, DarkSheet, InkButton, Ring, useEscapeKey, useLongPress } from '@/components/ui';
@@ -29,11 +29,12 @@ import { RateSetRow, RpeChipRow, targetFor } from '@/components/RpeChips';
 import { offersDrop } from '@/components/screens/SegmentControls';
 
 /**
- * The ring: radius 54 inside a 120 viewBox, drawn at 212px, which leaves room
- * under it for the question about the set. The dash length has to be the
- * circumference for the arc to empty exactly as the rest runs out.
+ * The ring: radius 56 inside a 120 viewBox, drawn at 216px, which leaves room
+ * under it for the question about the set. A thin stroke, so the clock inside
+ * is the thing you read. The dash length has to be the circumference for the
+ * arc to empty exactly as the rest runs out.
  */
-const REST_RING = { size: 212, viewBox: 120, radius: 54, stroke: 5, circumference: 339.3 } as const;
+const REST_RING = { size: 216, viewBox: 120, radius: 56, stroke: 3, circumference: 351.9 } as const;
 
 /** The last stretch, where the screen changes so it reads from across the room. */
 const URGENT_SEC = 10;
@@ -82,7 +83,7 @@ export function RestOverlay() {
 
   const urgent = view.urgent;
   const ink = urgent ? C.ink : onInk.text;
-  const quiet = urgent ? C.ink : onInk.muted;
+  const quiet = urgent ? C.ink80 : onInk.muted;
   const clock = `${openSession.routineName} · ${fmtClock(Math.floor(openSession.elapsedMs / 1000))}`;
   const canDrop = !view.complete && b.restKind === 'full' && offersDrop(b.sessionSets);
 
@@ -103,8 +104,8 @@ export function RestOverlay() {
         color: ink,
         display: 'flex',
         flexDirection: 'column',
-        padding: '12px 20px 24px',
-        gap: 16,
+        padding: '8px 16px 22px',
+        gap: 18,
         overflowY: 'auto',
         transition: 'background .2s ease',
         outline: 'none',
@@ -113,8 +114,8 @@ export function RestOverlay() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, minHeight: TOUCH }}>
         <span
           style={{
-            fontSize: T.sm,
-            fontWeight: 700,
+            fontSize: T.note,
+            fontWeight: W.label,
             color: quiet,
             minWidth: 0,
             overflow: 'hidden',
@@ -132,10 +133,10 @@ export function RestOverlay() {
               height: TOUCH,
               padding: '0 16px',
               borderRadius: R.pill,
-              border: urgent ? `1.5px solid ${C.ink}` : `1px solid ${onInk.control}`,
+              background: urgent ? onAmber.fill : onInk.raised,
               color: ink,
-              fontSize: T.sm,
-              fontWeight: 800,
+              fontSize: T.note,
+              fontWeight: W.button,
               flex: 'none',
             }}
           >
@@ -149,7 +150,7 @@ export function RestOverlay() {
       ) : (
         <>
           {view.complete ? (
-            <h2 style={{ margin: 0, fontSize: T.xxl, fontWeight: 800, letterSpacing: '-0.02em' }}>That&rsquo;s the plan done</h2>
+            <h2 style={{ margin: 0, fontSize: T.xxl, fontWeight: W.title, letterSpacing: '-0.02em' }}>That&rsquo;s the plan done</h2>
           ) : (
             <RestRing seconds={view.remaining} onHold={() => setChoosingPreset(true)} />
           )}
@@ -174,16 +175,16 @@ export function RestOverlay() {
       <div style={{ marginTop: 'auto', display: 'flex', gap: 8, flex: 'none' }}>
         {view.complete ? (
           <>
-            <InkButton variant="amber" onClick={b.requestFinish} height={60} fontSize={T.title} style={{ flex: 1.4 }}>
+            <InkButton variant="amber" onClick={b.requestFinish} height={58} fontSize={T.title} style={{ flex: 1.4 }}>
               Finish session
             </InkButton>
-            <InkButton onClick={b.keepTraining} height={60} fontSize={T.title} style={{ flex: 1 }}>
+            <InkButton onClick={b.keepTraining} height={58} fontSize={T.title} style={{ flex: 1 }}>
               Keep training
             </InkButton>
           </>
         ) : urgent ? (
           <>
-            <Btn onClick={b.addRest} style={{ ...URGENT_BUTTON, flex: 1, border: `1.5px solid ${C.ink}` }}>
+            <Btn onClick={b.addRest} style={{ ...URGENT_BUTTON, flex: 1, background: onAmber.fill }}>
               +30
             </Btn>
             {/* The same as Skip: the lifter is on their way to the bar. */}
@@ -193,13 +194,13 @@ export function RestOverlay() {
           </>
         ) : (
           <>
-            <InkButton onClick={b.subRest} height={60} fontSize={T.title} style={{ flex: 1 }}>
+            <InkButton onClick={b.subRest} height={58} fontSize={T.title} style={{ flex: 1 }}>
               −30
             </InkButton>
-            <InkButton onClick={b.addRest} height={60} fontSize={T.title} style={{ flex: 1 }}>
+            <InkButton onClick={b.addRest} height={58} fontSize={T.title} style={{ flex: 1 }}>
               +30
             </InkButton>
-            <InkButton onClick={b.skipRest} variant="white" height={60} fontSize={T.title} style={{ flex: 1.4, minWidth: TOUCH }}>
+            <InkButton onClick={b.skipRest} variant="white" height={58} fontSize={T.title} style={{ flex: 1.4, minWidth: TOUCH }}>
               Skip rest
             </InkButton>
           </>
@@ -212,11 +213,11 @@ export function RestOverlay() {
 }
 
 const URGENT_BUTTON: CSSProperties = {
-  height: 60,
-  borderRadius: R.block,
+  height: 58,
+  borderRadius: R.pill,
   color: C.ink,
   fontSize: T.title,
-  fontWeight: 800,
+  fontWeight: W.button,
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
@@ -231,8 +232,8 @@ function RestRing({ seconds, onHold }: { seconds: number; onHold: () => void }) 
   const press = useLongPress(onHold);
   const total = fmtClock(Math.round(b.restTotalMs / 1000));
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, paddingTop: 4, flex: 'none' }}>
-      <span style={{ fontSize: T.md, fontWeight: 800, color: onInk.body }}>Resting</span>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, flex: 'none' }}>
+      <span style={{ fontSize: T.copy, fontWeight: W.label, color: onInk.muted }}>Resting</span>
       <div
         role="timer"
         tabIndex={0}
@@ -248,12 +249,12 @@ function RestRing({ seconds, onHold }: { seconds: number; onHold: () => void }) 
           circumference={REST_RING.circumference}
           progress={b.restTotalMs > 0 ? b.restRemainingMs / b.restTotalMs : 0}
           color={C.amberLight}
-          track={onInk.line}
+          track={onInk.raised}
         >
-          <span aria-hidden style={{ fontSize: HERO_SIZE.restClock, fontWeight: 800, lineHeight: 1, letterSpacing: '-0.05em', color: onInk.text, ...num }}>
+          <span aria-hidden style={{ fontSize: HERO_SIZE.restClock, fontWeight: W.button, lineHeight: 1, letterSpacing: '-0.045em', color: onInk.text, ...num }}>
             {fmtClock(seconds)}
           </span>
-          <span aria-hidden style={{ fontSize: T.sm, fontWeight: 700, color: onInk.muted, paddingTop: 4, ...num }}>
+          <span aria-hidden style={{ fontSize: T.note, fontWeight: W.label, color: onInk.muted, paddingTop: 6, ...num }}>
             of {total}
           </span>
         </Ring>
@@ -271,26 +272,26 @@ function UrgentBody({ seconds }: { seconds: number }) {
   const next = b.restNext;
   const name = next ? (b.exerciseById.get(next.exerciseId)?.name ?? next.exerciseId) : null;
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, textAlign: 'center' }}>
-      <h2 style={{ margin: 0, fontSize: T.xxl, fontWeight: 800, letterSpacing: '-0.02em' }}>Get under the bar</h2>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, textAlign: 'center' }}>
+      <h2 style={{ margin: 0, fontSize: T.count, fontWeight: W.title, letterSpacing: '-0.02em' }}>Get under the bar</h2>
       <div
         role="timer"
         aria-label={`${seconds} seconds of rest left`}
         style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 8, maxWidth: '100%' }}
       >
-        <span aria-hidden style={{ fontSize: HERO_SIZE.restFinal, fontWeight: 800, lineHeight: 0.85, letterSpacing: '-0.06em', maxWidth: '100%', ...num }}>
+        <span aria-hidden style={{ fontSize: HERO_SIZE.restFinal, fontWeight: W.title, lineHeight: 0.85, letterSpacing: '-0.06em', maxWidth: '100%', ...num }}>
           {seconds}
         </span>
-        <span aria-hidden style={{ fontSize: T.xl, fontWeight: 800 }}>
+        <span aria-hidden style={{ fontSize: 20, fontWeight: W.button }}>
           sec
         </span>
       </div>
       {next && name && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, paddingTop: 18 }}>
-          <span style={{ fontSize: T.xl, fontWeight: 800 }}>
+          <span style={{ fontSize: 20, fontWeight: W.title, letterSpacing: '-0.01em' }}>
             {name} · set {next.setNo}
           </span>
-          <span style={{ fontSize: T.lg, fontWeight: 800, color: C.ink80, ...num }}>
+          <span style={{ fontSize: T.title, fontWeight: W.label, color: C.ink80, ...num }}>
             {weightShort(next.weight, b.s.unit, b.isBodyweightLift(next.exerciseId))} × {next.reps}
           </span>
         </div>
@@ -319,12 +320,11 @@ function JustLogged({ complete }: { complete: boolean }) {
       aria-label="Just logged"
       style={{
         background: onInk.raised,
-        border: `1px solid ${onInk.line}`,
-        borderRadius: R.card,
-        padding: '14px 14px 16px',
+        borderRadius: R.raisedCard,
+        padding: 16,
         display: 'flex',
         flexDirection: 'column',
-        gap: 12,
+        gap: 14,
         flex: 'none',
       }}
     >
@@ -333,8 +333,8 @@ function JustLogged({ complete }: { complete: boolean }) {
       ) : (
         rows.length > 1 && (
           <>
-            <span style={{ fontSize: T.sm, fontWeight: 700, color: onInk.muted }}>Just logged · the round</span>
-            <span style={{ fontSize: T.lg, fontWeight: 800 }}>How did that feel?</span>
+            <span style={{ fontSize: T.sm, fontWeight: W.label, color: onInk.muted }}>Just logged · the round</span>
+            <span style={{ fontSize: T.lg, fontWeight: W.title, letterSpacing: '-0.01em' }}>How did that feel?</span>
             {rows.map((row) => (
               <RateSetRow key={`${row.exerciseId}-${row.setNo}`} row={row} />
             ))}
@@ -343,7 +343,7 @@ function JustLogged({ complete }: { complete: boolean }) {
       )}
       {others.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 12, borderTop: `1px solid ${onInk.line}` }}>
-          <span style={{ fontSize: T.sm, fontWeight: 700, color: onInk.muted }}>Still unrated from this session</span>
+          <span style={{ fontSize: T.sm, fontWeight: W.label, color: onInk.muted }}>Still unrated from this session</span>
           {others.map((row) => (
             <RateSetRow key={`${row.exerciseId}-${row.setNo}`} row={row} />
           ))}
@@ -375,32 +375,47 @@ function SingleSet({ row }: { row: LoggedSet }) {
   const value = pieces.length ? `${weight} × ${[row.reps, ...pieces.map((x) => x.reps)].join(' + ')}` : `${weight} × ${row.reps}`;
   const rateable = countsAsWork(row.type);
 
+  const target = targetFor(b, row);
+
   return (
     <>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
-          <span style={{ fontSize: T.sm, fontWeight: 700, color: onInk.muted, ...num }}>Just logged · {title}</span>
-          <span style={{ fontSize: T.lg, fontWeight: 800, ...num }}>{value}</span>
+          <span style={{ fontSize: T.sm, fontWeight: W.label, color: onInk.muted, ...num }}>Just logged · {title}</span>
+          <span style={{ fontSize: 17, fontWeight: W.title, letterSpacing: '-0.01em', ...num }}>{value}</span>
         </div>
         <Btn
           onClick={row.id === undefined ? undefined : () => b.patch({ editingSetId: row.id! })}
           disabled={row.id === undefined}
-          style={{ height: TOUCH, padding: '0 6px', fontSize: T.sm, fontWeight: 800, color: C.amberLight, flex: 'none' }}
+          label="Edit this set"
+          style={{
+            height: TOUCH,
+            padding: '0 16px',
+            borderRadius: R.pill,
+            background: C.ink,
+            color: onInk.text,
+            fontSize: T.note,
+            fontWeight: W.button,
+            flex: 'none',
+          }}
         >
-          Edit set
+          Edit
         </Btn>
       </div>
       {rateable ? (
-        <>
-          <span style={{ fontSize: T.lg, fontWeight: 800 }}>How did that feel?</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 12, borderTop: `1px solid ${onInk.line}` }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
+            <span style={{ fontSize: T.lg, fontWeight: W.title, letterSpacing: '-0.01em' }}>How did that feel?</span>
+            <span style={{ fontSize: T.sm, fontWeight: W.label, color: onInk.muted, whiteSpace: 'nowrap', ...num }}>RPE · aim {target}</span>
+          </div>
           <RpeChipRow
-            target={targetFor(b, row)}
+            target={target}
             value={row.rpeEstimated ? null : row.rpe}
             onPick={(rpe) => row.id !== undefined && b.rateSet(row.id, rpe)}
             disabled={row.id === undefined}
             label={`RPE for ${short} set ${row.setNo}`}
           />
-        </>
+        </div>
       ) : (
         <span style={{ fontSize: T.sm, lineHeight: 1.4, color: onInk.body }}>
           Warm-ups stay out of your fatigue numbers, so there is nothing to rate.
@@ -419,31 +434,32 @@ function setNoun(style: LoggedSet['segmentStyle']): string {
 }
 
 /**
- * What the numbers mean, said against the aim, and a way to the fuller
- * explainer. Skipping is allowed, so the line says what happens then.
+ * What the aim means in reps, and what skipping does, with a way to the fuller
+ * explainer beside it. Skipping is allowed, so the line says what happens then.
  */
 function RpeHelpLine({ target }: { target: number | null }) {
   const b = useBompa();
   return (
-    <span style={{ fontSize: T.sm, lineHeight: 1.4, color: onInk.muted }}>
-      {target !== null && `Reps left in the tank: ${target} means ${repsLeft(target)}. `}
-      Skip it and I&rsquo;ll log your aim as an estimate.{' '}
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+      <span style={{ fontSize: T.sm, fontWeight: W.label, lineHeight: 1.4, color: onInk.muted, ...num }}>
+        {target === null ? 'Skip, and I’ll log your aim.' : `${target} means ${repsLeft(target)}. Skip, and I’ll log ${target}.`}
+      </span>
       <Btn
         onClick={() => b.patch({ rpeHelp: true })}
-        style={{ display: 'inline-flex', alignItems: 'center', minHeight: TOUCH, verticalAlign: 'middle', fontSize: T.sm, fontWeight: 800, color: C.amberLight }}
+        style={{ flex: 'none', display: 'inline-flex', alignItems: 'center', minHeight: TOUCH, fontSize: T.sm, fontWeight: W.button, color: onInk.body }}
       >
         What&rsquo;s RPE?
       </Btn>
-    </span>
+    </div>
   );
 }
 
-/** "about 3 more", "2 or 3 more", or "nothing left" at 10. */
+/** "about 3 reps left", "2 or 3 reps left", or "nothing left" at 10. */
 function repsLeft(rpe: number): string {
   const left = 10 - rpe;
   if (left <= 0) return 'nothing left';
-  if (Number.isInteger(left)) return `about ${left} more`;
-  return `${Math.floor(left)} or ${Math.ceil(left)} more`;
+  if (Number.isInteger(left)) return `about ${left} ${left === 1 ? 'rep' : 'reps'} left`;
+  return `${Math.floor(left)} or ${Math.ceil(left)} reps left`;
 }
 
 /**
@@ -456,14 +472,25 @@ function NextRow() {
   if (!next) return null;
   const name = b.exerciseById.get(next.exerciseId)?.name ?? next.exerciseId;
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '0 2px', flex: 'none' }}>
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 10,
+        padding: '12px 14px 12px 16px',
+        borderRadius: R.card,
+        background: onInk.raised,
+        flex: 'none',
+      }}
+    >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
-        <span style={{ fontSize: T.sm, fontWeight: 700, color: onInk.muted }}>Next</span>
-        <span style={{ fontSize: T.lg, fontWeight: 800, ...num }}>
+        <span style={{ fontSize: T.sm, fontWeight: W.label, color: onInk.muted }}>Next</span>
+        <span style={{ fontSize: T.title, fontWeight: W.button, ...num }}>
           {name} · set {next.setNo}
         </span>
       </div>
-      <span style={{ fontSize: T.lg, fontWeight: 800, color: onInk.body, flex: 'none', ...num }}>
+      <span style={{ fontSize: T.title, fontWeight: W.button, color: onInk.body, flex: 'none', ...num }}>
         {weightShort(next.weight, b.s.unit, b.isBodyweightLift(next.exerciseId))} × {next.reps}
       </span>
     </div>
@@ -481,7 +508,7 @@ function PresetSheet({ open, onClose }: { open: boolean; onClose: () => void }) 
           return (
             <InkButton
               key={sec}
-              variant={on ? 'amber' : 'outline'}
+              variant={on ? 'amber' : 'tonal'}
               pressed={on}
               height={56}
               fontSize={T.lg}

@@ -15,11 +15,11 @@ import {
   recentLiftDays,
   volumeUnit,
 } from '@/lib/history';
-import { C, HERO_SIZE, T, num, onInk } from '@/lib/tokens';
+import { C, HERO_SIZE, R, T, W, num, onInk } from '@/lib/tokens';
 import type { Unit } from '@/lib/types';
 import { weightShort } from '@/lib/bodyweight';
 import { useBompa } from '@/state/BompaContext';
-import { Empty, Hero, HeroEyebrow, HeroNumeral, HeroTabs, InkChip, Row, Scroller, Section, Sheet } from '@/components/ui';
+import { ChipTrack, Empty, Hero, HeroEyebrow, HeroNumeral, InkSegmented, Row, Section, Sheet } from '@/components/ui';
 import { SessionHistory } from '@/components/screens/SessionHistory';
 import { StartingMaxes } from '@/components/StartingMaxes';
 
@@ -32,30 +32,32 @@ export function History() {
   // scatter across as many chips as it had exercises.
   const [view, setView] = useState<View>('session');
 
-  const tabs = (
-    <HeroTabs
-      label="History view"
-      value={view}
-      options={[
-        { value: 'session', label: 'By session' },
-        { value: 'lift', label: 'By lift' },
-      ]}
-      onChange={setView}
-    />
+  // The title and the switch between the two views share the hero's first line.
+  const header = (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+      <h1 style={{ margin: 0, fontSize: 28, fontWeight: W.title, letterSpacing: '-0.03em' }}>History</h1>
+      <InkSegmented
+        label="History view"
+        value={view}
+        fit
+        options={[
+          { value: 'session', label: 'By session' },
+          { value: 'lift', label: 'By lift' },
+        ]}
+        onChange={setView}
+      />
+    </div>
   );
 
   return (
     <div className="rise" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
-      {/* Every other screen names itself in a heading; the hero leads with a
-          number instead, so the name is here for screen readers only. */}
-      <h1 className="sr-only">History</h1>
-      {view === 'session' ? <SessionHistory tabs={tabs} /> : <LiftHistory tabs={tabs} />}
+      {view === 'session' ? <SessionHistory header={header} /> : <LiftHistory header={header} />}
     </div>
   );
 }
 
 /** The By lift view: estimated max and its twelve-week curve, then records and recent days. */
-function LiftHistory({ tabs }: { tabs: ReactNode }) {
+function LiftHistory({ header }: { header: ReactNode }) {
   const b = useBompa();
   const { s } = b;
 
@@ -91,21 +93,19 @@ function LiftHistory({ tabs }: { tabs: ReactNode }) {
   return (
     <>
       <Hero gap={14} style={{ paddingTop: 4 }}>
-        {tabs}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {header}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {logged.length > 0 && (
-            // Runs to the hero's edges so a long row scrolls under them
-            // rather than stopping short in the padding.
-            <Scroller style={{ gap: 6, margin: '0 -22px', padding: '0 22px' }}>
-              {logged.map((id) => (
-                <InkChip key={id} on={id === liftId} onClick={() => b.setStatsLift(id)}>
-                  {b.exerciseById.get(id)?.name ?? id}
-                </InkChip>
-              ))}
-            </Scroller>
+            // The same track as Train's lifts: one way of picking a lift across the app.
+            <ChipTrack
+              label="Lifts"
+              value={liftId}
+              onChange={(id) => b.setStatsLift(id)}
+              items={logged.map((id) => ({ value: id, label: b.exerciseById.get(id)?.name ?? id }))}
+            />
           )}
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingTop: 4 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingTop: 2 }}>
             <HeroEyebrow>Estimated 1RM</HeroEyebrow>
             {e1rm > 0 ? (
               <HeroNumeral
@@ -113,6 +113,8 @@ function LiftHistory({ tabs }: { tabs: ReactNode }) {
                 size={HERO_SIZE.detail}
                 color={onInk.text}
                 label={s.unit}
+                labelSize={T.title}
+                labelWeight={W.button}
                 sub={sub}
                 subColor={subColor}
                 ariaLabel={`${name}: estimated one-rep max ${figure} ${s.unit}, ${sub}`}
@@ -121,16 +123,17 @@ function LiftHistory({ tabs }: { tabs: ReactNode }) {
               // Words, not a placeholder figure: a dash at hero size draws as a
               // solid white bar and reads as something broken.
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingTop: 4 }}>
-                <span style={{ fontSize: T.xxl, fontWeight: 800, letterSpacing: '-0.02em', color: onInk.text }}>No estimate yet</span>
-                <span style={{ fontSize: T.sm, fontWeight: 700, color: subColor }}>{sub}</span>
+                <span style={{ fontSize: T.xxl, fontWeight: W.title, letterSpacing: '-0.02em', color: onInk.text }}>No estimate yet</span>
+                <span style={{ fontSize: T.sm, fontWeight: W.label, color: subColor }}>{sub}</span>
               </div>
             )}
           </div>
 
           {spark.length > 1 ? (
             <div>
-              <svg viewBox="0 0 300 82" preserveAspectRatio="none" style={{ width: '100%', height: 72, display: 'block' }} aria-hidden>
-                <polyline points={spark.join(' ')} fill="none" stroke={onInk.text} strokeWidth={2.5} strokeLinejoin="round" />
+              {/* A non-scaling stroke, so stretching the box to the screen does not fatten the line. */}
+              <svg viewBox="0 0 300 82" preserveAspectRatio="none" style={{ width: '100%', height: 52, display: 'block' }} aria-hidden>
+                <polyline points={spark.join(' ')} fill="none" stroke={onInk.text} strokeWidth={2} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
               </svg>
               {/* Each label sits where its month begins, nudged left by its own
                   width in proportion, so the first hugs the left edge and none
@@ -144,7 +147,7 @@ function LiftHistory({ tabs }: { tabs: ReactNode }) {
                       left: `${t.x * 100}%`,
                       transform: `translateX(-${t.x * 100}%)`,
                       fontSize: T.xs,
-                      fontWeight: 700,
+                      fontWeight: W.label,
                       color: onInk.muted,
                     }}
                   >
@@ -155,7 +158,7 @@ function LiftHistory({ tabs }: { tabs: ReactNode }) {
             </div>
           ) : (
             spark.length === 1 && (
-              <span style={{ fontSize: T.caption, fontWeight: 600, color: onInk.muted }}>One session logged — the curve starts at two.</span>
+              <span style={{ fontSize: T.caption, fontWeight: W.label, color: onInk.muted }}>One session logged — the curve starts at two.</span>
             )
           )}
         </div>
@@ -173,20 +176,17 @@ function LiftHistory({ tabs }: { tabs: ReactNode }) {
           </Empty>
         ) : (
           <>
-            <div style={{ display: 'flex', gap: 28 }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 2 }}>
-                  <span style={{ fontSize: 28, fontWeight: 800, ...num }}>{fmtVolume(liftVolume(rows, b.now), s.unit)}</span>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: C.tertiary }}>{volumeUnit(s.unit, true)}</span>
-                </div>
-                <span style={{ fontSize: 11.5, fontWeight: 700, color: C.tertiary }}>block volume · 28d</span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <span style={{ fontSize: 28, fontWeight: 800, ...num }}>
-                  {best ? bestSetText(best.weightKg, best.reps, s.unit, b.isBodyweightLift(liftId)) : '—'}
-                </span>
-                <span style={{ fontSize: 11.5, fontWeight: 700, color: C.tertiary }}>best set</span>
-              </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <StatTile
+                value={
+                  <>
+                    {fmtVolume(liftVolume(rows, b.now), s.unit)}{' '}
+                    <span style={{ fontSize: T.note, fontWeight: W.label, color: C.tertiary }}>{volumeUnit(s.unit, true)}</span>
+                  </>
+                }
+                label="Block volume · 28 days"
+              />
+              <StatTile value={best ? bestSetText(best.weightKg, best.reps, s.unit, b.isBodyweightLift(liftId)) : '—'} label="Best set" />
             </div>
 
             <Section title="Personal records">
@@ -194,10 +194,10 @@ function LiftHistory({ tabs }: { tabs: ReactNode }) {
                 <Row
                   key={pr.label}
                   title={pr.label}
-                  titleSize={14}
+                  titleSize={14.5}
                   sub={fmtDate(pr.key)}
                   right={
-                    <span style={{ fontSize: 17, fontWeight: 800, color: pr.highlight ? C.amberDark : C.ink, whiteSpace: 'nowrap', ...num }}>
+                    <span style={{ fontSize: 17, fontWeight: W.title, color: pr.highlight ? C.amberDark : C.ink, whiteSpace: 'nowrap', ...num }}>
                       {pr.kind === 'volume' ? volumeText(pr.kg, s.unit) : weightShort(toDisplay(pr.kg, s.unit), s.unit, b.isBodyweightLift(liftId))}
                     </span>
                   }
@@ -209,9 +209,9 @@ function LiftHistory({ tabs }: { tabs: ReactNode }) {
               {recent.map((day) => (
                 <Row
                   key={day.key}
-                  title={<span style={{ fontSize: 13.5, fontWeight: 700, color: C.ink80, ...num }}>{fmtShortDay(day.key, b.todayKey)}</span>}
+                  title={<span style={{ fontSize: 13.5, fontWeight: W.button, color: C.ink80, ...num }}>{fmtShortDay(day.key, b.todayKey)}</span>}
                   right={
-                    <span style={{ fontSize: 13.5, fontWeight: 800, color: C.ink60, whiteSpace: 'nowrap', ...num }}>
+                    <span style={{ fontSize: 13.5, fontWeight: W.button, color: C.ink60, whiteSpace: 'nowrap', ...num }}>
                       {day.sets} sets · {volumeText(day.tonnageKg, s.unit)}
                     </span>
                   }
@@ -222,6 +222,16 @@ function LiftHistory({ tabs }: { tabs: ReactNode }) {
         )}
       </Sheet>
     </>
+  );
+}
+
+/** A figure on a grey tile with its label under it: the lift's block volume and its best set. */
+function StatTile({ value, label }: { value: ReactNode; label: string }) {
+  return (
+    <div style={{ background: C.screen, borderRadius: R.panel, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
+      <span style={{ fontSize: T.xl, fontWeight: W.title, letterSpacing: '-0.02em', whiteSpace: 'nowrap', ...num }}>{value}</span>
+      <span style={{ fontSize: T.sm, fontWeight: W.label, color: C.tertiary }}>{label}</span>
+    </div>
   );
 }
 

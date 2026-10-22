@@ -29,7 +29,7 @@ import {
   segmentStyleLabel,
   type PresetGroup,
 } from '@/lib/methodPresets';
-import { C, FONT, R, T, TOUCH, num, onInk } from '@/lib/tokens';
+import { C, FONT, R, T, TOUCH, W, num, onInk } from '@/lib/tokens';
 import type { RepStyle, RoutineSlot, SegmentPlan, SegmentStyle, SetPrescription, Unit } from '@/lib/types';
 import { useBompa } from '@/state/BompaContext';
 import { Btn, DarkSheet, InkButton, InkChip } from '@/components/ui';
@@ -114,7 +114,7 @@ export function MethodPicker({
                 onClick={() => onChange(preset.apply(slot))}
                 style={{ flex: 1, minWidth: 0, minHeight: TOUCH, padding: '9px 0', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 2 }}
               >
-                <span style={{ fontSize: T.md, fontWeight: 800, color: onInk.text, ...num }}>{preset.label}</span>
+                <span style={{ fontSize: T.md, fontWeight: W.button, color: onInk.text, ...num }}>{preset.label}</span>
                 <span style={{ fontSize: 12, fontWeight: 600, color: onInk.muted, ...num }}>{preset.description}</span>
               </Btn>
               <HelpButton label={`About ${preset.label}`} onClick={() => guide(preset.guide)} />
@@ -295,7 +295,7 @@ function SchemeEditor({
           else if (entry.type === 'backoff') tag = 'B/O';
           return (
             <div key={index} role="group" aria-label={`Set ${index + 1}`} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ width: 38, flex: 'none', height: TOUCH, display: 'flex', flexDirection: 'column', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: onInk.body, ...num }}>
+              <span style={{ width: 38, flex: 'none', height: TOUCH, display: 'flex', flexDirection: 'column', justifyContent: 'center', fontSize: 12, fontWeight: W.label, color: onInk.body, ...num }}>
                 {index + 1}
                 {tag && <span style={{ fontSize: T.xs, fontWeight: 700, color: C.amberLight }}>{tag}</span>}
               </span>
@@ -591,20 +591,20 @@ const inputStyle: CSSProperties = {
   color: onInk.text,
   padding: '0 10px',
   fontSize: 15,
-  fontWeight: 800,
+  fontWeight: W.button,
   fontFamily: FONT,
   ...num,
 };
 
 function FieldLabel({ children }: { children: ReactNode }) {
-  return <span style={{ fontSize: T.xs, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: onInk.muted }}>{children}</span>;
+  return <span style={{ fontSize: T.sm, fontWeight: W.label, color: onInk.muted }}>{children}</span>;
 }
 
 function Block({ title, children, onGuide, guideLabel }: { title: string; children: ReactNode; onGuide: () => void; guideLabel: string }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-        <span style={{ fontSize: 13.5, fontWeight: 800, color: onInk.text }}>{title}</span>
+        <span style={{ fontSize: 13.5, fontWeight: W.button, color: onInk.text }}>{title}</span>
         <HelpButton label={guideLabel} onClick={onGuide} />
       </div>
       {children}

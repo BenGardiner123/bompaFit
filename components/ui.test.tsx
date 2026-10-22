@@ -4,9 +4,9 @@
 // here is behaviour a screen relies on without looking: how a sheet closes,
 // what a screen reader hears, and which state a picker announces.
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ConfirmSheet, DarkSheet, EditableNumber, HeroNumeral, HeroTabs, InkButton, InkChip, Row } from './ui';
+import { ChipTrack, ConfirmSheet, DarkSheet, EditableNumber, HeroNumeral, HeroTabs, InkButton, InkChip, Row } from './ui';
 
 afterEach(cleanup);
 
@@ -106,12 +106,52 @@ describe('pickers', () => {
     );
     expect(screen.getByRole('button').getAttribute('aria-pressed')).toBe('true');
   });
+
+  it('ChipTrack is a named group that announces the chosen chip and reports a tap', () => {
+    const onChange = vi.fn();
+    render(
+      <ChipTrack
+        label="Lifts"
+        value="bench"
+        onChange={onChange}
+        items={[
+          { value: 'bench', label: 'Bench', name: 'Bench Press, 2 of 4 sets' },
+          { value: 'fly', label: 'Fly', trail: <span>A</span> },
+        ]}
+      />,
+    );
+    const group = screen.getByRole('group', { name: 'Lifts' });
+    expect(within(group).getByRole('button', { name: 'Bench Press, 2 of 4 sets' }).getAttribute('aria-pressed')).toBe('true');
+    // The superset letter is part of the chip, so it is read with the name.
+    const fly = within(group).getByRole('button', { name: 'Fly A' });
+    expect(fly.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(fly);
+    expect(onChange).toHaveBeenCalledWith('fly');
+  });
+
+  it('ChipTrack can have nothing chosen yet, as RPE has before a set is rated', () => {
+    render(
+      <ChipTrack
+        label="RPE"
+        value={null}
+        onChange={() => {}}
+        fill
+        items={['6', '7', '8'].map((v) => ({ value: v, label: v, suggested: v === '7' }))}
+      />,
+    );
+    for (const button of screen.getAllByRole('button')) expect(button.getAttribute('aria-pressed')).toBe('false');
+  });
 });
 
 describe('touch targets', () => {
   it('InkButton never goes below 44px, even when asked to', () => {
     render(<InkButton height={40}>Finish</InkButton>);
     expect(screen.getByRole('button', { name: 'Finish' }).style.height).toBe('44px');
+  });
+
+  it('a ChipTrack chip is 44px tall, though the design drew it at 40', () => {
+    render(<ChipTrack label="Lifts" value="a" onChange={() => {}} items={[{ value: 'a', label: 'Bench' }]} />);
+    expect(screen.getByRole('button', { name: 'Bench' }).style.height).toBe('44px');
   });
 });
 

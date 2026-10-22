@@ -1,6 +1,6 @@
 'use client';
 
-import { C, FONT, T, Z, onInk } from '@/lib/tokens';
+import { C, FONT, T, W, Z, onInk } from '@/lib/tokens';
 import { useBompa, type Tab } from '@/state/BompaContext';
 import { Icon, type IconName } from '@/components/icons';
 
@@ -13,15 +13,19 @@ const TABS: { id: Tab; label: string; icon: IconName }[] = [
 ];
 
 /**
- * Ink on every screen, not only on Train. One bar that never changes colour
- * reads as the frame of the app; a bar that flips between white and ink as you
- * move reads as five different apps.
+ * Follows the surface above it: dark under Train, which is dark all the way
+ * down, and white under every other screen, whose body is white. An ink bar
+ * under a white screen drew a heavy band across the bottom that belonged to
+ * neither.
  *
- * The current tab is white, not amber: amber means "tap this", and the tab you
- * are already on is the one thing on the bar there is no point tapping.
+ * The current tab is ink (white on Train), not amber: amber means "tap this",
+ * and the tab you are already on is the one thing on the bar there is no point
+ * tapping.
  */
 export function TabBar() {
   const { s, go } = useBompa();
+  // A view pushed over Train, such as a tool, is light, so the bar goes light with it.
+  const dark = s.tab === 'log' && s.pushed === null;
 
   return (
     <nav
@@ -30,11 +34,11 @@ export function TabBar() {
         position: 'relative',
         flex: 'none',
         zIndex: Z.tabBar,
-        background: C.ink,
-        borderTop: `1px solid ${onInk.line}`,
+        background: dark ? C.ink : C.card,
+        borderTop: `1px solid ${dark ? onInk.raised : C.lineSoft}`,
         // The extra bottom padding is the Android gesture bar's home for its
         // pill; content underneath it is unreachable.
-        padding: '8px 10px calc(20px + env(safe-area-inset-bottom))',
+        padding: '6px 10px calc(20px + env(safe-area-inset-bottom))',
         display: 'grid',
         gridTemplateColumns: 'repeat(5, 1fr)',
         gap: 2,
@@ -42,7 +46,7 @@ export function TabBar() {
     >
       {TABS.map((tab) => {
         const on = s.tab === tab.id;
-        const color = on ? C.white : onInk.muted;
+        const color = on ? (dark ? C.white : C.ink) : dark ? onInk.muted : C.tertiary;
         return (
           <button
             key={tab.id}
@@ -59,13 +63,13 @@ export function TabBar() {
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: 5,
+              gap: 4,
               padding: 0,
               color,
             }}
           >
-            <Icon name={tab.icon} size={22} />
-            <span style={{ fontSize: T.xs, fontWeight: 800, letterSpacing: '.02em' }}>{tab.label}</span>
+            <Icon name={tab.icon} size={22} strokeWidth={1.8} />
+            <span style={{ fontSize: T.xs, fontWeight: on ? W.button : W.label }}>{tab.label}</span>
           </button>
         );
       })}

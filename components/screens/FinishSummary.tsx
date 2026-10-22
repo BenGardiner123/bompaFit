@@ -15,13 +15,14 @@ import { useEffect, useRef } from 'react';
 import { resolveTarget, targetRpeFor } from '@/lib/adapt';
 import { countsAsWork, fmtClock, toDisplay, tomorrowReadiness } from '@/lib/calc';
 import type { SessionSummary } from '@/lib/history';
-import { C, HERO_SIZE, R, T, TOUCH, Z, num, onInk } from '@/lib/tokens';
+import { C, HERO_SIZE, R, T, TOUCH, W, Z, num, onInk } from '@/lib/tokens';
 import { READY_WORD, readinessBand, type ReadinessBand } from '@/lib/today';
 import { unratedSets } from '@/lib/train';
 import { fatigueDelta, sessionVerdict } from '@/lib/verdict';
 import { weightShort } from '@/lib/bodyweight';
 import { UNDO_FINISH_MS, useBompa } from '@/state/BompaContext';
 import { Btn, Hero, HeroEyebrow, InkButton, Row, Section, Sheet, useEscapeKey } from '@/components/ui';
+import { Icon } from '@/components/icons';
 
 export function FinishSummary() {
   const b = useBompa();
@@ -48,7 +49,7 @@ export function FinishSummary() {
         position: 'absolute',
         inset: 0,
         zIndex: Z.summary,
-        background: C.screen,
+        background: C.card,
         display: 'flex',
         flexDirection: 'column',
         overflowY: 'auto',
@@ -94,6 +95,8 @@ function SummaryBody({ summary }: { summary: SessionSummary }) {
   const learning = b.scores.lowConfidence;
   const changeText =
     tomorrow.change < 0 ? `down ${Math.abs(tomorrow.change)}` : tomorrow.change > 0 ? `up ${tomorrow.change}` : 'no change';
+  // The same change as an arrow, to be read at a glance; the spoken label keeps the words.
+  const changeMark = tomorrow.change < 0 ? `↓ ${Math.abs(tomorrow.change)}` : tomorrow.change > 0 ? `↑ ${tomorrow.change}` : 'level';
 
   // Every lift the session was built around, trained or not, plus anything
   // added along the way. Skipping a planned lift is worth seeing here.
@@ -122,18 +125,20 @@ function SummaryBody({ summary }: { summary: SessionSummary }) {
 
     let status: string;
     let statusColor: string;
+    let complete = false;
     if (!slot) {
       status = `+${done.length} extra`;
       statusColor = C.ink60;
     } else {
       const planned = resolveTarget(slot, b.prescriptions, b.e1rmByExercise[exerciseId] ?? 0).sets;
       status = `${done.length}/${planned}`;
-      statusColor = done.length >= planned ? C.greenDark : done.length > 0 ? C.amberDark : C.tertiary;
+      complete = done.length >= planned;
+      statusColor = complete ? C.greenDark : done.length > 0 ? C.amberDark : C.tertiary;
     }
 
     const unratedIds = unrated.map((row) => row.id).filter((id): id is number => id !== undefined);
     const untrained = Boolean(slot) && done.length === 0;
-    return [{ exerciseId, name: b.exerciseById.get(exerciseId)?.name ?? exerciseId, detail, status, statusColor, unratedIds, untrained }];
+    return [{ exerciseId, name: b.exerciseById.get(exerciseId)?.name ?? exerciseId, detail, status, statusColor, complete, unratedIds, untrained }];
   });
 
   const verdict = sessionVerdict(
@@ -145,39 +150,38 @@ function SummaryBody({ summary }: { summary: SessionSummary }) {
 
   const { done, total } = b.progress;
   const next = b.nextSlot ? b.routineById(b.nextSlot.routineId)?.name : undefined;
-  const week =
-    total === 0
-      ? 'Nothing planned this week'
-      : `${done} of ${total} done${next ? ` · ${next} is next` : done >= total ? ' · week complete' : ''}`;
+  const weekHead = total === 0 ? 'This week' : `This week · ${done} of ${total} done`;
+  const weekLine = total === 0 ? 'Nothing planned this week' : next ? `${next} is next` : done >= total ? 'Week complete' : 'Nothing left planned';
 
   return (
     <>
-      <Hero gap={14} style={{ padding: '14px 22px 46px' }}>
+      <Hero gap={14} style={{ paddingTop: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, minHeight: TOUCH }}>
           <HeroEyebrow color={C.greenLight}>Session saved · {session.routineName}</HeroEyebrow>
           <UndoFinish />
         </div>
 
-        <p style={{ margin: 0, fontSize: T.xxl, lineHeight: 1.18, fontWeight: 800, letterSpacing: '-0.02em', textWrap: 'pretty' }}>{verdict}</p>
+        {/* The verdict is the headline: what the session meant, before any number. */}
+        <p style={{ margin: 0, fontSize: T.xl, lineHeight: 1.25, fontWeight: W.title, letterSpacing: '-0.02em', textWrap: 'pretty' }}>{verdict}</p>
 
         <div
           role="img"
           aria-label={`Tomorrow's readiness ${tomorrow.readiness}, ${learning ? 'still learning' : READY_WORD[band]}. Readiness ${changeText}, fatigue ${deltaText}.`}
-          style={{ display: 'flex', alignItems: 'flex-end', gap: 12, paddingTop: 4 }}
+          style={{ display: 'flex', alignItems: 'flex-end', gap: 12, paddingTop: 2 }}
         >
-          <span aria-hidden style={{ fontSize: HERO_SIZE.summary, fontWeight: 800, lineHeight: 0.82, letterSpacing: '-0.05em', ...num }}>
+          <span aria-hidden style={{ fontSize: HERO_SIZE.summary, fontWeight: W.title, lineHeight: 0.82, letterSpacing: '-0.045em', ...num }}>
             {tomorrow.readiness}
           </span>
-          <div aria-hidden style={{ display: 'flex', flexDirection: 'column', gap: 3, paddingBottom: 6 }}>
-            {learning && <span style={{ fontSize: T.lg, fontWeight: 800, color: onInk.muted }}>Still learning</span>}
-            {!learning && <span style={{ fontSize: T.lg, fontWeight: 800, color: BAND_COLOR[band] }}>{BAND_WORD[band]} tomorrow</span>}
-            <span style={{ fontSize: T.sm, fontWeight: 700, color: onInk.muted, ...num }}>
-              readiness, {changeText} · fatigue {deltaText}
+          <div aria-hidden style={{ display: 'flex', flexDirection: 'column', gap: 2, paddingBottom: 2 }}>
+            {learning && <span style={{ fontSize: 17, fontWeight: W.title, color: onInk.muted }}>Still learning</span>}
+            {!learning && <span style={{ fontSize: 17, fontWeight: W.title, color: BAND_COLOR[band] }}>{BAND_WORD[band]} tomorrow</span>}
+            <span style={{ fontSize: T.sm, fontWeight: W.label, color: onInk.muted, ...num }}>
+              Readiness {changeMark} · fatigue {deltaText}
             </span>
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 26, paddingTop: 6 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 8, paddingTop: 4, borderTop: `1px solid ${onInk.line}` }}>
           <Figure value={String(summary.workingSets)} label="sets" />
           <Figure value={String(minutes)} label="min" />
           <Figure value={avgRpe} label="avg RPE" />
@@ -185,7 +189,7 @@ function SummaryBody({ summary }: { summary: SessionSummary }) {
         </div>
       </Hero>
 
-      <Sheet>
+      <Sheet gap={14}>
         <Section title="What you did">
           {rows.map((row) => (
             <Row
@@ -200,18 +204,21 @@ function SummaryBody({ summary }: { summary: SessionSummary }) {
                     label={`Rate ${row.name}`}
                     style={{
                       height: TOUCH,
-                      padding: '0 14px',
-                      borderRadius: R.chip,
-                      border: `1px solid ${C.ink}`,
-                      fontSize: T.sm,
-                      fontWeight: 800,
+                      padding: '0 16px',
+                      borderRadius: R.pill,
+                      background: C.sunken,
+                      fontSize: T.note,
+                      fontWeight: W.button,
                       flex: 'none',
                     }}
                   >
                     Rate
                   </Btn>
                 ) : (
-                  <span style={{ fontSize: T.md, fontWeight: 800, color: row.statusColor, flex: 'none', ...num }}>{row.status}</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: T.note, fontWeight: W.button, color: row.statusColor, flex: 'none', ...num }}>
+                    {row.complete && <Icon name="check" size={13} />}
+                    {row.status}
+                  </span>
                 )
               }
             />
@@ -219,21 +226,21 @@ function SummaryBody({ summary }: { summary: SessionSummary }) {
           {rows.length === 0 && <Row title="No lifts in this session" />}
         </Section>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingTop: 12, borderTop: `1px solid ${C.line}` }}>
-          <span style={{ fontSize: T.xs, fontWeight: 800, letterSpacing: '.14em', color: C.tertiary }}>THIS WEEK</span>
-          <span style={{ fontSize: T.lg, fontWeight: 800, ...num }}>{week}</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 1, padding: '12px 14px', borderRadius: R.panel, background: C.screen }}>
+          <span style={{ fontSize: T.sm, fontWeight: W.label, color: C.tertiary, ...num }}>{weekHead}</span>
+          <span style={{ fontSize: T.title, fontWeight: W.button }}>{weekLine}</span>
         </div>
 
         <Btn
           onClick={b.closeSummary}
           style={{
             marginTop: 'auto',
-            height: 58,
-            borderRadius: R.block,
+            height: 56,
+            borderRadius: R.pill,
             background: C.amber,
             color: C.ink,
             fontSize: T.lg,
-            fontWeight: 800,
+            fontWeight: W.button,
           }}
         >
           Done
@@ -260,17 +267,18 @@ function UndoFinish() {
   const left = Math.min(UNDO_FINISH_MS / 1000, Math.ceil((b.lastFinishedAt + UNDO_FINISH_MS - b.now) / 1000));
   if (left <= 0) return null;
   return (
-    <InkButton onClick={b.undoFinish} shape="pill" height={44} fontSize={T.sm} label={`Undo finish, ${left} seconds left`}>
-      Undo finish · {fmtClock(left)}
+    // "Undo" is enough beside "Session saved"; the spoken name says what it undoes.
+    <InkButton onClick={b.undoFinish} height={44} fontSize={T.note} label={`Undo finish, ${left} seconds left`}>
+      Undo · {fmtClock(left)}
     </InkButton>
   );
 }
 
 function Figure({ value, label }: { value: string; label: string }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column' }}>
-      <span style={{ fontSize: T.xl, fontWeight: 800, ...num }}>{value}</span>
-      <span style={{ fontSize: T.xs, fontWeight: 700, color: onInk.muted }}>{label}</span>
+    <div style={{ display: 'flex', flexDirection: 'column', paddingTop: 10, minWidth: 0 }}>
+      <span style={{ fontSize: 20, fontWeight: W.title, ...num }}>{value}</span>
+      <span style={{ fontSize: T.caption, fontWeight: W.label, color: onInk.muted }}>{label}</span>
     </div>
   );
 }

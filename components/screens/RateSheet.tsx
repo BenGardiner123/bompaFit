@@ -6,7 +6,7 @@
 // put, showing its new value, once it is rated rather than vanishing under
 // the finger.
 
-import { C, T, TOUCH, onInk } from '@/lib/tokens';
+import { C, T, TOUCH, W, onInk } from '@/lib/tokens';
 import { useBompa } from '@/state/BompaContext';
 import { Btn, DarkSheet, InkButton } from '@/components/ui';
 import { RateSetRow } from '@/components/RpeChips';
@@ -39,7 +39,7 @@ export function RateSheet() {
             close();
             b.patch({ rpeHelp: true });
           }}
-          style={{ display: 'inline-flex', alignItems: 'center', minHeight: TOUCH, verticalAlign: 'middle', fontSize: T.sm, fontWeight: 800, color: C.amberLight }}
+          style={{ display: 'inline-flex', alignItems: 'center', minHeight: TOUCH, verticalAlign: 'middle', fontSize: T.sm, fontWeight: W.button, color: C.amberLight }}
         >
           What&rsquo;s RPE?
         </Btn>

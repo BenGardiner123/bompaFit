@@ -2,8 +2,9 @@ import { expect, test } from '@playwright/test';
 import { C, onInk } from '../lib/tokens';
 import { completeSetup, goToTab, gotoApp, type TabName } from './helpers';
 
-// Five tabs, one bar: ink on every screen, the current tab white and the rest
-// muted. A bar that changed colour from screen to screen read as five apps.
+// Five tabs, one bar that follows the surface above it: dark under Train,
+// which is dark all the way down, and white under every other screen. The
+// current tab is the strongest colour on its bar and the rest are muted.
 
 const TABS: TabName[] = ['Today', 'Train', 'Plan', 'History', 'Workouts'];
 
@@ -25,12 +26,15 @@ test('names the five tabs in order, with Tools gone', async ({ page }) => {
 });
 
 for (const tab of TABS) {
-  test(`is ink on ${tab}, with ${tab} white and the others muted`, async ({ page }) => {
+  const dark = tab === 'Train';
+  test(`is ${dark ? 'ink' : 'white'} on ${tab}, with ${tab} ${dark ? 'white' : 'ink'} and the others muted`, async ({ page }) => {
     await goToTab(page, tab);
     const nav = page.getByRole('navigation', { name: 'Main' });
-    await expect(nav).toHaveCSS('background-color', rgb(C.ink));
+    await expect(nav).toHaveCSS('background-color', rgb(dark ? C.ink : C.card));
+    const current = dark ? C.white : C.ink;
+    const muted = dark ? onInk.muted : C.tertiary;
     for (const other of TABS) {
-      await expect(nav.getByRole('button', { name: other })).toHaveCSS('color', rgb(other === tab ? C.white : onInk.muted));
+      await expect(nav.getByRole('button', { name: other })).toHaveCSS('color', rgb(other === tab ? current : muted));
     }
   });
 }

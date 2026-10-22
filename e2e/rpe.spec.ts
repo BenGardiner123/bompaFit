@@ -54,7 +54,8 @@ test.describe('RPE after the set', () => {
     await expect(rest.getByText('How did that feel?')).toBeVisible();
     const row = rest.getByRole('group', { name: /^RPE for Bench set 1$/ });
     await expect(row.getByRole('button')).toHaveCount(7);
-    await expect(row.getByRole('button', { name: 'RPE 8, your aim' })).toContainText('aim');
+    await expect(row.getByRole('button', { name: 'RPE 8, your aim' })).toBeVisible();
+    await expect(rest.getByText('RPE · aim 8', { exact: true })).toBeVisible();
   });
 
   test('a chosen value is logged as said; one left alone logs the aim as an estimate', async ({ page }) => {

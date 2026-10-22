@@ -27,17 +27,17 @@ import {
   type MethodGuideKey,
   type SlotMethod,
 } from '@/lib/methods';
-import { weightShort } from '@/lib/bodyweight';
+import { weightShort, weightSpoken } from '@/lib/bodyweight';
 import { REPS_MAX } from '@/lib/numberEntry';
 import { workingSetCount } from '@/lib/supersets';
-import { C, HERO_SIZE, R, T, TOUCH, num, onAmber, onInk } from '@/lib/tokens';
-import { unratedSets, untrainedLifts } from '@/lib/train';
+import { C, HERO_SIZE, R, T, TOUCH, W, num, onInk } from '@/lib/tokens';
+import { lastTimeText, lastWorkingSet, unratedSets, untrainedLifts } from '@/lib/train';
 import type { LoggedSet, SetPrescription, SetType } from '@/lib/types';
 import { TRAIN_HINTS_SESSIONS, useBompa } from '@/state/BompaContext';
-import { Btn, ConfirmSheet, DarkSheet, EditableNumber, InkButton, InkSegmented, StepperTile, useLongPress } from '@/components/ui';
+import { Btn, ChipTrack, ConfirmSheet, DarkSheet, EditableNumber, InkButton, InkSegmented, StepperTile, useLongPress } from '@/components/ui';
 import { sheetHairline } from '@/components/SheetParts';
 import { ExercisePicker } from '@/components/screens/ExercisePicker';
-import { BodyweightChip, WeightFigure, useBodyweight } from '@/components/WeightFigure';
+import { BODYWEIGHT_WORD_IN_TILE, BodyweightChip, WeightFigure, useBodyweight, weightUnitLine } from '@/components/WeightFigure';
 import { SegmentControls, offersDrop } from '@/components/screens/SegmentControls';
 import { Icon } from '@/components/icons';
 import { Toast } from '@/components/Toast';
@@ -148,6 +148,7 @@ export function Log() {
   const [picking, setPicking] = useState(false);
   const asked = useInlineAsk();
   const catchUp = useCatchUp();
+  const [focus, setFocus] = useEntryFocus(`${openSession?.id}:${s.exIdx}:${b.sessionSets.length}`);
 
   // Only the session gates the logger. If the routine behind it has since been
   // deleted, the session still has its own snapshot of exercise ids and is
@@ -179,7 +180,7 @@ export function Log() {
         flexDirection: 'column',
       }}
     >
-      <div style={{ padding: '12px 18px 0', display: 'flex', flexDirection: 'column', gap: busy ? 8 : 12 }}>
+      <div style={{ padding: '6px 16px 0', display: 'flex', flexDirection: 'column', gap: busy ? 8 : 12 }}>
         <SessionHeader />
 
         {/* Above the lifts and outside the swipe column, so a tick is never
@@ -207,63 +208,9 @@ export function Log() {
       <SwipeColumn tight={busy}>
         <LiftHeader tight={busy} />
 
-        <WeightEntry />
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {/* Floored at 1 — zero reps is not a set. */}
-          <StepperTile label="Decrease reps" width={72} onClick={() => b.patch({ entryReps: Math.max(1, s.entryReps - 1) })}>
-            <Icon name="minus" size={24} />
-          </StepperTile>
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 6 }}>
-              <EditableNumber
-                label="Reps"
-                value={s.entryReps}
-                min={1}
-                max={REPS_MAX}
-                precision={1}
-                onCommit={(next) => b.patch({ entryReps: next })}
-                style={{ fontSize: T.figure, fontWeight: 800, lineHeight: 1 }}
-              />
-              <span style={{ fontSize: T.md, fontWeight: 800, color: onInk.muted }}>
-                {REP_UNIT[repStyle]}
-              </span>
-            </div>
-            {/* The stepper starts at the minimum; the lifter steps up to what
-                they actually got. Saying so stops "5" reading as a cap. */}
-            {amrap && b.activeSetTarget && (
-              <span style={{ fontSize: T.caption, fontWeight: 700, color: onInk.body, ...num }}>
-                {b.activeSetTarget.reps}+ · as many as you can
-              </span>
-            )}
-          </div>
-          <StepperTile label="Increase reps" width={72} onClick={() => b.patch({ entryReps: s.entryReps + 1 })}>
-            <Icon name="plus" size={24} />
-          </StepperTile>
-        </div>
+        <EntryPad focus={focus} onFocus={setFocus} amrap={amrap} repStyle={repStyle} tight={busy} />
 
         {repStyle === 'isometric' && <HoldStepper />}
-
-        {/* Set type goes last on purpose: it is the field changed least, and the
-            one most often left alone between sets. */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <InkSegmented
-            label="Set type"
-            value={s.entryType}
-            options={SET_TYPES}
-            onChange={(entryType) => b.patch({ entryType })}
-          />
-          <InkButton
-            onClick={() => b.patch({ setTypeHelp: true })}
-            label="What do the set types mean?"
-            height={50}
-            width={TOUCH}
-            color={onInk.body}
-            style={{ padding: 0 }}
-          >
-            <Icon name="help" size={20} />
-          </InkButton>
-        </div>
       </SwipeColumn>
 
       <div
@@ -271,50 +218,79 @@ export function Log() {
           position: 'sticky',
           bottom: 0,
           zIndex: 6,
-          padding: '14px 18px 16px',
-          // Fades the controls out under the button as they scroll past, rather
+          padding: '10px 16px 16px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 10,
+          // Fades the controls out under the footer as they scroll past, rather
           // than cutting them off at a hard edge.
-          background: `linear-gradient(180deg, transparent, ${C.ink} 36%)`,
+          background: `linear-gradient(180deg, transparent, ${C.ink} 24%)`,
         }}
       >
-        {/* The toast hangs off this wrapper, just above the button, so a
-            message about the set never covers the button for the next one. */}
-        <div style={{ position: 'relative' }}>
+        {/* The toast hangs off the footer, above the set type, so a message
+            about the set never covers the controls for the next one. */}
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8 }}>
           <Toast placement="footer" />
-          <Btn
-            onClick={b.logSet}
-            style={{
-              width: '100%',
-              height: 64,
-              borderRadius: R.panel,
-              background: C.amber,
-              color: C.ink,
-              fontSize: 18,
-              fontWeight: 800,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 10,
-            }}
+          {/* Set type sits with the Log button: it is part of saying what the
+              set was, and the field most often left alone between sets. */}
+          <InkSegmented label="Set type" value={s.entryType} options={SET_TYPES} onChange={(entryType) => b.patch({ entryType })} />
+          <InkButton
+            onClick={() => b.patch({ setTypeHelp: true })}
+            label="What do the set types mean?"
+            shape="circle"
+            height={50}
+            color={onInk.body}
           >
-            {/* Mid-set the same button logs the next piece, and says so: "Log set"
-                there would read as starting a new set. */}
-            {b.segment
-              ? b.segment.style === 'drop' || b.segment.style === 'mechanical-drop'
-                ? 'Log drop'
-                : 'Log piece'
-              : amrap
-                ? 'Log AMRAP set'
-                : 'Log set'}
-            <span style={{ fontWeight: 700, opacity: 0.65, ...num }}>
-              {s.entryWeight === 0 ? 'BW' : s.entryWeight} × {s.entryReps}
-            </span>
-          </Btn>
+            <Icon name="help" size={20} />
+          </InkButton>
         </div>
+        <Btn
+          onClick={b.logSet}
+          style={{
+            width: '100%',
+            height: 62,
+            borderRadius: R.pill,
+            background: C.amber,
+            color: C.ink,
+            fontSize: 17,
+            fontWeight: W.button,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 10,
+          }}
+        >
+          {/* Mid-set the same button logs the next piece, and says so: "Log set"
+              there would read as starting a new set. */}
+          {b.segment
+            ? b.segment.style === 'drop' || b.segment.style === 'mechanical-drop'
+              ? 'Log drop'
+              : 'Log piece'
+            : amrap
+              ? 'Log AMRAP set'
+              : 'Log set'}
+          <span style={{ fontWeight: W.label, color: C.ink80, ...num }}>
+            {s.entryWeight === 0 ? 'BW' : s.entryWeight} × {s.entryReps}
+          </span>
+        </Btn>
       </div>
     </div>
   );
 }
+
+/**
+ * Which tile the steppers change. Weight whenever a set is about to be entered
+ * fresh — a new lift, or straight after logging — because weight is what
+ * changes most between sets. Kept beside a key for that moment, so it falls
+ * back to weight on its own rather than through an effect.
+ */
+function useEntryFocus(key: string) {
+  const [state, setState] = useState<{ key: string; focus: EntryFocus }>({ key, focus: 'weight' });
+  const focus: EntryFocus = state.key === key ? state.focus : 'weight';
+  return [focus, (next: EntryFocus) => setState({ key, focus: next })] as const;
+}
+
+type EntryFocus = 'weight' | 'reps';
 
 /**
  * The routine name, the running totals, and the way to everything that is not
@@ -350,14 +326,14 @@ function SessionHeader() {
           label={`${openSession.routineName}. Opens the session menu.`}
           style={{ display: 'flex', alignItems: 'center', gap: 6, minHeight: TOUCH, minWidth: 0, textAlign: 'left', color: onInk.text }}
         >
-          <span style={{ fontSize: T.lg, fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <span style={{ fontSize: 17, fontWeight: W.title, letterSpacing: '-0.02em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {openSession.routineName}
           </span>
           <span style={{ display: 'flex', color: onInk.muted }}>
             <Icon name="chevron-down" size={14} strokeWidth={2.5} />
           </span>
         </Btn>
-        <span style={{ fontSize: T.sm, fontWeight: 700, color: onInk.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', ...num }}>
+        <span style={{ fontSize: T.sm, fontWeight: W.label, color: onInk.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', ...num }}>
           {fmtClock(Math.floor(openSession.elapsedMs / 1000))} · {planned > 0 ? `${done} of ${planned} sets` : `${done} sets`} · {tonnageText}
         </span>
       </div>
@@ -376,7 +352,7 @@ function SessionHeader() {
               alignItems: 'center',
               gap: 8,
               fontSize: T.md,
-              fontWeight: 800,
+              fontWeight: W.button,
               ...num,
             }}
           >
@@ -406,119 +382,67 @@ function SessionHeader() {
 }
 
 /**
- * The lifts in this session, as a sideways-scrolling row of chips. This is also
- * the keyboard and screen-reader way to change lift, since a swipe is neither.
- * Each chip carries its progress as a bar inside it, and a tick once its
- * planned sets are all done.
+ * The lifts in this session, as a chip track. This is also the keyboard and
+ * screen-reader way to change lift, since a swipe is neither. The chosen chip
+ * shows its sets as dots, and any other chip gets a tick once its planned sets
+ * are all done.
  */
 function LiftChips() {
   const b = useBompa();
   const { s, sessionSets } = b;
-  const row = useRef<HTMLDivElement>(null);
 
-  // Keep the active lift in view whenever it changes — by a tap, a swipe, a
-  // superset moving you on, or a lift being added at the far end of the row.
-  useEffect(() => {
-    const el = row.current;
-    const chip = el?.querySelectorAll<HTMLElement>('[data-chip]')[s.exIdx];
-    if (!el || !chip || typeof el.scrollTo !== 'function') return;
-    const still = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    el.scrollTo({
-      left: Math.max(0, chip.offsetLeft - el.clientWidth / 2 + chip.offsetWidth / 2),
-      behavior: still ? 'auto' : 'smooth',
-    });
-  }, [s.exIdx, b.chips.length]);
-
-  // The row runs to both screen edges and fades at each end, so a chip cut off
-  // at the edge reads as "there is more this way" rather than as clipping.
-  const mask = 'linear-gradient(90deg, transparent 0, black 18px, black calc(100% - 44px), transparent)';
+  const items = b.chips.map((chip, index) => {
+    const planned = b.sessionPlan.find((lift) => lift.exerciseId === chip.exerciseId)?.planned ?? 0;
+    const done = workingSetCount(sessionSets, chip.exerciseId);
+    const finished = planned > 0 && done >= planned;
+    const on = index === s.exIdx;
+    const short = b.exerciseById.get(chip.exerciseId)?.short ?? chip.exerciseId;
+    // The spoken name keeps the letter and the count the chip no longer prints.
+    const spoken = chip.letter ? `${short} · ${chip.letter}` : short;
+    return {
+      value: chip.exerciseId,
+      // An unplanned lift has no target to count against.
+      name: planned > 0 ? `${spoken}, ${done} of ${planned} sets` : `${spoken}, ${done} sets`,
+      label: (
+        <>
+          {finished && !on && (
+            <span style={{ display: 'flex', color: C.greenLight }}>
+              <Icon name="check" size={13} />
+            </span>
+          )}
+          {short}
+        </>
+      ),
+      trail: (
+        <>
+          {chip.letter && <span style={{ fontSize: T.xs, fontWeight: W.button, color: C.tertiary }}>{chip.letter}</span>}
+          {on && planned > 0 && <SetPips done={done} planned={planned} />}
+        </>
+      ),
+    };
+  });
 
   return (
-    <div
-      ref={row}
-      className="no-scrollbar"
-      style={{
-        // Positioned, so each chip's offsetLeft is measured from the row itself.
-        position: 'relative',
-        display: 'flex',
-        gap: 6,
-        overflowX: 'auto',
-        margin: '0 -18px',
-        padding: '0 44px 0 18px',
-        scrollPadding: '0 18px',
-        WebkitMaskImage: mask,
-        maskImage: mask,
+    <ChipTrack
+      label="Lifts"
+      value={b.activeExerciseId}
+      items={items}
+      onChange={(id) => {
+        const index = b.chips.findIndex((chip) => chip.exerciseId === id);
+        if (index >= 0) b.pickExercise(index);
       }}
-    >
-      {b.chips.map((chip, index) => {
-        const planned = b.sessionPlan.find((lift) => lift.exerciseId === chip.exerciseId)?.planned ?? 0;
-        const done = workingSetCount(sessionSets, chip.exerciseId);
-        const finished = planned > 0 && done >= planned;
-        const on = index === s.exIdx;
-        const short = b.exerciseById.get(chip.exerciseId)?.short ?? chip.exerciseId;
-        const name = chip.letter ? `${short} · ${chip.letter}` : short;
-        return (
-          // The wrapper is what the scroll-into-view measures.
-          <span key={chip.exerciseId} data-chip style={{ display: 'flex', flex: 'none' }}>
-          <Btn
-            onClick={() => b.pickExercise(index)}
-            pressed={on}
-            // An unplanned lift has no target to count against.
-            label={planned > 0 ? `${name}, ${done} of ${planned} sets` : `${name}, ${done} sets`}
-            style={{
-              position: 'relative',
-              overflow: 'hidden',
-              flex: 'none',
-              height: TOUCH,
-              padding: '0 14px',
-              borderRadius: R.chip,
-              background: on ? C.amber : 'transparent',
-              border: `1px solid ${on ? C.amber : onInk.control}`,
-              color: on ? C.ink : onInk.body,
-              fontSize: T.sm,
-              fontWeight: 800,
-              whiteSpace: 'nowrap',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 5,
-            }}
-          >
-            {finished && !on && (
-              <span style={{ display: 'flex', color: C.greenLight }}>
-                <Icon name="check" size={13} />
-              </span>
-            )}
-            {name}
-            {planned > 0 && (
-              <span
-                aria-hidden
-                style={{
-                  position: 'absolute',
-                  left: 12,
-                  right: 12,
-                  bottom: 6,
-                  height: 3,
-                  borderRadius: R.bar,
-                  background: on ? onAmber.track : onInk.line,
-                  overflow: 'hidden',
-                }}
-              >
-                <span
-                  style={{
-                    display: 'block',
-                    height: '100%',
-                    width: `${Math.min(1, done / planned) * 100}%`,
-                    borderRadius: R.bar,
-                    background: on ? C.ink : C.green,
-                  }}
-                />
-              </span>
-            )}
-          </Btn>
-          </span>
-        );
-      })}
-    </div>
+    />
+  );
+}
+
+/** A 4px dot per planned set inside the chosen chip: ink when done, light when still to do. */
+function SetPips({ done, planned }: { done: number; planned: number }) {
+  return (
+    <span aria-hidden style={{ display: 'flex', gap: 2 }}>
+      {Array.from({ length: planned }, (_, i) => (
+        <span key={i} style={{ width: 4, height: 4, borderRadius: R.pill, background: i < done ? C.ink : C.lineStrong }} />
+      ))}
+    </span>
   );
 }
 
@@ -565,17 +489,17 @@ function CatchUpLine({ catchUp }: { catchUp: CatchUp }) {
       role="status"
       style={{
         height: TOUCH,
-        borderRadius: R.chip,
-        background: onInk.line,
+        borderRadius: R.pill,
+        background: onInk.raised,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: '0 6px 0 14px',
+        padding: '0 6px 0 16px',
         gap: 10,
       }}
     >
       <span style={{ fontSize: T.md, fontWeight: 700, color: onInk.text, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', ...num }}>
-        <span style={{ fontWeight: 800 }}>{name}</span> · {unrated.length} {unrated.length === 1 ? 'set' : 'sets'} unrated
+        <span style={{ fontWeight: W.button }}>{name}</span> · {unrated.length} {unrated.length === 1 ? 'set' : 'sets'} unrated
       </span>
       {/* 44px to press, 36px drawn, so it sits inside the 44px bar. */}
       <Btn
@@ -588,12 +512,12 @@ function CatchUpLine({ catchUp }: { catchUp: CatchUp }) {
           style={{
             height: 36,
             padding: '0 14px',
-            borderRadius: R.small,
-            border: `1px solid ${onInk.muted}`,
+            borderRadius: R.pill,
+            background: onInk.line,
             display: 'flex',
             alignItems: 'center',
             fontSize: T.sm,
-            fontWeight: 800,
+            fontWeight: W.button,
             color: onInk.text,
           }}
         >
@@ -632,7 +556,7 @@ function InlineRating({ asked, catchUp }: { asked: LoggedSet[]; catchUp: CatchUp
         disabled={ids.length === 0}
         style={{ height: TOUCH, minWidth: 0, maxWidth: '100%', display: 'flex', alignItems: 'center', gap: 8 }}
       >
-        <span style={{ fontSize: T.md, fontWeight: 800, color: C.amberLight, flex: 'none', ...num }}>
+        <span style={{ fontSize: T.md, fontWeight: W.button, color: C.amberLight, flex: 'none', ...num }}>
           {single ? 'Rate this set?' : `Rate these ${count} sets?`}
         </span>
         {/* Only for one set: after a round, one lift's name would read as if
@@ -676,41 +600,75 @@ function SessionMenu({ onAddLift }: { onAddLift: () => void }) {
     setConfirmDiscard(true);
   };
 
-  const item = (label: string, icon: 'plus' | 'arrow-down', onClick: () => void) => (
+  // The same running totals as Train's header, so the menu says which session it is about.
+  const done = b.sessionSets.filter((row) => countsAsWork(row.type) && isSet(row)).length;
+  const planned = b.sessionPlan.reduce((total, lift) => total + lift.planned, 0);
+  const meta = `${fmtClock(Math.floor(b.openSession.elapsedMs / 1000))} · ${planned > 0 ? `${done} of ${planned} sets` : `${done} sets`} · ${fmtVolume(sessionTonnage(b.sessionSets), b.s.unit)}`;
+  const untrained = untrainedLifts(b.sessionPlan, b.sessionSets).length;
+
+  const item = (label: string, sub: string, icon: 'plus' | 'arrow-down', onClick: () => void, first = false) => (
     <Btn
       onClick={onClick}
-      style={{ minHeight: 52, display: 'flex', alignItems: 'center', gap: 12, fontSize: T.lg, fontWeight: 800, color: onInk.text, textAlign: 'left' }}
+      // Named by its title alone; the line under it is help, not part of what it does.
+      label={label}
+      style={{
+        minHeight: 56,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        color: onInk.text,
+        textAlign: 'left',
+        borderTop: first ? 'none' : `1px solid ${onInk.line}`,
+      }}
     >
       <span style={{ display: 'flex', color: onInk.muted }}>
-        <Icon name={icon} size={20} />
+        <Icon name={icon} size={20} strokeWidth={1.8} />
       </span>
-      {label}
+      <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
+        <span style={{ fontSize: T.title, fontWeight: W.button }}>{label}</span>
+        <span style={{ fontSize: T.sm, fontWeight: W.label, color: onInk.muted }}>{sub}</span>
+      </span>
     </Btn>
   );
 
   return (
     <>
-      <DarkSheet open={open} onClose={close} eyebrow="This session" title={b.openSession.routineName} titleSize={22} label="Session menu" gap={4}>
+      <DarkSheet open={open} onClose={close} title={b.openSession.routineName} sub={meta} label="Session menu" gap={16}>
         {reordering ? (
           <ReorderLifts onDone={() => setReordering(false)} />
         ) : (
           <>
-            {item('Add a lift', 'plus', () => {
-              close();
-              onAddLift();
-            })}
-            {item('Reorder lifts', 'arrow-down', () => setReordering(true))}
-            <div style={{ ...sheetHairline, marginTop: 8, paddingTop: 12 }}>
-              <InkButton onClick={b.requestFinish} width="100%" height={56} fontSize={T.lg}>
+            <div style={{ background: onInk.raised, borderRadius: R.card, padding: '0 14px', display: 'flex', flexDirection: 'column' }}>
+              {item(
+                'Add a lift',
+                'From the movement library',
+                'plus',
+                () => {
+                  close();
+                  onAddLift();
+                },
+                true,
+              )}
+              {item('Reorder lifts', 'In this session only', 'arrow-down', () => setReordering(true))}
+            </div>
+            {/* White rather than amber: it ends the session, which is not the
+                thing to do most often from here. */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <InkButton variant="white" onClick={b.requestFinish} width="100%" height={56} fontSize={T.lg}>
                 Finish session
               </InkButton>
+              {untrained > 0 && (
+                <span style={{ fontSize: T.sm, fontWeight: W.label, color: onInk.muted, textAlign: 'center' }}>
+                  {untrained} {untrained === 1 ? 'lift' : 'lifts'} not trained yet. I&rsquo;ll ask before finishing.
+                </span>
+              )}
             </div>
             {/* Under Finish and in red, so the two are never confused. Waits for
                 the session's database id, for the same reason rating does. */}
             <Btn
               onClick={discard}
               disabled={b.openSession.id === undefined}
-              style={{ minHeight: 52, marginTop: 4, display: 'flex', alignItems: 'center', gap: 12, fontSize: T.lg, fontWeight: 800, color: C.redLight, textAlign: 'left' }}
+              style={{ minHeight: 52, display: 'flex', alignItems: 'center', gap: 12, fontSize: T.title, fontWeight: W.button, color: C.redLight, textAlign: 'left' }}
             >
               <span style={{ display: 'flex' }}>
                 <Icon name="close" size={20} />
@@ -747,7 +705,7 @@ function ReorderLifts({ onDone }: { onDone: () => void }) {
           const name = b.exerciseById.get(id)?.name ?? id;
           return (
             <li key={id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 0', ...sheetHairline }}>
-              <span style={{ flex: 1, minWidth: 0, fontSize: T.title, fontWeight: 800 }}>{name}</span>
+              <span style={{ flex: 1, minWidth: 0, fontSize: T.title, fontWeight: W.button }}>{name}</span>
               <InkButton shape="circle" height={TOUCH} label={`Move ${name} up`} disabled={index === 0} onClick={() => b.moveSessionLift(index, -1)}>
                 <Icon name="arrow-up" size={18} />
               </InkButton>
@@ -795,7 +753,7 @@ function FinishGuard() {
         {left.map((lift) => (
           <li
             key={lift.exerciseId}
-            style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '12px 0', fontSize: T.title, fontWeight: 800, ...sheetHairline }}
+            style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '12px 0', fontSize: T.title, fontWeight: W.button, ...sheetHairline }}
           >
             <span>{b.exerciseById.get(lift.exerciseId)?.name ?? lift.exerciseId}</span>
             <span style={{ color: onInk.muted, ...num }}>0 / {lift.planned}</span>
@@ -937,10 +895,10 @@ function SwipeColumn({ children, tight }: { children: ReactNode; tight: boolean 
       onPointerCancel={() => release(false)}
       onClickCapture={onClickCapture}
       style={{
-        padding: `${tight ? 12 : 20}px 18px 0`,
+        padding: `${tight ? 12 : 22}px 16px 0`,
         display: 'flex',
         flexDirection: 'column',
-        gap: tight ? 10 : 18,
+        gap: tight ? 10 : 16,
         flex: 1,
         // Vertical scrolling stays with the browser; sideways movement comes to us.
         touchAction: 'pan-y',
@@ -986,10 +944,22 @@ function LiftHeader({ tight }: { tight: boolean }) {
           onClick={() => b.patch({ howToKey: activeExerciseId })}
           style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: TOUCH, color: onInk.text }}
         >
-          <span style={{ fontSize: T.xl, fontWeight: 800 }}>{exercise?.name ?? 'Exercise'}</span>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: T.sm, fontWeight: 800, color: onInk.muted }}>
+          <span style={{ fontSize: T.count, fontWeight: W.title, letterSpacing: '-0.02em' }}>{exercise?.name ?? 'Exercise'}</span>
+          <span
+            style={{
+              flex: 'none',
+              height: 28,
+              padding: '0 10px',
+              borderRadius: R.pill,
+              background: onInk.raised,
+              display: 'inline-flex',
+              alignItems: 'center',
+              fontSize: T.caption,
+              fontWeight: W.button,
+              color: onInk.body,
+            }}
+          >
             How to
-            <Icon name="chevron-right" size={13} strokeWidth={2.5} />
           </span>
         </Btn>
       </h2>
@@ -997,7 +967,7 @@ function LiftHeader({ tight }: { tight: boolean }) {
       {activeTarget && activeSetTarget && b.activeMethod ? (
         <TargetLine target={activeSetTarget} method={b.activeMethod} />
       ) : (
-        <span style={{ fontSize: T.md, fontWeight: 800, color: onInk.body, whiteSpace: 'nowrap', ...num }}>
+        <span style={{ fontSize: T.copy, fontWeight: W.label, color: onInk.muted, whiteSpace: 'nowrap', ...num }}>
           {activeTarget
             ? `${activeTarget.sets} × ${activeTarget.reps} @ ${weightShort(toDisplay(activeTarget.weightKg, s.unit), s.unit, b.isBodyweightLift(activeExerciseId))} · aim RPE ${activeTarget.rpe}`
             : 'Added today · no target'}
@@ -1078,7 +1048,7 @@ function TargetLine({ target, method }: { target: ActiveSetTarget; method: SlotM
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-      <span style={{ fontSize: T.md, fontWeight: 800, color: onInk.body, whiteSpace: 'nowrap', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', ...num }}>
+      <span style={{ fontSize: T.copy, fontWeight: W.label, color: onInk.muted, whiteSpace: 'nowrap', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', ...num }}>
         {head}
       </span>
 
@@ -1092,7 +1062,7 @@ function TargetLine({ target, method }: { target: ActiveSetTarget; method: SlotM
               // Starts with the words on screen, so saying what you see still
               // finds it by voice; then the tempo spelled out.
               label={`tempo ${formatTempo(method.tempo, { spaced: true })}: ${describeTempo(method.tempo)}. Opens the tempo guide.`}
-              style={{ minHeight: TOUCH, padding: '0 6px', fontSize: T.copy, fontWeight: 800, color: onInk.text, ...num }}
+              style={{ minHeight: TOUCH, padding: '0 6px', fontSize: T.copy, fontWeight: W.button, color: onInk.text, ...num }}
             >
               {/* Spaced so each phase reads on its own at arm's length. */}
               tempo {formatTempo(method.tempo, { spaced: true })}
@@ -1109,10 +1079,10 @@ function TargetLine({ target, method }: { target: ActiveSetTarget; method: SlotM
               style={{
                 minHeight: TOUCH,
                 padding: '0 12px',
-                borderRadius: R.chip,
-                border: `1px solid ${onInk.control}`,
+                borderRadius: R.pill,
+                background: onInk.raised,
                 fontSize: T.caption,
-                fontWeight: 800,
+                fontWeight: W.button,
                 color: onInk.text,
                 ...num,
               }}
@@ -1149,7 +1119,7 @@ function SchemeStrip({ scheme, current }: { scheme: SetPrescription[]; current: 
           <li
             key={i}
             aria-current={now ? 'step' : undefined}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: T.note, fontWeight: 800, ...num }}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: T.note, fontWeight: W.button, ...num }}
           >
             {i > 0 && i % period === 0 && (
               <span aria-hidden style={{ color: onInk.muted }}>
@@ -1198,9 +1168,9 @@ function HoldStepper() {
           max={HOLD_SEC_MAX}
           precision={1}
           onCommit={set}
-          style={{ fontSize: 32, fontWeight: 800, lineHeight: 1 }}
+          style={{ fontSize: 32, fontWeight: W.title, lineHeight: 1 }}
         />
-        <span style={{ fontSize: T.md, fontWeight: 800, color: onInk.muted }}>s each hold</span>
+        <span style={{ fontSize: T.md, fontWeight: W.label, color: onInk.muted }}>s each hold</span>
       </div>
       <StepperTile label="Longer hold" onClick={() => set(seconds + HOLD_STEP_SEC)}>
         <Icon name="plus" size={24} />
@@ -1214,7 +1184,7 @@ const HOLD_STEP_SEC = 5;
 /** Only reached when a routine asks for holds without saying how long. */
 const HOLD_DEFAULT_SEC = 10;
 
-/** A 14px dot is what the eye needs; a 44px box is what the thumb needs. */
+/** A 12px dot is what the eye needs; a 44px box is what the thumb needs. */
 const DOT_BOX = {
   width: TOUCH,
   height: TOUCH,
@@ -1224,7 +1194,7 @@ const DOT_BOX = {
   flex: 'none',
 } as const;
 
-const DOT = { width: 14, height: 14, borderRadius: '50%', boxSizing: 'border-box' } as const;
+const DOT = { width: 12, height: 12, borderRadius: '50%', boxSizing: 'border-box' } as const;
 
 /**
  * A logged set. Tapping it opens the editor for that set.
@@ -1244,7 +1214,7 @@ function SetDot({ row }: { row: LoggedSet }) {
     row.type === 'warmup'
       ? { background: onInk.muted, border: `1.5px solid ${onInk.muted}` }
       : unrated
-        ? { background: 'transparent', border: `3.5px solid ${C.green}` }
+        ? { background: 'transparent', border: `3px solid ${C.green}` }
         : { background: C.green, border: `1.5px solid ${C.green}` };
   return (
     <Btn
@@ -1265,51 +1235,198 @@ function SetDot({ row }: { row: LoggedSet }) {
 }
 
 /**
- * The weight: the big figure, typed or stepped, and a one-tap way to plain
- * bodyweight. Entry stays in the display unit throughout; logging the set is
- * where it becomes kilograms, once.
+ * Weight and reps as two tiles side by side, one row of − / + under them for
+ * whichever is selected, and what the lifter did last time.
  *
- * The steppers say their step, and holding either one moves to the next step.
- * The Bodyweight chip only shows where it means something: on a bodyweight
- * lift, or with the weight already at zero.
+ * Two figures and one stepper row, rather than a stepper row each: the pair
+ * reads as the set it is ("80 × 8"), and the thumb finds − and + in the same
+ * place whichever figure it is changing. Tapping a tile only selects it, so a
+ * thumb heading for the steppers never opens the keyboard by accident; tapping
+ * the selected figure types, as everywhere else.
+ *
+ * Entry stays in the display unit throughout; logging the set is where it
+ * becomes kilograms, once.
  */
-function WeightEntry() {
+function EntryPad({
+  focus,
+  onFocus,
+  amrap,
+  repStyle,
+  tight,
+}: {
+  focus: EntryFocus;
+  onFocus: (next: EntryFocus) => void;
+  amrap: boolean;
+  repStyle: SlotMethod['repStyle'];
+  tight: boolean;
+}) {
   const b = useBompa();
   const { s, activeExerciseId } = b;
   const setWeight = (next: number) => b.patch({ entryWeight: next });
   const bodyweight = useBodyweight(activeExerciseId ?? undefined, s.entryWeight, setWeight);
-  const showBodyweight = b.isBodyweightLift(activeExerciseId) || s.entryWeight === 0;
+  // Only where it means something: on a bodyweight lift, or with the weight already at zero.
+  const showBodyweight = focus === 'weight' && (b.isBodyweightLift(activeExerciseId) || s.entryWeight === 0);
+  const last = activeExerciseId ? lastWorkingSet(b.setsByExercise.get(activeExerciseId) ?? [], activeExerciseId, b.openSession?.id) : null;
+  const height = tight ? TILE_TIGHT : TILE;
+  const figure = { fontSize: HERO_SIZE.step, fontWeight: W.title, lineHeight: 0.9, letterSpacing: '-0.05em' } as const;
+  const unitStyle = { fontSize: T.note, fontWeight: W.label } as const;
+  const weightSaid = weightSpoken(s.entryWeight, s.unit, bodyweight.on);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-      {/* Holds the full figure's height even when "Bodyweight" is drawn
-          smaller, so the steppers don't jump under a thumb that is about to
-          press one. The outer box sits its row at the bottom (flex-end); the
-          inner row lines the figure and unit up on their text baseline. */}
-      <div style={{ minHeight: Math.round(HERO_SIZE.step * 0.9), display: 'flex', alignItems: 'flex-end' }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-          <WeightFigure
-            weight={s.entryWeight}
-            unit={s.unit}
-            bodyweight={bodyweight.on}
-            onCommit={setWeight}
-            figure={{ fontSize: HERO_SIZE.step, fontWeight: 800, lineHeight: 0.9, letterSpacing: '-0.05em' }}
-            unitStyle={{ fontSize: T.lg, fontWeight: 800 }}
-          />
-        </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: tight ? 10 : 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 8 }}>
+        {focus === 'weight' ? (
+          <FigureTile height={height}>
+            <WeightFigure weight={s.entryWeight} unit={s.unit} bodyweight={bodyweight.on} onCommit={setWeight} figure={figure} unitStyle={unitStyle} stacked />
+          </FigureTile>
+        ) : (
+          <FigureTile height={height} select={{ label: `Select weight, now ${weightSaid}`, onSelect: () => onFocus('weight') }}>
+            <span style={{ ...figure, ...(s.entryWeight === 0 ? { fontSize: Math.round(HERO_SIZE.step * BODYWEIGHT_WORD_IN_TILE), letterSpacing: '-0.02em' } : {}), ...num }}>
+              {s.entryWeight === 0 ? 'Bodyweight' : s.entryWeight}
+            </span>
+            {weightUnitLine(s.entryWeight, s.unit, bodyweight.on) && (
+              <span style={{ ...unitStyle, color: onInk.muted }}>{weightUnitLine(s.entryWeight, s.unit, bodyweight.on)}</span>
+            )}
+          </FigureTile>
+        )}
+
+        <span aria-hidden style={{ fontSize: T.xl, fontWeight: W.label, color: onInk.control }}>
+          ×
+        </span>
+
+        {focus === 'reps' ? (
+          <FigureTile height={height}>
+            <EditableNumber
+              label="Reps"
+              value={s.entryReps}
+              min={1}
+              max={REPS_MAX}
+              precision={1}
+              onCommit={(next) => b.patch({ entryReps: next })}
+              style={figure}
+            />
+            <RepsUnder repStyle={repStyle} amrap={amrap} />
+          </FigureTile>
+        ) : (
+          <FigureTile height={height} select={{ label: `Select reps, now ${s.entryReps}`, onSelect: () => onFocus('reps') }}>
+            <span style={{ ...figure, ...num }}>{s.entryReps}</span>
+            <RepsUnder repStyle={repStyle} amrap={amrap} />
+          </FigureTile>
+        )}
       </div>
-      <div style={{ display: 'flex', gap: 8, width: '100%', paddingTop: 12 }}>
-        <WeightStep sign="minus" onStep={() => setWeight(Math.max(0, Math.round((s.entryWeight - s.step) * 100) / 100))} />
-        {showBodyweight && <BodyweightChip on={bodyweight.on} onClick={bodyweight.toggle} />}
-        <WeightStep sign="plus" onStep={() => setWeight(Math.round((s.entryWeight + s.step) * 100) / 100)} />
+
+      <div style={{ display: 'flex', gap: 8 }}>
+        {focus === 'weight' ? (
+          <>
+            <WeightStep sign="minus" onStep={() => setWeight(Math.max(0, Math.round((s.entryWeight - s.step) * 100) / 100))} />
+            {showBodyweight && <BodyweightChip on={bodyweight.on} onClick={bodyweight.toggle} />}
+            <WeightStep sign="plus" onStep={() => setWeight(Math.round((s.entryWeight + s.step) * 100) / 100)} />
+          </>
+        ) : (
+          <>
+            {/* Floored at 1 — zero reps is not a set. */}
+            <RepStep sign="minus" onStep={() => b.patch({ entryReps: Math.max(1, s.entryReps - 1) })} />
+            <RepStep sign="plus" onStep={() => b.patch({ entryReps: s.entryReps + 1 })} />
+          </>
+        )}
       </div>
+
+      {last && (
+        <span style={{ textAlign: 'center', fontSize: T.sm, fontWeight: W.label, color: onInk.muted, ...num }}>
+          {lastTimeText(last, s.unit, b.isBodyweightLift(activeExerciseId))}
+        </span>
+      )}
     </div>
   );
 }
 
+/** How tall a figure tile is. Shorter while a rating or catch-up line takes a row, so Train still fits without scrolling. */
+const TILE = 148;
+const TILE_TIGHT = 120;
+
 /**
- * One weight stepper: "− 2.5". A tap steps; holding it half a second moves to
- * the next step size instead, so the step lives where the thumb already is
+ * One figure tile. Selected, it holds the live figure (tap to type) and is
+ * ringed in white. Not selected, the whole tile is one button that selects
+ * it, and its figure is dimmed so the eye goes to the one the steppers change.
+ */
+function FigureTile({
+  height,
+  select,
+  children,
+}: {
+  height: number;
+  /** Absent when this is the selected tile. */
+  select?: { label: string; onSelect: () => void };
+  children: ReactNode;
+}) {
+  const look = {
+    height,
+    minWidth: 0,
+    borderRadius: R.sheet,
+    background: onInk.raised,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  } as const;
+
+  if (!select) {
+    return (
+      <div data-tile data-selected="true" style={{ ...look, boxShadow: `inset 0 0 0 1.5px ${C.white}`, color: onInk.text }}>
+        {children}
+      </div>
+    );
+  }
+  return (
+    <button
+      type="button"
+      data-tile
+      data-selected="false"
+      aria-label={select.label}
+      onClick={select.onSelect}
+      style={{ ...look, fontFamily: 'inherit', border: 'none', padding: 0, cursor: 'pointer', color: onInk.body }}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** The word under the reps figure, and for an AMRAP set the reminder that the number is a floor. */
+function RepsUnder({ repStyle, amrap }: { repStyle: SlotMethod['repStyle']; amrap: boolean }) {
+  const b = useBompa();
+  return (
+    <>
+      <span style={{ fontSize: T.note, fontWeight: W.label, color: onInk.muted }}>{REP_UNIT[repStyle]}</span>
+      {/* The stepper starts at the minimum; the lifter steps up to what
+          they actually got. Saying so stops "5" reading as a cap. */}
+      {amrap && b.activeSetTarget && (
+        <span style={{ fontSize: T.caption, fontWeight: W.label, color: onInk.body, ...num }}>{b.activeSetTarget.reps}+ · as many as you can</span>
+      )}
+    </>
+  );
+}
+
+/** The look both stepper kinds share: a 56px filled pill, the sign, then what one tap moves. */
+const STEP_LOOK = {
+  fontFamily: 'inherit',
+  flex: 1,
+  height: 56,
+  borderRadius: R.pill,
+  border: 'none',
+  background: onInk.raised,
+  color: onInk.text,
+  cursor: 'pointer',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 6,
+  padding: 0,
+} as const;
+
+/**
+ * One weight stepper: "− 2.5 kg". A tap steps; holding it half a second moves
+ * to the next step size instead, so the step lives where the thumb already is
  * rather than on a button of its own.
  */
 function WeightStep({ sign, onStep }: { sign: 'minus' | 'plus'; onStep: () => void }) {
@@ -1327,28 +1444,28 @@ function WeightStep({ sign, onStep }: { sign: 'minus' | 'plus'; onStep: () => vo
       }}
       aria-label={`${verb} weight by ${s.step} ${s.unit}. Hold to change the step.`}
       style={{
-        fontFamily: 'inherit',
-        flex: 1,
-        height: 56,
-        borderRadius: R.block,
-        border: `1px solid ${onInk.control}`,
-        background: 'transparent',
-        color: onInk.text,
-        cursor: 'pointer',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 4,
+        ...STEP_LOOK,
         // A held finger must not select the text or raise the phone's own menu.
         userSelect: 'none',
         WebkitUserSelect: 'none',
         WebkitTouchCallout: 'none',
-        padding: 0,
       }}
     >
-      <Icon name={sign} size={24} />
-      <span aria-hidden style={{ fontSize: T.md, fontWeight: 800, color: onInk.muted, ...num }}>
-        {s.step}
+      <Icon name={sign} size={22} />
+      <span aria-hidden style={{ fontSize: T.md, fontWeight: W.label, color: onInk.muted, ...num }}>
+        {s.step} {s.unit}
+      </span>
+    </button>
+  );
+}
+
+/** One reps stepper: "− 1". Always a whole rep, so there is no step to hold for. */
+function RepStep({ sign, onStep }: { sign: 'minus' | 'plus'; onStep: () => void }) {
+  return (
+    <button type="button" onClick={onStep} aria-label={sign === 'minus' ? 'Decrease reps' : 'Increase reps'} style={STEP_LOOK}>
+      <Icon name={sign} size={22} />
+      <span aria-hidden style={{ fontSize: T.md, fontWeight: W.label, color: onInk.muted }}>
+        1
       </span>
     </button>
   );
@@ -1373,7 +1490,7 @@ function NoSession() {
         gap: 14,
       }}
     >
-      <h1 style={{ fontSize: T.xl, fontWeight: 800, margin: 0 }}>Train</h1>
+      <h1 style={{ fontSize: T.xl, fontWeight: W.title, margin: 0 }}>Train</h1>
       <div
         style={{
           border: `1px dashed ${onInk.control}`,

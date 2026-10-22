@@ -22,10 +22,10 @@ import {
   type LoadWord,
   type ReadinessBand,
 } from '@/lib/today';
-import { C, HERO_SIZE, PHASE_LABEL, R, SHADOW, T, TOUCH, num, onInk } from '@/lib/tokens';
-import type { PlannedSession } from '@/lib/types';
+import { C, HERO_SIZE, PHASE_LABEL, R, T, TOUCH, W, num, onInk } from '@/lib/tokens';
+import type { PlannedSession, Routine } from '@/lib/types';
 import { useBompa } from '@/state/BompaContext';
-import { Btn, Hero, HeroEyebrow, HeroNumeral, HeroText, Sheet } from '@/components/ui';
+import { Btn, Hero, HeroNumeral, HeroText, Sheet } from '@/components/ui';
 import { Icon } from '@/components/icons';
 import { Notifications } from '@/components/Notifications';
 import type { Insight } from '@/lib/insights';
@@ -38,20 +38,28 @@ const READY_ON_INK: Record<ReadinessBand, string> = {
 };
 
 /**
- * The bell and the way into Settings. They sit in the eyebrow row, and pull
- * themselves out by the same amount they add so the hero stays the height it
- * was: the 44px targets are for the thumb, not for the layout.
+ * The bell and the way into Settings, as filled circles so they read as
+ * buttons without an outline, the same as ⋯ on Train.
  */
 function HeaderButtons({ notes, onOpenSettings }: { notes: Insight[]; onOpenSettings: () => void }) {
   return (
-    <span style={{ display: 'flex', alignItems: 'center', margin: '-14px -10px -14px 0' }}>
+    <span style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 'none' }}>
       <Notifications notes={notes} />
       <Btn
         onClick={onOpenSettings}
         label="Settings"
-        style={{ width: TOUCH, height: TOUCH, display: 'flex', alignItems: 'center', justifyContent: 'center', color: onInk.body }}
+        style={{
+          width: TOUCH,
+          height: TOUCH,
+          borderRadius: R.pill,
+          background: onInk.raised,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: onInk.body,
+        }}
       >
-        <Icon name="gear" size={20} />
+        <Icon name="gear" size={20} strokeWidth={1.8} />
       </Btn>
     </span>
   );
@@ -62,7 +70,7 @@ const CURVE_DAYS = 28;
 
 export function Today() {
   const b = useBompa();
-  const { s, scores, metrics } = b;
+  const { scores, metrics } = b;
 
   const block = b.currentBlock;
   const weekInBlock = block ? Math.floor(daysBetween(block.startDate, b.currentWeek) / 7) + 1 : null;
@@ -102,10 +110,18 @@ export function Today() {
 
   return (
     <div className="rise" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
-      <Hero style={{ paddingTop: 4 }}>
-        <HeroEyebrow right={<HeaderButtons notes={insights} onOpenSettings={b.openSettings} />}>
-          {block && weekInBlock && totalWeeks ? `Readiness · ${PHASE_LABEL[block.phase]} wk ${weekInBlock} of ${totalWeeks}` : 'Readiness'}
-        </HeroEyebrow>
+      <Hero gap={10} style={{ paddingTop: 2 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
+            <span style={{ fontSize: 17, fontWeight: W.title, letterSpacing: '-0.02em' }}>Today</span>
+            {block && weekInBlock && totalWeeks && (
+              <span style={{ fontSize: T.sm, fontWeight: W.label, color: onInk.muted, ...num }}>
+                {PHASE_LABEL[block.phase]} · week {weekInBlock} of {totalWeeks}
+              </span>
+            )}
+          </div>
+          <HeaderButtons notes={insights} onOpenSettings={b.openSettings} />
+        </div>
 
         {/* Nothing logged at all, not "under a day of history": a first session
             done this morning is something to read, it just reads with low confidence. */}
@@ -113,7 +129,7 @@ export function Today() {
           <>
             {/* No number rather than a placeholder one: a dash the size of the
                 readiness figure reads as a broken bar, not as "nothing yet". */}
-            <p style={{ margin: 0, paddingTop: 6, fontSize: T.xxl, fontWeight: 800, letterSpacing: '-0.02em', color: onInk.text }}>Nothing to read yet</p>
+            <p style={{ margin: 0, paddingTop: 6, fontSize: T.xxl, fontWeight: W.title, letterSpacing: '-0.02em', color: onInk.text }}>Nothing to read yet</p>
             <HeroText maxWidth={340}>
               Log your first session and I’ll start reading your readiness. It takes about two weeks of data before the number means much.
             </HeroText>
@@ -126,8 +142,8 @@ export function Today() {
               color={onInk.text}
               label="Still learning"
               labelColor={onInk.muted}
-              labelSize={T.xl}
-              sub={<TrendSub first={historyPhrase(scores.historyDays)} trend={trend} />}
+              labelSize={20}
+              sub={<TrendSub first={`Readiness · ${historyPhrase(scores.historyDays)}`} trend={trend} />}
               ariaLabel={`Readiness ${scores.readiness} out of 100, still learning from ${historyPhrase(scores.historyDays)}.${trendSpoken}`}
             />
             <ScaleTrack readiness={scores.readiness} />
@@ -143,8 +159,8 @@ export function Today() {
               color={onInk.text}
               label={READY_LABEL[band]}
               labelColor={READY_ON_INK[band]}
-              labelSize={T.xl}
-              sub={<TrendSub first={`out of 100 · primed at ${READY_AT.primed}+`} trend={trend} />}
+              labelSize={20}
+              sub={<TrendSub first={`Readiness · out of 100 · primed at ${READY_AT.primed}+`} trend={trend} />}
               ariaLabel={`Readiness ${scores.readiness} out of 100, ${READY_WORD[band]}. Fatigue ${scores.fatigueScore}.${trendSpoken}`}
             />
             <ScaleTrack readiness={scores.readiness} />
@@ -155,140 +171,96 @@ export function Today() {
         <FormCurve />
       </Hero>
 
-      <Sheet gap={10} style={{ padding: '16px 18px 14px' }}>
+      <Sheet gap={14}>
         <WeekChips shownId={shownSlot?.id} onPick={setPreviewSlotId} />
 
-        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 10, paddingTop: 2 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
-            <span style={{ fontSize: T.xs, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase', color: C.tertiary, ...num }}>
+        {/* The next workout and the button that starts it, as one dark card:
+            what is in it and the way in are read together. */}
+        <div style={{ background: C.ink, color: onInk.text, borderRadius: R.hero, padding: '16px 16px 14px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
+            <span style={{ fontSize: T.sm, fontWeight: W.label, color: onInk.muted, ...num }}>
               {/* "Next up", never "today" — the plan does not claim a day.
                   When you have picked a different slot to look at, this names
                   it, so the card never looks like it is offering something it
                   is not. */}
               {b.progress.total > 0
                 ? showingNext
-                  ? `Next up · ${b.progress.done} of ${b.progress.total} done`
-                  : `#${(shownSlot?.slotIndex ?? 0) + 1} · ${b.progress.done} of ${b.progress.total} done`
+                  ? 'Next up'
+                  : `Slot ${(shownSlot?.slotIndex ?? 0) + 1}`
                 : block
                   ? PHASE_LABEL[block.phase]
                   : 'Unplanned'}
             </span>
-            <h1 style={{ margin: 0, fontSize: T.xxl, fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1.1 }}>
-              {routine?.name ?? (b.progress.total > 0 ? 'Week complete' : 'Nothing planned')}
-            </h1>
+            {routine && (
+              <span style={{ fontSize: T.sm, fontWeight: W.label, color: onInk.muted, whiteSpace: 'nowrap', ...num }}>
+                {routine.slots.length} lifts · ~{routine.estMinutes} min
+              </span>
+            )}
           </div>
-          {routine && (
-            <span style={{ fontSize: T.sm, fontWeight: 700, color: C.tertiary, flex: 'none', whiteSpace: 'nowrap', ...num }}>
-              {routine.slots.length} lifts · ~{routine.estMinutes} min
-            </span>
+          <h1 style={{ margin: 0, paddingBottom: 6, fontSize: T.xl, fontWeight: W.title, letterSpacing: '-0.02em', lineHeight: 1.15 }}>
+            {routine?.name ?? (b.progress.total > 0 ? 'Week complete' : 'Nothing planned')}
+          </h1>
+
+          {routine ? (
+            <LiftRows routine={routine} weekStart={shownSlot?.weekStart ?? b.currentWeek} />
+          ) : (
+            <p style={{ margin: 0, paddingBottom: 4, fontSize: T.copy, lineHeight: 1.5, color: onInk.body }}>
+              {b.progress.total > 0
+                ? "That's the week's work done. Rest is part of the plan — fatigue only drains when you let it."
+                : b.routines.length === 0
+                  ? "No workouts yet. Build one and I'll schedule a block around it."
+                  : 'No plan running. Start a workout whenever you like, or build a block on the Plan tab.'}
+            </p>
           )}
-        </div>
 
-        {routine ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {chipLayout(
-              [...routine.slots].sort((a, x) => a.order - x.order).map((slot) => slot.exerciseId),
-              routine,
-            ).map((chip, index) => {
-              const slot = routine.slots.find((x) => x.exerciseId === chip.exerciseId)!;
-              const exercise = b.exerciseById.get(slot.exerciseId);
-              // Shaped by the slot's week, the same way Train will ask for it.
-              const target = b.targetFor(slot, shownSlot?.weekStart ?? b.currentWeek);
-              return (
-                <div
-                  key={slot.exerciseId}
-                  style={{ display: 'grid', gridTemplateColumns: '22px 1fr auto', gap: 8, alignItems: 'baseline', fontSize: T.md }}
-                >
-                  <span style={{ fontSize: T.xs, fontWeight: 800, color: C.tertiary, ...num }}>{String(index + 1).padStart(2, '0')}</span>
-                  <span
-                    style={{
-                      fontWeight: 700,
-                      minWidth: 0,
-                      // Superset members hang off an ink rule so the list shows
-                      // the shape of the session, not a flat run of lifts.
-                      paddingLeft: chip.letter ? 8 : 0,
-                      borderLeft: chip.letter ? `2px solid ${C.ink}` : 'none',
-                    }}
-                  >
-                    {exercise?.name ?? slot.exerciseId}
-                    {chip.startsGroup && <span style={{ color: C.tertiary, fontWeight: 700 }}> · superset {chip.letter}</span>}
-                  </span>
-                  <span style={{ color: C.tertiary, fontWeight: 600, ...num }}>
-                    {target.sets} × {slot.reps}
-                    {target.weightKg > 0 ? ` @ ${toDisplay(target.weightKg, s.unit)}` : ''}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.5, color: C.ink60 }}>
-            {b.progress.total > 0
-              ? "That's the week's work done. Rest is part of the plan — fatigue only drains when you let it."
-              : b.routines.length === 0
-                ? "No workouts yet. Build one and I'll schedule a block around it."
-                : 'No plan running. Start a workout whenever you like, or build a block on the Plan tab.'}
-          </p>
-        )}
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, paddingTop: 2 }}>
           <Btn
             onClick={() => (routine ? b.startSession(routine.id, shownSlot?.id) : b.go('workouts'))}
             style={{
-              // In a column now, where flex: 1 would size its height from zero.
-              flex: 'none',
+              marginTop: 8,
               minWidth: 0,
-              height: 56,
-              padding: '0 14px',
-              borderRadius: R.block,
+              height: 52,
+              padding: '0 16px',
+              borderRadius: R.pill,
               background: C.amber,
               color: C.ink,
-              fontSize: T.lg,
-              fontWeight: 800,
-              boxShadow: SHADOW.cta,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
+              fontSize: T.title,
+              fontWeight: W.button,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
             }}
           >
             {/* Names the workout, so the button says exactly what a tap
                 starts. "Train anyway" is nonsense when there is nothing to
                 train — it sent people looking for a workout they had not
                 built yet. */}
-            {b.openSession ? 'Resume workout' : routine ? `Start ${routine.name}` : b.routines.length === 0 ? 'Build a workout' : 'Train anyway'}
-          </Btn>
-          {/* Words, not a hamburger: "Other workouts" says where it goes,
-              and a bare three-line icon read as a menu of the whole app. */}
-          <Btn
-            onClick={() => b.go('workouts')}
-            style={{ height: TOUCH, marginBottom: -6, fontSize: T.md, fontWeight: 800, color: C.ink }}
-          >
-            Other workouts
+            <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {b.openSession ? 'Resume workout' : routine ? `Start ${routine.name}` : b.routines.length === 0 ? 'Build a workout' : 'Train anyway'}
+            </span>
+            <Icon name="arrow-right" size={16} style={{ flex: 'none' }} />
           </Btn>
         </div>
+
+        {/* Words, not a hamburger: "Other workouts" says where it goes,
+            and a bare three-line icon read as a menu of the whole app. */}
+        <Btn onClick={() => b.go('workouts')} style={{ height: TOUCH, marginTop: -8, fontSize: T.md, fontWeight: W.button, color: C.ink }}>
+          Other workouts
+        </Btn>
 
         {/* Three figures that fit the width, rather than five that scrolled
             sideways where the last two were never seen. Volume and intensity
             are a look back, so they live on History. */}
-        <dl
-          style={{
-            margin: 0,
-            display: 'grid',
-            gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-            gap: 10,
-            paddingTop: 8,
-            borderTop: `1px solid ${C.line}`,
-          }}
-        >
+        <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 6 }}>
           <StripMetric
-            label="load vs usual"
+            label="Load vs usual"
             value={metrics.acwr === null ? '—' : metrics.acwr.toFixed(2)}
             unit={metrics.acwr === null ? undefined : '×'}
             word={load ?? undefined}
             wordColor={load ? LOAD_COLOUR[load] : undefined}
           />
           <StripMetric
-            label="since rest"
+            label="Since rest"
             // With nothing logged there is no run of training to count, and
             // "0 days" would read as "you rested today".
             value={scores.sessions === 0 ? '—' : metrics.daysSinceRest}
@@ -296,7 +268,7 @@ export function Today() {
             // Five straight days is when a rest day stops being optional.
             color={metrics.daysSinceRest >= 5 ? C.redDark : C.ink}
           />
-          <StripMetric label="to meet" value={toMeet ?? '—'} unit={toMeet === null ? undefined : toMeet === 1 ? 'day' : 'days'} />
+          <StripMetric label="To meet" value={toMeet ?? '—'} unit={toMeet === null ? undefined : toMeet === 1 ? 'day' : 'days'} />
         </dl>
       </Sheet>
     </div>
@@ -318,7 +290,7 @@ const LOAD_COLOUR: Record<LoadWord, string> = {
 function ScaleTrack({ readiness }: { readiness: number }) {
   const scale = readinessScale();
   return (
-    <div aria-hidden style={{ position: 'relative', display: 'flex', gap: 2, height: 6, marginTop: 8 }}>
+    <div aria-hidden style={{ position: 'relative', display: 'flex', gap: 2, height: 6, marginTop: 4 }}>
       {scale.map((stretch, index) => (
         <span
           key={stretch.band}
@@ -358,7 +330,14 @@ function WeekChips({ shownId, onPick }: { shownId: number | undefined; onPick: (
   if (b.thisWeekSlots.length === 0) return null;
 
   return (
-    <div role="group" aria-label="This week" style={{ display: 'flex', gap: 6 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div aria-hidden style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, fontSize: T.sm, fontWeight: W.label, color: C.tertiary, ...num }}>
+        <span>This week</span>
+        <span>
+          {b.progress.done} of {b.progress.total} done
+        </span>
+      </div>
+    <div role="group" aria-label={`This week, ${b.progress.done} of ${b.progress.total} done`} style={{ display: 'flex', gap: 6 }}>
       {b.thisWeekSlots.map((slot) => {
         const name = b.routineById(slot.routineId)?.name ?? 'workout';
         const key = slot.id ?? `${slot.weekStart}-${slot.slotIndex}`;
@@ -393,6 +372,7 @@ function WeekChips({ shownId, onPick }: { shownId: number | undefined; onPick: (
         );
       })}
     </div>
+    </div>
   );
 }
 
@@ -401,26 +381,84 @@ const CHIP: CSSProperties = {
   // Lets a long workout name shrink to its share instead of widening the row.
   minWidth: 0,
   height: TOUCH,
-  padding: '0 6px',
-  borderRadius: R.chip,
+  padding: '0 8px',
+  borderRadius: R.pill,
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
   gap: 5,
-  fontSize: T.sm,
-  fontWeight: 800,
+  fontSize: T.note,
+  fontWeight: W.label,
+  background: C.sunken,
+  color: C.ink60,
 };
 
 function chipLook(slot: PlannedSession, shown: boolean, isNext: boolean): CSSProperties {
-  if (slot.status === 'done') return { background: C.greenBg, border: `1px solid ${C.greenBd}`, color: C.greenDark };
-  if (slot.status === 'skip') return { border: `1px solid ${C.lineStrong}`, color: C.tertiary, textDecoration: 'line-through' };
+  if (slot.status === 'done') return { background: C.greenBg, color: C.greenDark, fontWeight: W.button };
+  if (slot.status === 'skip') return { color: C.tertiary, textDecoration: 'line-through' };
   // The one the card is showing is filled, so the row agrees with the card.
-  if (shown) return { background: C.ink, border: `1px solid ${C.ink}`, color: C.white };
-  // What is next keeps an ink outline while you look at another, so the
+  if (shown) return { background: C.ink, color: C.white, fontWeight: W.button };
+  // What is next keeps an ink ring while you look at another, so the
   // suggestion is still findable.
-  if (isNext) return { border: `1px solid ${C.ink}`, color: C.ink };
-  return { border: `1px solid ${C.lineStrong}`, color: C.ink60 };
+  if (isNext) return { boxShadow: `inset 0 0 0 1.5px ${C.ink}`, color: C.ink, fontWeight: W.button };
+  return {};
 }
+
+/**
+ * The first three lifts of the workout, with a count of the rest. Enough to
+ * recognise the session at a glance without the card growing with every lift
+ * added; the whole list is one tap away on Train.
+ */
+function LiftRows({ routine, weekStart }: { routine: Routine; weekStart: string }) {
+  const b = useBompa();
+  const unit = b.s.unit;
+  const chips = chipLayout(
+    [...routine.slots].sort((a, x) => a.order - x.order).map((slot) => slot.exerciseId),
+    routine,
+  );
+  const shown = chips.slice(0, LIFTS_SHOWN);
+  const hidden = chips.slice(LIFTS_SHOWN);
+  // Supersets that start among the hidden lifts, so "+2 more" still says the
+  // session has one in it.
+  const hiddenGroups = [...new Set(hidden.filter((chip) => chip.letter && chip.startsGroup).map((chip) => chip.letter))];
+
+  return (
+    <>
+      {shown.map((chip) => {
+        const slot = routine.slots.find((x) => x.exerciseId === chip.exerciseId)!;
+        // Shaped by the slot's week, the same way Train will ask for it.
+        const target = b.targetFor(slot, weekStart);
+        return (
+          <div key={slot.exerciseId} style={{ ...LIFT_ROW, minHeight: 40 }}>
+            <span style={{ minWidth: 0, fontSize: T.md, fontWeight: W.label }}>
+              {b.exerciseById.get(slot.exerciseId)?.name ?? slot.exerciseId}
+              {chip.letter && <span style={{ fontSize: T.xs, fontWeight: W.button, color: onInk.muted }}> {chip.letter}</span>}
+            </span>
+            <span style={{ flex: 'none', fontSize: T.note, fontWeight: W.label, color: onInk.muted, ...num }}>
+              {target.sets} × {slot.reps}
+              {target.weightKg > 0 ? ` · ${toDisplay(target.weightKg, unit)} ${unit}` : ''}
+            </span>
+          </div>
+        );
+      })}
+      {hidden.length > 0 && (
+        <div style={{ ...LIFT_ROW, minHeight: 36, fontSize: T.sm, fontWeight: W.label, color: onInk.muted }}>
+          +{hidden.length} more{hiddenGroups.length > 0 ? ` · superset ${hiddenGroups.join(', ')}` : ''}
+        </div>
+      )}
+    </>
+  );
+}
+
+const LIFTS_SHOWN = 3;
+
+const LIFT_ROW: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: 10,
+  borderTop: `1px solid ${onInk.line}`,
+};
 
 /**
  * The fitness-and-fatigue curve under the readiness number: the history the
@@ -439,17 +477,17 @@ function FormCurve() {
 
   return (
     <>
-      <div style={{ display: 'flex', alignItems: 'stretch', gap: 8, marginTop: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'stretch', gap: 10 }}>
         <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" style={{ flex: 1, minWidth: 0, height: 40, display: 'block' }} aria-hidden>
           {/* Non-scaling strokes, because the box stretches to the screen width
               and would otherwise smear the dashes and fatten the lines. */}
           <line x1={0} y1={height - 1} x2={width} y2={height - 1} stroke={onInk.line} strokeWidth={1} vectorEffect="non-scaling-stroke" />
-          <polyline points={geometry.fitness} fill="none" stroke={C.greenLight} strokeWidth={2.5} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+          <polyline points={geometry.fitness} fill="none" stroke={C.greenLight} strokeWidth={2} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
           <polyline
             points={geometry.fatigue}
             fill="none"
             stroke={C.redLight}
-            strokeWidth={2.5}
+            strokeWidth={2}
             strokeDasharray="5 4"
             strokeLinejoin="round"
             vectorEffect="non-scaling-stroke"
@@ -459,11 +497,13 @@ function FormCurve() {
             own, so it is named rather than given a number that means nothing. */}
         <div
           aria-hidden
-          style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', fontSize: T.xs, fontWeight: 800, whiteSpace: 'nowrap', ...num }}
+          style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', fontSize: T.xs, fontWeight: W.label, color: onInk.muted, whiteSpace: 'nowrap', ...num }}
         >
-          <span style={{ color: C.greenLight }}>fitness</span>
-          <span style={{ color: C.redLight }}>fatigue {b.scores.fatigueScore}</span>
-          <span style={{ color: onInk.muted, fontWeight: 700 }}>{CURVE_DAYS} days</span>
+          <span style={{ color: C.greenLight, fontWeight: W.button }}>fitness</span>
+          <span>
+            <span style={{ color: C.redLight, fontWeight: W.button }}>fatigue</span> {b.scores.fatigueScore}
+          </span>
+          <span>{CURVE_DAYS} days</span>
         </div>
       </div>
       <p className="sr-only">
@@ -509,14 +549,14 @@ function StripMetric({
   wordColor?: string;
 }) {
   return (
-    <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column-reverse', gap: 1 }}>
+    <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column-reverse', gap: 1, background: C.screen, borderRadius: R.block, padding: '10px 12px' }}>
       {/* The label comes first in the markup so a screen reader hears the name
           before the number; column-reverse puts it back under the figure. */}
-      <dt style={{ fontSize: T.xs, fontWeight: 700, color: C.tertiary }}>{label}</dt>
-      <dd style={{ margin: 0, display: 'flex', alignItems: 'baseline', gap: 2, whiteSpace: 'nowrap' }}>
-        <span style={{ fontSize: T.xl, fontWeight: 800, color, ...num }}>{value}</span>
-        {unit && <span style={{ fontSize: T.sm, fontWeight: 700, color: C.tertiary }}>{unit}</span>}
-        {word && <span style={{ fontSize: T.xs, fontWeight: 800, color: wordColor, paddingLeft: 4 }}>{word}</span>}
+      <dt style={{ fontSize: T.caption, fontWeight: W.label, color: C.tertiary }}>{label}</dt>
+      <dd style={{ margin: 0, display: 'flex', alignItems: 'baseline', gap: 3, whiteSpace: 'nowrap' }}>
+        <span style={{ fontSize: 20, fontWeight: W.title, letterSpacing: '-0.02em', color, ...num }}>{value}</span>
+        {unit && <span style={{ fontSize: T.sm, fontWeight: W.label, color: C.tertiary }}>{unit}</span>}
+        {word && <span style={{ fontSize: T.caption, fontWeight: W.button, color: wordColor, paddingLeft: 2 }}>{word}</span>}
       </dd>
     </div>
   );
