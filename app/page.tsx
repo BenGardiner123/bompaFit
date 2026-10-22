@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { AndroidFrame } from '@/components/AndroidFrame';
 import { MethodGuideSheet } from '@/components/MethodGuideSheet';
 import { TabBar } from '@/components/TabBar';
@@ -23,7 +23,7 @@ import { Workouts } from '@/components/screens/Workouts';
 import { SettingsSheet } from '@/components/SettingsSheet';
 import { useThemeColor } from '@/components/useThemeColor';
 import { TimerAlerts } from '@/components/TimerAlerts';
-import { BOOT_BAND, C } from '@/lib/tokens';
+import { C, SPLASH, Z } from '@/lib/tokens';
 import { BompaProvider, useBompa, type Tab } from '@/state/BompaContext';
 
 export default function Page() {
@@ -51,7 +51,8 @@ function Frame() {
   const dark = !s.hydrated || s.summary !== null || inkTop;
   // The rest screen's last ten seconds are amber from edge to edge, the bar included.
   const urgent = useRestView().urgent;
-  useThemeColor(urgent ? C.amber : dark ? C.ink : C.screen);
+  // Black while loading, under the black splash.
+  useThemeColor(!s.hydrated ? C.black : urgent ? C.amber : dark ? C.ink : C.screen);
   return (
     <AndroidFrame dark={dark} urgent={urgent}>
       <App />
@@ -96,7 +97,7 @@ function App() {
       ) : (
         <>
           <div className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
-            {!b.s.hydrated ? <Booting /> : b.s.pushed ? <PushedScreen /> : <Screen />}
+            {!b.s.hydrated ? null : b.s.pushed ? <PushedScreen /> : <Screen />}
           </div>
           <ToastSlot />
           <TabBar />
@@ -125,6 +126,8 @@ function App() {
           drawn later is on top, and the builder's help buttons open this. */}
       <MethodGuideSheet />
       <TimerAlerts />
+      {/* Last, so it covers everything above, the tab bar and the strip under it included. */}
+      <Splash />
     </div>
   );
 }
@@ -142,21 +145,91 @@ function Screen() {
 const INK_TOP_TABS: Tab[] = ['home', 'log', 'plan', 'stats'];
 
 /**
- * The moment before saved data has been read. No logo: the phone has just
- * shown the app's icon on its own splash screen, and a second one read as the
- * app loading twice. Instead it is the shape most screens are about to be, an
- * ink band over white, so the handover is a header filling in rather than the
- * whole screen changing colour.
+ * Opening the app, as one event. The phone's own splash screen shows the icon
+ * on black (the manifest's colours), and this carries it on unchanged: the
+ * same black, the same mark in the middle, over the whole screen, the tab bar
+ * and the strip under it included. The app renders
+ * underneath while saved data is read and the font loads, then this fades out
+ * once. Before, the phone's light splash, a light page, an ink band and a font
+ * swapping in all happened within a second, which read as three things at once.
+ *
+ * It is in the page as first served, so it is also what shows before any
+ * script has run.
  */
-function Booting() {
+function Splash() {
+  const { s } = useBompa();
+  const [fontsReady, setFontsReady] = useState(false);
+  const [gone, setGone] = useState(false);
+
+  // The app is revealed in its own font rather than swapping into it a moment
+  // later, but a font that fails to arrive must never hold the app shut.
+  useEffect(() => {
+    let settled = false;
+    const ready = () => {
+      if (settled) return;
+      settled = true;
+      setFontsReady(true);
+    };
+    const timer = setTimeout(ready, SPLASH.fontWaitMs);
+    if (document.fonts) void document.fonts.ready.then(ready);
+    else ready();
+    return () => clearTimeout(timer);
+  }, []);
+
+  const leaving = s.hydrated && fontsReady;
+  useEffect(() => {
+    if (!leaving) return;
+    // Removed once the fade is over, so nothing sits on top of the app afterwards.
+    const timer = setTimeout(() => setGone(true), SPLASH.fadeMs + 100);
+    return () => clearTimeout(timer);
+  }, [leaving]);
+
+  if (gone) return null;
   return (
-    <div data-booting style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-      <span className="sr-only" role="status">
-        Loading
-      </span>
-      <div aria-hidden style={{ height: BOOT_BAND, flex: 'none', background: C.ink }} />
-      <div aria-hidden style={{ flex: 1, background: C.card }} />
+    <div
+      data-splash
+      // Only while loading: the tests wait on it as the sign the app is ready.
+      data-booting={leaving ? undefined : ''}
+      aria-hidden={leaving || undefined}
+      style={{
+        position: 'absolute',
+        inset: 0,
+        zIndex: Z.splash,
+        background: C.black,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        opacity: leaving ? 0 : 1,
+        transition: `opacity ${SPLASH.fadeMs}ms ease`,
+        // Taps go straight to the app as soon as it starts showing through.
+        pointerEvents: leaving ? 'none' : 'auto',
+      }}
+    >
+      {!leaving && (
+        <span className="sr-only" role="status">
+          Loading
+        </span>
+      )}
+      <AppMark size={SPLASH.icon} />
     </div>
+  );
+}
+
+/**
+ * The app icon, drawn in the page rather than loaded, so it is there on the
+ * first paint even offline. The same shapes as `scripts/generate-icons.mjs`
+ * draws into the PNGs: a bar and two plates a side, ink on amber.
+ */
+function AppMark({ size }: { size: number }) {
+  return (
+    <svg aria-hidden width={size} height={size} viewBox="0 0 100 100" style={{ display: 'block' }}>
+      <rect width="100" height="100" rx="22" fill={C.amber} />
+      <rect x="11" y="46.25" width="78" height="7.5" fill={C.ink} />
+      <rect x="21.6" y="14" width="10" height="72" fill={C.ink} />
+      <rect x="68.4" y="14" width="10" height="72" fill={C.ink} />
+      <rect x="9.12" y="27" width="10" height="46" fill={C.ink} />
+      <rect x="80.88" y="27" width="10" height="46" fill={C.ink} />
+    </svg>
   );
 }
 

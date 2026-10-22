@@ -86,6 +86,16 @@ button {
   animation: bompaRise 0.28s ease;
 }
 
+/* On a phone the page behind the app is only seen while it opens, as the
+   splash fades: black, the splash's own colour (`C.black`). Wider, it is the
+   desk the phone preview sits on. Matches FRAME_BREAKPOINT in lib/tokens.ts. */
+@media (max-width: 491px) {
+  html,
+  body {
+    background: #000000;
+  }
+}
+
 .sheet {
   animation: bompaSheet 0.24s ease;
 }

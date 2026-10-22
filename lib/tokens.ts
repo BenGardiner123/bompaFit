@@ -91,6 +91,13 @@ export const C = {
   grey: '#9CA3AF',
 
   white: '#FFFFFF',
+  /**
+   * Opening the app only: the splash, the status bar and the page behind it
+   * while it loads. True black rather than `ink`, so the phone's own splash
+   * screen, drawn in the manifest's colour, and the page's first paint are one
+   * colour and the hand-over cannot be seen.
+   */
+  black: '#000000',
 } as const;
 
 /**
@@ -333,14 +340,16 @@ export const Z = {
    * say is not drawn underneath the sheet that caused it.
    */
   toastOverSheet: 31,
+  /** The opening splash covers everything, until it fades. */
+  splash: 40,
 } as const;
 
 /**
- * The ink band the loading screen draws for the moment before saved data is
- * read: about the height of Today's header, so the header fills it rather
- * than the screen jumping between two shapes.
+ * The splash that carries on from the phone's own as the app opens: the icon's
+ * size in the middle of the screen, how long it takes to fade once the app is
+ * ready, and the longest it waits for the font before showing the app anyway.
  */
-export const BOOT_BAND = 196;
+export const SPLASH = { icon: 96, fadeMs: 200, fontWaitMs: 600 } as const;
 
 /**
  * The smallest thing a thumb can reliably hit. Every button, chip and tile is
