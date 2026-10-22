@@ -10,7 +10,7 @@ import { daysToMeet } from '@/lib/today';
 import { C, FONT, HERO_SIZE, ON_PHASE, PH, PHASE_ABBR, PHASE_LABEL, PH_ON_INK, R, ROW_COMPACT, T, TOUCH, W, num, onInk } from '@/lib/tokens';
 import type { Phase, PlannedSession, Routine } from '@/lib/types';
 import { useBompa } from '@/state/BompaContext';
-import { Btn, DarkSheet, Hero, HeroNumeral, HeroText, InkButton, Row, Scroller, Section, Segmented, Sheet } from '@/components/ui';
+import { Btn, DarkSheet, Hero, HeroNumeral, HeroText, InkButton, Row, Scroller, Section, Segmented, Sheet, useRise } from '@/components/ui';
 import { browsableWeeks, macrocycle, nextBlockStart, weekAt, weekPosition } from './PlanMacrocycle';
 import { SessionRow } from './SessionHistory';
 import { Icon } from '@/components/icons';
@@ -27,6 +27,7 @@ import { Icon } from '@/components/icons';
  * listed here: it lives behind the bell on Today, where it can be dismissed.
  */
 export function Plan() {
+  const rise = useRise();
   const b = useBompa();
   const [building, setBuilding] = useState(false);
   const [editingMeet, setEditingMeet] = useState(false);
@@ -43,7 +44,7 @@ export function Plan() {
   };
 
   return (
-    <div className="rise" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
+    <div className={rise} style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
       <Hero gap={14}>
         <MacrocycleHero week={week} onPick={(target) => show(target, true)} />
       </Hero>

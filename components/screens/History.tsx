@@ -19,13 +19,14 @@ import { C, HERO_SIZE, R, T, W, num, onInk } from '@/lib/tokens';
 import type { Unit } from '@/lib/types';
 import { weightShort } from '@/lib/bodyweight';
 import { useBompa } from '@/state/BompaContext';
-import { ChipTrack, Empty, Hero, HeroEyebrow, HeroNumeral, InkSegmented, Row, Section, Sheet } from '@/components/ui';
+import { ChipTrack, Empty, Hero, HeroEyebrow, HeroNumeral, InkSegmented, Row, Section, Sheet, useRise } from '@/components/ui';
 import { SessionHistory } from '@/components/screens/SessionHistory';
 import { StartingMaxes } from '@/components/StartingMaxes';
 
 type View = 'session' | 'lift';
 
 export function History() {
+  const rise = useRise();
   // Two axes on the same data. By session answers "what did I do on
   // Tuesday"; by lift answers "how is my squat going". Slicing by lift alone
   // made the first question unanswerable, because one session's lifts
@@ -50,7 +51,7 @@ export function History() {
   );
 
   return (
-    <div className="rise" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
+    <div className={rise} style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
       {view === 'session' ? <SessionHistory header={header} /> : <LiftHistory header={header} />}
     </div>
   );

@@ -34,7 +34,7 @@ import { C, HERO_SIZE, R, T, TOUCH, W, num, onInk } from '@/lib/tokens';
 import { lastTimeText, lastWorkingSet, unratedSets, untrainedLifts } from '@/lib/train';
 import type { LoggedSet, SetPrescription, SetType } from '@/lib/types';
 import { TRAIN_HINTS_SESSIONS, useBompa } from '@/state/BompaContext';
-import { Btn, ChipTrack, ConfirmSheet, DarkSheet, EditableNumber, InkButton, InkSegmented, StepperTile, useLongPress } from '@/components/ui';
+import { Btn, ChipTrack, ConfirmSheet, DarkSheet, EditableNumber, InkButton, InkSegmented, StepperTile, useLongPress, useRise } from '@/components/ui';
 import { sheetHairline } from '@/components/SheetParts';
 import { ExercisePicker } from '@/components/screens/ExercisePicker';
 import { BODYWEIGHT_WORD_IN_TILE, BodyweightChip, WeightFigure, useBodyweight, weightUnitLine } from '@/components/WeightFigure';
@@ -143,6 +143,7 @@ const SET_TYPES: { value: SetType; label: string }[] = [
 const SWIPE = { LOCK: 8, COMMIT: 70, SNAP: 60, SETTLE_MS: 120, FADE: 300, RUBBER: 40 } as const;
 
 export function Log() {
+  const rise = useRise();
   const b = useBompa();
   const { s, openSession } = b;
   const [picking, setPicking] = useState(false);
@@ -168,7 +169,7 @@ export function Log() {
 
   return (
     <div
-      className="rise"
+      className={rise}
       style={{
         // The screen paints its own ink, all the way down, so a short page never
         // shows a light strip between the last control and the tab bar.
@@ -1472,13 +1473,14 @@ function RepStep({ sign, onStep }: { sign: 'minus' | 'plus'; onStep: () => void 
 }
 
 function NoSession() {
+  const rise = useRise();
   const b = useBompa();
   const routine = b.nextSlot ? b.routineById(b.nextSlot.routineId) : undefined;
   const { done, total } = b.progress;
 
   return (
     <div
-      className="rise"
+      className={rise}
       style={{
         flex: '1 0 auto',
         minHeight: '100%',

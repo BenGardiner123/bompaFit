@@ -3,8 +3,8 @@ import { C } from '../lib/tokens';
 import { completeSetup, dismissSummary, finishToSummary, gotoApp, goToTab, restScreen, skipRest } from './helpers';
 
 // An installed app paints the phone's status bar from the theme-color tag, so
-// the tag has to follow the screen: a light bar over the ink Train screen reads
-// as the app failing to draw.
+// the tag has to follow the screen: a light bar over an ink header reads as a
+// strip the app forgot to paint, and an ink one over a light header the same.
 
 function themeColor(page: Page) {
   return page.locator('meta[name="theme-color"]');
@@ -22,17 +22,20 @@ test.describe('status bar colour', () => {
     await completeSetup(page);
   });
 
-  test('is light on Today and ink on Train, and goes back when you leave', async ({ page }) => {
-    await expectThemeColor(page, C.screen);
+  test('is ink on every screen that opens with an ink header', async ({ page }) => {
+    await expectThemeColor(page, C.ink);
 
     await page.getByRole('button', { name: /^(Start .+|Train anyway)$/ }).click();
     await goToTab(page, 'Train');
     await expectThemeColor(page, C.ink);
 
     await goToTab(page, 'Plan');
-    await expectThemeColor(page, C.screen);
+    await expectThemeColor(page, C.ink);
 
-    await goToTab(page, 'Train');
+    await goToTab(page, 'History');
+    await expectThemeColor(page, C.ink);
+
+    await goToTab(page, 'Today');
     await expectThemeColor(page, C.ink);
   });
 
@@ -58,7 +61,13 @@ test.describe('status bar colour', () => {
     await finishToSummary(page);
     await expectThemeColor(page, C.ink);
 
+    // Back on Today, whose header is ink as well.
     await dismissSummary(page);
-    await expectThemeColor(page, C.screen);
+    await expectThemeColor(page, C.ink);
   });
+});
+
+test('is light during setup, whose header is light', async ({ page }) => {
+  await gotoApp(page);
+  await expectThemeColor(page, C.screen);
 });

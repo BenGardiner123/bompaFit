@@ -336,6 +336,13 @@ export const Z = {
 } as const;
 
 /**
+ * The ink band the loading screen draws for the moment before saved data is
+ * read: about the height of Today's header, so the header fills it rather
+ * than the screen jumping between two shapes.
+ */
+export const BOOT_BAND = 196;
+
+/**
  * The smallest thing a thumb can reliably hit. Every button, chip and tile is
  * at least this tall and wide, even where the design drew it smaller.
  */

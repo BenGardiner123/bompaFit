@@ -23,8 +23,8 @@ import { Workouts } from '@/components/screens/Workouts';
 import { SettingsSheet } from '@/components/SettingsSheet';
 import { useThemeColor } from '@/components/useThemeColor';
 import { TimerAlerts } from '@/components/TimerAlerts';
-import { C, W } from '@/lib/tokens';
-import { BompaProvider, useBompa } from '@/state/BompaContext';
+import { BOOT_BAND, C } from '@/lib/tokens';
+import { BompaProvider, useBompa, type Tab } from '@/state/BompaContext';
 
 export default function Page() {
   return (
@@ -35,17 +35,20 @@ export default function Page() {
 }
 
 /**
- * The frame sits inside the provider so its status bar can follow whatever
- * dark surface is at the top of the screen: the Train screen (and the rest
- * countdown, which only ever opens over it), or the ink header of the finish
- * summary, which covers Today.
+ * The frame sits inside the provider so its status bar can follow whatever is
+ * at the top of the screen. Today, Train, Plan and History all open with an
+ * ink header, and so does the finish summary and the loading band before
+ * them, so the bar is ink there; Workouts, the tools and setup open light. A
+ * light bar over an ink header read as a strip the app forgot to paint.
  *
  * One condition drives both the preview frame and the real phone's status
  * bar, so the two cannot drift apart.
  */
 function Frame() {
-  const { s } = useBompa();
-  const dark = s.hydrated && ((s.tab === 'log' && s.pushed === null) || s.summary !== null);
+  const b = useBompa();
+  const { s } = b;
+  const inkTop = s.pushed === null && !b.needsSetup && INK_TOP_TABS.includes(s.tab);
+  const dark = !s.hydrated || s.summary !== null || inkTop;
   // The rest screen's last ten seconds are amber from edge to edge, the bar included.
   const urgent = useRestView().urgent;
   useThemeColor(urgent ? C.amber : dark ? C.ink : C.screen);
@@ -135,12 +138,24 @@ function Screen() {
   return <Workouts />;
 }
 
+/** The tabs whose screens open with an ink header. */
+const INK_TOP_TABS: Tab[] = ['home', 'log', 'plan', 'stats'];
+
+/**
+ * The moment before saved data has been read. No logo: the phone has just
+ * shown the app's icon on its own splash screen, and a second one read as the
+ * app loading twice. Instead it is the shape most screens are about to be, an
+ * ink band over white, so the handover is a header filling in rather than the
+ * whole screen changing colour.
+ */
 function Booting() {
   return (
-    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40 }}>
-      <span className="pulse" style={{ fontSize: 12, fontWeight: W.title, letterSpacing: '.18em', color: C.muted }}>
-        BOMPA
+    <div data-booting style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+      <span className="sr-only" role="status">
+        Loading
       </span>
+      <div aria-hidden style={{ height: BOOT_BAND, flex: 'none', background: C.ink }} />
+      <div aria-hidden style={{ flex: 1, background: C.card }} />
     </div>
   );
 }

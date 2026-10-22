@@ -17,7 +17,7 @@ import { ContentProviders } from '@/components/ContentProviders';
 import { DefaultWarmup } from '@/components/DefaultWarmup';
 import { Icon } from '@/components/icons';
 import { useIntervalAlerts } from '@/components/useTimerAlerts';
-import { Btn, EditableNumber, Hero, HeroNumeral, HeroTabs, InkButton, InkChip, Row, Section, Tag } from '@/components/ui';
+import { Btn, EditableNumber, Hero, HeroNumeral, HeroTabs, InkButton, InkChip, Row, Section, Tag, useRise } from '@/components/ui';
 
 const TITLE: Record<PushedView, string> = {
   timer: 'Interval timer',
@@ -31,13 +31,14 @@ const TITLE: Record<PushedView, string> = {
 const TAB_NAME: Record<Tab, string> = { home: 'Today', log: 'Train', plan: 'Plan', stats: 'History', workouts: 'Workouts' };
 
 export function PushedScreen() {
+  const rise = useRise();
   const b = useBompa();
   const pushed = b.s.pushed;
   if (!pushed) return null;
   const back = pushed.from === 'settings' ? 'Settings' : TAB_NAME[b.s.tab];
 
   return (
-    <div className="rise" style={{ flex: 1, display: 'flex', flexDirection: 'column', background: C.screen }}>
+    <div className={rise} style={{ flex: 1, display: 'flex', flexDirection: 'column', background: C.screen }}>
       <header style={{ padding: '4px 18px 10px', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
         {/* Says where it goes, not just "Back": from Settings it reopens the
             sheet, which a bare arrow would not tell you. */}

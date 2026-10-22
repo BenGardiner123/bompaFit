@@ -16,8 +16,9 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  // First paint only: the page swaps it to match whichever screen is showing.
-  themeColor: C.screen,
+  // First paint only, under the loading band; the page swaps it to match
+  // whichever screen is showing.
+  themeColor: C.ink,
   width: 'device-width',
   initialScale: 1,
   // The logging screen has a sticky footer button; letting the page zoom would

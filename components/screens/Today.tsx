@@ -25,7 +25,7 @@ import {
 import { C, HERO_SIZE, PHASE_LABEL, R, T, TOUCH, W, num, onInk } from '@/lib/tokens';
 import type { PlannedSession, Routine } from '@/lib/types';
 import { useBompa } from '@/state/BompaContext';
-import { Btn, Hero, HeroNumeral, HeroText, Sheet } from '@/components/ui';
+import { Btn, Hero, HeroNumeral, HeroText, Sheet, useRise } from '@/components/ui';
 import { Icon } from '@/components/icons';
 import { Notifications } from '@/components/Notifications';
 import type { Insight } from '@/lib/insights';
@@ -69,6 +69,7 @@ function HeaderButtons({ notes, onOpenSettings }: { notes: Insight[]; onOpenSett
 const CURVE_DAYS = 28;
 
 export function Today() {
+  const rise = useRise();
   const b = useBompa();
   const { scores, metrics } = b;
 
@@ -109,7 +110,7 @@ export function Today() {
   const toMeet = daysToMeet(b.todayKey, b.competition?.date);
 
   return (
-    <div className="rise" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
+    <div className={rise} style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
       <Hero gap={10} style={{ paddingTop: 2 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>

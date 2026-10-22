@@ -6,7 +6,7 @@ import { C, PH, PHASE_LABEL, R, T, TOUCH, W, num, onInk } from '@/lib/tokens';
 import type { Routine } from '@/lib/types';
 import { useBompa } from '@/state/BompaContext';
 import { ImportPreview, useImport } from '@/components/ImportPreview';
-import { Btn, InkButton, Segmented } from '@/components/ui';
+import { Btn, InkButton, Segmented, useRise } from '@/components/ui';
 import { Icon, type IconName } from '@/components/icons';
 
 type Filter = 'mine' | 'import' | 'template';
@@ -25,6 +25,7 @@ const EMPTY: Record<Filter, string> = {
  * repeated it; this screen is a list to pick from, so it starts with the list.
  */
 export function Workouts() {
+  const rise = useRise();
   const b = useBompa();
   const [filter, setFilter] = useState<Filter>('mine');
 
@@ -51,7 +52,7 @@ export function Workouts() {
   else if (picked !== undefined && visible.some((r) => r.id === picked)) expanded = picked;
 
   return (
-    <div className="rise" style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 14, padding: '4px 16px 16px', background: C.card }}>
+    <div className={rise} style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 14, padding: '4px 16px 16px', background: C.card }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
         <h1 style={{ margin: 0, fontSize: 28, fontWeight: W.title, letterSpacing: '-0.03em' }}>Workouts</h1>
         {/* Building one from nothing has to be reachable here, not only during

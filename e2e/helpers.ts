@@ -14,12 +14,12 @@ export type TabName = 'Today' | 'Train' | 'Plan' | 'History' | 'Workouts';
 /**
  * Load the app and wait for hydration.
  *
- * Until IndexedDB has been read the shell renders a pulsing BOMPA placeholder,
- * so every test would otherwise race the first paint.
+ * Until IndexedDB has been read the shell renders a loading placeholder
+ * (`data-booting`), so every test would otherwise race the first paint.
  */
 export async function gotoApp(page: Page) {
   await page.goto('/');
-  await expect(page.getByText('BOMPA', { exact: true })).toBeHidden({ timeout: 15_000 });
+  await expect(page.locator('[data-booting]')).toBeHidden({ timeout: 15_000 });
 }
 
 /** True when the app is sitting in first-run setup. */

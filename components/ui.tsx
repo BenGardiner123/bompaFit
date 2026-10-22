@@ -340,6 +340,24 @@ export function Ring({
   );
 }
 
+/** Whether a screen has been shown since the app loaded. */
+let screenShown = false;
+
+/**
+ * The class a screen's outermost element takes: the short rise that marks
+ * moving to it, except for the very first screen after the app loads. That
+ * one is already where the eye is, and rising into place made the app look
+ * as if it jumped as it opened.
+ */
+export function useRise(): string | undefined {
+  // Decided once, when the screen mounts, so it never starts rising later.
+  const [className] = useState(() => (screenShown ? 'rise' : undefined));
+  useEffect(() => {
+    screenShown = true;
+  }, []);
+  return className;
+}
+
 // ─────────────────────────────────────────────────────────────
 // Ink hero and light sheet
 //

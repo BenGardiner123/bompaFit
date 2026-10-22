@@ -31,7 +31,7 @@ test.describe('offline', () => {
     // paints even when every script request fails. The placeholder clearing
     // needs the app to hydrate and read IndexedDB, and switching tabs needs a
     // live click handler — neither can happen without the JavaScript.
-    await expect(page.getByText('BOMPA', { exact: true })).toBeHidden({ timeout: 20_000 });
+    await expect(page.locator('[data-booting]')).toBeHidden({ timeout: 20_000 });
     await goToTab(page, 'History');
     await goToTab(page, 'Plan');
   });
@@ -45,7 +45,7 @@ test.describe('offline', () => {
     await context.setOffline(true);
 
     await page.reload();
-    await expect(page.getByText('BOMPA', { exact: true })).toBeHidden({ timeout: 20_000 });
+    await expect(page.locator('[data-booting]')).toBeHidden({ timeout: 20_000 });
     await expect(setupHeading(page)).toBeVisible();
   });
 
