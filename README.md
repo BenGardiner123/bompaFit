@@ -36,7 +36,7 @@ On iPhone, install it rather than using it in a Safari tab. Safari can clear a w
 
 ## How it works
 
-<img src=".github/readme/feature-train.png" alt="Train: log a set in three taps, one-handed" width="100%">
+<img src=".github/readme/feature-train.png" alt="Train: log a set one-handed, with chalk on your thumb" width="100%">
 
 <img src=".github/readme/feature-rest.png" alt="Rest: rate the set while you catch your breath" width="100%">
 
@@ -62,10 +62,10 @@ For more detail, pictures or video, **connect a content service** in Settings â†
 
 | Screen | File | Contains |
 |---|---|---|
-| Today | `components/screens/Today.tsx` | Readiness score and its trend since your last session, the 28-day fitness and fatigue curve, this week's sessions, insights, next session. The gear opens Settings (`components/SettingsSheet.tsx`) |
-| Train | `components/screens/Log.tsx` | Each set's target, tempo and method, set entry, drop and cluster pieces, swipe between lifts, finishing (with 30 seconds to undo) |
+| Today | `components/screens/Today.tsx` | Readiness score and its trend since your last session, the 28-day fitness and fatigue curve, this week's sessions and the next workout, ready to start. The bell holds what Bompa changed and noticed: any note can be dismissed, and a change can be undone (`components/Notifications.tsx`); the gear opens Settings (`components/SettingsSheet.tsx`) |
+| Train | `components/screens/Log.tsx` | Weight and reps tiles with one row of steppers, what you lifted last time, each set's target, tempo and method, drop and cluster pieces, swipe between lifts, finishing (with 30 seconds to undo) |
 | Rest | `components/screens/RestOverlay.tsx` | Full-screen rest, where you rate how the set felt; `FinishSummary.tsx` is the session summary |
-| Plan | `components/screens/Plan.tsx` | Training block timeline, this week's sessions, what Bompa changed and why, taper to a competition |
+| Plan | `components/screens/Plan.tsx` | The whole plan at a glance, any week of it (move, swap, drop or add sessions in this one), a competition and the taper worked back from it, and your training blocks |
 | History | `components/screens/History.tsx` | Past sessions, estimated one-rep max over time, personal records, starting maxes |
 | Workouts | `components/screens/Workouts.tsx` | Your workouts, templates and imports, plus the interval timer, one-rep max calculator and import (`ToolViews.tsx`) |
 
